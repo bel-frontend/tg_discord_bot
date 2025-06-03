@@ -22,11 +22,7 @@ async function beforeTelegramSend(
   const imageUrls = await Promise.all(fileIds.map(getTelegramFileUrl));
   console.log(imageUrls);
 
-  sendMessageToChannels(
-    ["1374368491771002970"], // lepro channel
-    text,
-    imageUrls
-  );
+  sendMessageToChannels(text, imageUrls);
 }
 
 // Initialize Telegram bot and pass the callback

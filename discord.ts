@@ -13,8 +13,11 @@ const client = new Client({
   ],
 });
 
+const channelIdsEnv = process.env.DISCORD_CHANNEL_IDS || "";
+
+const channelIds = channelIdsEnv.split(",").map((c) => c.trim());
+
 export async function sendMessageToChannels(
-  channelIds: string[],
   text?: string,
   imageUrls?: string[]
 ) {
