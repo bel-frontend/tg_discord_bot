@@ -1,4 +1,9 @@
-import { Client, GatewayIntentBits, ChannelType } from "discord.js";
+import {
+  Client,
+  GatewayIntentBits,
+  ChannelType,
+  MessageFlags,
+} from "discord.js";
 import type { TextBasedChannel } from "discord.js";
 
 const TOKEN = process.env.DISCORD_BOT_TOKEN;
@@ -75,3 +80,42 @@ client.once("ready", () => {
 });
 
 client.login(TOKEN);
+
+client.on("messageCreate", async (message) => {
+  console.log("Message received:", message.content);
+  const userId = message.author.id;
+  // 1. Check if it's a direct message (DM)
+  const isDirect = message.channel.type === ChannelType.DM;
+
+  // 2. Check if the bot is mentioned in a guild message
+  const isMention = message.mentions.has(client.user?.id || "");
+
+  if (isDirect) {
+    console.log("User wrote to the bot directly (DM)");
+  } else if (isMention) {
+    console.log("User mentioned the bot in a server");
+  } else {
+    console.log("Message is not a DM or mention");
+    return; // Optionally ignore
+  }
+
+  if (message.author.bot) return;
+  console.log("User ID:", userId);
+  const channelId = message.channel.id;
+
+  console.log("Channel ID:", channelId);
+
+  message.channel.send({
+    content:
+      "channelId: " +
+      channelId +
+      " userId: " +
+      userId +
+      " message: " +
+      message.content,
+
+    flags: MessageFlags.SuppressNotifications,
+  });
+
+  if (message.author.bot) return;
+});
