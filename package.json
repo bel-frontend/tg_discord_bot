@@ -1,0 +1,16 @@
+{
+  "name": "tg_discord_bot",
+  "module": "index.ts",
+  "type": "module",
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/node-telegram-bot-api": "^0.64.8"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "discord.js": "^14.19.3",
+    "node-telegram-bot-api": "^0.66.0"
+  }
+}
