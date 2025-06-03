@@ -123,3 +123,38 @@ MIT
 - [discord.js](https://discord.js.org/)
 - [node-telegram-bot-api](https://github.com/yagop/node-telegram-bot-api)
 - [Bun](https://bun.sh)
+
+---
+
+## Running with Docker
+
+You can run the bot permanently on your server using Docker and Docker Compose.
+
+### 1. Build and Run
+
+Make sure you have a `.env` file in your project root with all required variables.
+
+Build and start the bot with:
+
+```bash
+docker compose up -d --build
+```
+
+This will:
+
+- Build the Docker image using the provided `Dockerfile`
+- Start the bot as a background service
+- Automatically restart the bot if it crashes or your server reboots
+
+### 2. Stopping the Bot
+
+To stop the bot, run:
+
+```bash
+docker compose down
+```
+
+### 3. Customization
+
+- The bot does **not** expose any ports, as it only connects to Telegram and Discord APIs.
+- To persist logs or other files, you can uncomment and adjust the `volumes` section in `docker-compose.yml`.
