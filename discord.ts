@@ -113,7 +113,6 @@ client.on("messageCreate", async (message) => {
       userId +
       " message: " +
       message.content,
-
     flags: MessageFlags.SuppressNotifications,
   });
 

@@ -1,0 +1,12 @@
+version: "3.8"
+
+services:
+  tg_discord_bot:
+    build: .
+    container_name: tg_discord_bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    # No ports exposed, as this is a bot
+    # volumes:
+    #   - ./logs:/app/logs   # Optional: mount logs if you want
