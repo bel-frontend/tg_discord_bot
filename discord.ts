@@ -1,188 +1,211 @@
 import {
-  Client,
-  GatewayIntentBits,
-  ChannelType,
-  MessageFlags,
-} from "discord.js";
-import type { TextBasedChannel } from "discord.js";
+    Client,
+    GatewayIntentBits,
+    ChannelType,
+    MessageFlags,
+} from 'discord.js';
+import type { TextBasedChannel } from 'discord.js';
+import { NodeHtmlMarkdown } from 'node-html-markdown';
 
 const TOKEN = process.env.DISCORD_BOT_TOKEN;
-if (!TOKEN) throw new Error("Missing DISCORD_BOT_TOKEN");
+if (!TOKEN) throw new Error('Missing DISCORD_BOT_TOKEN');
 
 const client = new Client({
-  intents: [
-    GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent,
-    GatewayIntentBits.DirectMessages,
-  ],
+    intents: [
+        GatewayIntentBits.Guilds,
+        GatewayIntentBits.GuildMessages,
+        GatewayIntentBits.MessageContent,
+        GatewayIntentBits.DirectMessages,
+    ],
 });
 
-const channelIdsEnv = process.env.DISCORD_CHANNEL_IDS || "";
+const channelIdsEnv = process.env.DISCORD_CHANNEL_IDS || '';
+const channelIds = channelIdsEnv.split(',').map((c) => c.trim());
 
-const channelIds = channelIdsEnv.split(",").map((c) => c.trim());
+// Папярэдняя апрацоўка HTML перад канвертацыяй
+// function preprocessHtml(html: string): string {
+//     return html
+//         .replace(/<br\s*\/?>/gi, '\n') // Замяняем <br> на перанос
+//         .replace(/&nbsp;/g, ' ') // Замяняем &nbsp; на звычайны прабел
+//         .trim();
+// }
 
-export async function sendMessageToChannels(
-  text?: string,
-  imageUrls?: string[],
-  discordChunks?: string[]
-) {
-  function htmlToDiscordMarkdown(html: string): string {
-    let result = html;
-
-    // First, clean up any nested or malformed tags
-    result = result
-      // Remove nested bold tags
-      .replace(/<b><b>(.*?)<\/b><\/b>/gi, "**$1**")
-      .replace(/<b>\s*<b>(.*?)<\/b>\s*<\/b>/gi, "**$1**")
-      // Remove nested italic tags
-      .replace(/<i><i>(.*?)<\/i><\/i>/gi, "*$1*")
-      .replace(/<i>\s*<i>(.*?)<\/i>\s*<\/i>/gi, "*$1*")
-      // Clean up any remaining nested tags
-      .replace(/<(\w+)><\1>(.*?)<\/\1><\/\1>/gi, "<$1>$2</$1>");
-
-    // Now convert HTML to Discord markdown
-    result = result
-      .replace(/<b>(.*?)<\/b>/gi, "**$1**")
-      .replace(/<strong>(.*?)<\/strong>/gi, "**$1**")
-      .replace(/<i>(.*?)<\/i>/gi, "*$1*")
-      .replace(/<em>(.*?)<\/em>/gi, "*$1*")
-      .replace(/<u>(.*?)<\/u>/gi, "__$1__")
-      .replace(/<s>(.*?)<\/s>/gi, "~~$1~~")
-      .replace(/<code>(.*?)<\/code>/gi, "`$1`")
-      .replace(/<pre>(.*?)<\/pre>/gi, "```\n$1\n```")
-      .replace(/<a href="([^"]*)">(.*?)<\/a>/gi, "[$2]($1)")
-      .replace(/<br\s*\/?>/gi, "\n")
-      // Handle HTML entities
-      .replace(/&lt;/g, "<")
-      .replace(/&gt;/g, ">")
-      .replace(/&amp;/g, "&")
-      .replace(/&quot;/g, '"')
-      .replace(/&#39;/g, "'");
-
-    // Clean up any remaining malformed formatting
-    result = result
-      // Fix multiple asterisks
-      .replace(/\*{3,}/g, "**")
-      // Fix empty formatting
-      .replace(/\*\*\s*\*\*/g, "")
-      .replace(/\*\s*\*/g, "")
-      .replace(/__\s*__/g, "")
-      // Clean up extra spaces around formatting
-      .replace(/\*\*\s+/g, "**")
-      .replace(/\s+\*\*/g, "**")
-      .replace(/\*\s+/g, "*")
-      .replace(/\s+\*/g, "*");
-
-    return result;
-  }
-
-  for (const channelId of channelIds) {
-    try {
-      const channel = await client.channels.fetch(channelId);
-      if (!channel?.isTextBased()) {
-        console.error(`Channel ${channelId} not found or is not text-based`);
-        continue;
-      }
-
-      // Handle chunked messages (from file processing)
-      if (discordChunks && discordChunks.length > 0) {
-        for (let i = 0; i < discordChunks.length; i++) {
-          const chunkHeader =
-            discordChunks.length > 1
-              ? `📄 Part ${i + 1}/${discordChunks.length}\n\n`
-              : "";
-
-          // Convert HTML formatting to Discord markdown
-          const convertedChunk = htmlToDiscordMarkdown(discordChunks[i]);
-
-          const messagePayload: {
-            content: string;
-            files?: string[];
-          } = {
-            content: chunkHeader + convertedChunk,
-          };
-
-          if (imageUrls && imageUrls.length > 0 && i === 0) {
-            messagePayload.files = imageUrls;
-          }
-
-          await (channel as TextBasedChannel).send(messagePayload);
-        }
-        continue;
-      }
-
-      // Handle regular messages (existing logic)
-      const markdownText = text ? htmlToDiscordMarkdown(text) : undefined;
-
-      const messagePayload: {
-        content?: string;
-        files?: string[];
-      } = {};
-
-      if (markdownText) {
-        messagePayload.content = markdownText;
-      }
-
-      if (imageUrls && imageUrls.length > 0) {
-        messagePayload.files = imageUrls;
-      }
-
-      await (channel as TextBasedChannel).send(messagePayload);
-    } catch (error) {
-      console.error(
-        `Error sending message to Discord channel ${channelId}:`,
-        error
-      );
+// Канвертацыя HTML у Discord Markdown
+function htmlToDiscordMarkdown(html: string): string {
+    const nhm = new NodeHtmlMarkdown({
+        strongDelimiter: '**',
+        emDelimiter: '*',
+        codeBlockStyle: 'fenced',
+        bulletMarker: '•',
+        headingStyle: 'atx',
+        hr: '---',
+        br: '\n', // УВАГА: толькі адзін перанос
+        keepDataImages: false,
+        useLinkReferenceDefinitions: false,
+        useInlineLinks: true,
+        blockElements: [
+            'p',
+            'div',
+            'blockquote',
+            'pre',
+            'h1',
+            'h2',
+            'h3',
+            'h4',
+            'h5',
+            'h6',
+            'ul',
+            'ol',
+            'li',
+            'table',
+            'thead',
+            'tbody',
+            'tr',
+            'th',
+            'td',
+        ],
+    });
+    function cleanUpMarkdown(md: string): string {
+        return md
+            .replace(/•(?=\S)/g, '• ') // Дадае прабел пасля bullet
+            .replace(/\*\*(.+?)\*\*(?=\S)/g, '**$1**\n') // Падзел пасля загалоўкаў
+            .trim();
     }
-  }
+    const cleanedHtml = html.replaceAll(/\n/g, '<br/>');
+    const  md  =  nhm.translate(cleanedHtml);
+    return cleanUpMarkdown(md);
 }
 
-client.once("ready", () => {
-  if (client.user) {
-    // console.log(`Logged in as ${client.user.tag}`);
-    // sendMessageToChannels(chatIdsList, "Прывітанне! Я бот.");
-  } else {
-    console.log("Logged in, but client.user is null");
-  }
+export async function sendMessageToChannels(
+    text?: string,
+    imageUrls?: string[],
+    discordChunks?: string[],
+) {
+    if (!channelIds.length || channelIds.every((id) => !id.trim())) {
+        console.warn(
+            'No Discord channels configured - skipping Discord sending',
+        );
+        return;
+    }
+
+    for (const channelId of channelIds) {
+        if (!channelId || !channelId.trim()) {
+            console.warn('Empty Discord channel ID found - skipping');
+            continue;
+        }
+
+        try {
+            const channel = await client.channels.fetch(channelId.trim());
+            if (!channel?.isTextBased()) {
+                console.warn(
+                    `Discord channel ${channelId} not found or is not text-based - skipping`,
+                );
+                continue;
+            }
+
+            if (discordChunks && discordChunks.length > 0) {
+                for (let i = 0; i < discordChunks.length; i++) {
+                    const chunkHeader =
+                        discordChunks.length > 1
+                            ? `📄 Part ${i + 1}/${discordChunks.length}\n\n`
+                            : '';
+
+                    const convertedChunk = htmlToDiscordMarkdown(
+                        discordChunks[i],
+                    );
+
+                    const messagePayload: {
+                        content: string;
+                        files?: string[];
+                    } = {
+                        content: chunkHeader + convertedChunk,
+                    };
+
+                    if (imageUrls && imageUrls.length > 0 && i === 0) {
+                        messagePayload.files = imageUrls;
+                    }
+
+                    await (channel as TextBasedChannel).send(messagePayload);
+                }
+                continue;
+            }
+
+            const markdownText = text ? htmlToDiscordMarkdown(text) : undefined;
+
+            const messagePayload: {
+                content?: string;
+                files?: string[];
+            } = {};
+
+            if (markdownText) {
+                messagePayload.content = markdownText;
+            }
+
+            if (imageUrls && imageUrls.length > 0) {
+                messagePayload.files = imageUrls;
+            }
+
+            await (channel as TextBasedChannel).send(messagePayload);
+        } catch (error: any) {
+            if (
+                error.code === 10003 ||
+                error.code === 50001 ||
+                error.code === 50013
+            ) {
+                console.warn(
+                    `Discord channel ${channelId} not accessible (${error.message}) - skipping`,
+                );
+            } else {
+                console.error(
+                    `Error sending message to Discord channel ${channelId}:`,
+                    error,
+                );
+            }
+            continue;
+        }
+    }
+}
+
+// Аўтэнтыфікацыя і апрацоўка падзей
+client.once('ready', () => {
+    if (client.user) {
+        console.log(`Logged in as ${client.user.tag}`);
+    } else {
+        console.log('Logged in, but client.user is null');
+    }
 });
 
 client.login(TOKEN);
 
-client.on("messageCreate", async (message) => {
-  console.log("Message received:", message.content);
-  const userId = message.author.id;
-  // 1. Check if it's a direct message (DM)
-  const isDirect = message.channel.type === ChannelType.DM;
+client.on('messageCreate', async (message) => {
+    console.log('Message received:', message.content);
+    const userId = message.author.id;
+    const isDirect = message.channel.type === ChannelType.DM;
+    const isMention = message.mentions.has(client.user?.id || '');
 
-  // 2. Check if the bot is mentioned in a guild message
-  const isMention = message.mentions.has(client.user?.id || "");
+    if (message.author.bot) return;
 
-  if (isDirect) {
-    console.log("User wrote to the bot directly (DM)");
-  } else if (isMention) {
-    console.log("User mentioned the bot in a server");
-  } else {
-    console.log("Message is not a DM or mention");
-    return; // Optionally ignore
-  }
+    if (isDirect) {
+        console.log('User wrote to the bot directly (DM)');
+    } else if (isMention) {
+        console.log('User mentioned the bot in a server');
+    } else {
+        console.log('Message is not a DM or mention');
+        return;
+    }
 
-  if (message.author.bot) return;
-  console.log("User ID:", userId);
-  const channelId = message.channel.id;
+    const channelId = message.channel.id;
+    console.log('User ID:', userId);
+    console.log('Channel ID:', channelId);
 
-  console.log("Channel ID:", channelId);
-
-  message.channel.send({
-    content:
-      "channelId: " +
-      channelId +
-      " userId: " +
-      userId +
-      " message: " +
-      message.content,
-    flags: MessageFlags.SuppressNotifications,
-  });
-
-  if (message.author.bot) return;
+    message.channel.send({
+        content:
+            'channelId: ' +
+            channelId +
+            ' userId: ' +
+            userId +
+            ' message: ' +
+            message.content,
+        flags: MessageFlags.SuppressNotifications,
+    });
 });

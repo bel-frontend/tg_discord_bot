@@ -26,6 +26,15 @@ async function beforeTelegramSend(
   const imageUrls = await Promise.all(fileIds.map(getTelegramFileUrl));
   console.log(imageUrls);
 
+  // Check if Discord is configured before attempting to send
+  const discordChannelIds = process.env.DISCORD_CHANNEL_IDS || "";
+  const hasDiscordChannels = discordChannelIds.split(",").some((id) => id.trim());
+
+  if (!hasDiscordChannels) {
+    console.warn("No Discord channels configured - skipping Discord sending");
+    return;
+  }
+
   // Handle chunked text (from file processing)
   if (telegramChunks && telegramChunks.length > 0) {
     const extractedContent = { text: text, isFormatted: true };
