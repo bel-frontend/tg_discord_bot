@@ -1,7 +1,17 @@
 import TelegramBot from "node-telegram-bot-api";
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
-const pdfParse = require('pdf-parse');
+
+// We'll use pdf2pic and then OCR, or try pdf-lib for better formatting extraction
+let pdfParse: any;
+let pdfLib: any;
+
+try {
+  pdfParse = require('pdf-parse');
+  pdfLib = require('pdf-lib');
+} catch (error) {
+  console.warn('PDF parsing libraries not installed. Install pdf-parse and pdf-lib for better PDF support.');
+}
 
 interface ChunkedText {
   telegramChunks: string[];
@@ -11,6 +21,16 @@ interface ChunkedText {
 interface ParsedContent {
   text: string;
   isFormatted: boolean;
+}
+
+interface PDFTextItem {
+  str: string;
+  dir: string;
+  width: number;
+  height: number;
+  transform: number[];
+  fontName: string;
+  hasEOL: boolean;
 }
 
 export class FileReader {
@@ -34,7 +54,7 @@ export class FileReader {
       const uint8Array = new Uint8Array(buffer);
 
       if (fileName.toLowerCase().endsWith('.pdf')) {
-        return await this.extractFromPDF(uint8Array);
+        return await this.extractFromPDFAdvanced(uint8Array);
       } else if (fileName.toLowerCase().endsWith('.txt')) {
         return { text: this.extractFromTXT(uint8Array), isFormatted: false };
       } else {
@@ -45,27 +65,140 @@ export class FileReader {
     }
   }
 
-  private async extractFromPDF(buffer: Uint8Array): Promise<ParsedContent> {
+  private async extractFromPDFAdvanced(buffer: Uint8Array): Promise<ParsedContent> {
     try {
-      const data = await pdfParse(buffer, {
-        // Get more detailed parsing options
-        max: 0, // No limit on pages
-        version: 'v1.10.100'
-      });
+      // Try advanced parsing with pdf-parse render_page option to get text items
+      const options = {
+        pagerender: (pageData: any) => {
+          return this.renderPageWithFormatting(pageData);
+        }
+      };
 
-      // Try to preserve formatting by analyzing text patterns
-      const formattedText = this.enhancePDFFormatting(data.text, data);
+      const data = await pdfParse(buffer, options);
+      
+      // If we got formatted text from our custom renderer, use it
+      if (data.formattedText) {
+        return {
+          text: data.formattedText,
+          isFormatted: true
+        };
+      }
+
+      // Fallback to basic text with enhancement
+      const enhancedText = this.enhancePDFFormatting(data.text);
       
       return {
-        text: formattedText,
+        text: enhancedText,
         isFormatted: true
       };
     } catch (error) {
-      throw new Error('Failed to extract text from PDF. The file might be corrupted or password-protected.');
+      console.error('Advanced PDF parsing failed:', error);
+      
+      // Fallback to basic pdf-parse
+      try {
+        const data = await pdfParse(buffer);
+        const enhancedText = this.enhancePDFFormatting(data.text);
+        
+        return {
+          text: enhancedText,
+          isFormatted: true
+        };
+      } catch (fallbackError) {
+        throw new Error('Failed to extract text from PDF. The file might be corrupted or password-protected.');
+      }
     }
   }
 
-  private enhancePDFFormatting(rawText: string, pdfData: any): string {
+  private async renderPageWithFormatting(pageData: any): Promise<string> {
+    try {
+      // Get text content with positioning and font information
+      const textContent = await pageData.getTextContent();
+      const items: PDFTextItem[] = textContent.items;
+      
+      if (!items || items.length === 0) {
+        return '';
+      }
+
+      // Group text items by their vertical position (Y coordinate)
+      const lines: { [key: number]: PDFTextItem[] } = {};
+      
+      items.forEach((item: PDFTextItem) => {
+        const y = Math.round(item.transform[5]); // Y position
+        if (!lines[y]) {
+          lines[y] = [];
+        }
+        lines[y].push(item);
+      });
+
+      // Sort lines by Y position (top to bottom)
+      const sortedY = Object.keys(lines).map(Number).sort((a, b) => b - a);
+      
+      const formattedLines: string[] = [];
+      let previousFontSize = 0;
+      let previousY = 0;
+
+      for (const y of sortedY) {
+        const lineItems = lines[y].sort((a, b) => a.transform[4] - b.transform[4]); // Sort by X position
+        
+        let lineText = '';
+        let lineFormatting = '';
+        let maxFontSize = 0;
+        
+        for (const item of lineItems) {
+          const fontSize = item.transform[0]; // Font size from transform matrix
+          const fontName = item.fontName || '';
+          const text = item.str;
+          
+          maxFontSize = Math.max(maxFontSize, fontSize);
+          
+          // Detect formatting based on font properties
+          let formattedText = text;
+          
+          // Bold detection (common bold font names or larger size)
+          if (fontName.toLowerCase().includes('bold') || 
+              fontName.toLowerCase().includes('black') ||
+              fontSize > previousFontSize * 1.2) {
+            formattedText = `<b>${text}</b>`;
+          }
+          
+          // Italic detection
+          else if (fontName.toLowerCase().includes('italic') || 
+                   fontName.toLowerCase().includes('oblique')) {
+            formattedText = `<i>${text}</i>`;
+          }
+          
+          lineText += formattedText;
+        }
+        
+        // Detect headers (larger font size or significant gap)
+        const yGap = previousY - y;
+        if (maxFontSize > previousFontSize * 1.3 || yGap > maxFontSize * 2) {
+          if (lineText.trim() && lineText.length < 100) {
+            lineText = `<b>${lineText.trim()}</b>`;
+          }
+        }
+        
+        // Add extra line break for large gaps (paragraph separation)
+        if (yGap > maxFontSize * 1.5 && formattedLines.length > 0) {
+          formattedLines.push('');
+        }
+        
+        if (lineText.trim()) {
+          formattedLines.push(lineText.trim());
+        }
+        
+        previousFontSize = maxFontSize;
+        previousY = y;
+      }
+      
+      return formattedLines.join('\n');
+    } catch (error) {
+      console.error('Error in renderPageWithFormatting:', error);
+      return '';
+    }
+  }
+
+  private enhancePDFFormatting(rawText: string): string {
     let text = rawText;
 
     // Split into lines for processing
@@ -80,7 +213,7 @@ export class FileReader {
         continue;
       }
 
-      // Detect headers (lines that are short, capitalized, or followed by empty lines)
+      // Enhanced header detection
       if (this.isLikelyHeader(line, lines, i)) {
         line = `<b>${line}</b>`;
       }
@@ -95,18 +228,18 @@ export class FileReader {
         // Keep as is, already formatted
       }
       
-      // Detect quoted text (lines starting with quotes or indented)
+      // Detect quoted text
       else if (this.isQuotedText(line)) {
         line = `<i>"${line.replace(/^["'"'\s]*/, '').replace(/["'"'\s]*$/, '')}"</i>`;
       }
 
-      // Detect emphasis patterns (words in ALL CAPS that aren't entire sentences)
-      line = this.detectEmphasis(line);
+      // Detect emphasis patterns and preserve them
+      line = this.detectAndPreserveEmphasis(line);
 
       processedLines.push(line);
     }
 
-    // Join lines back and clean up multiple empty lines
+    // Join lines back and clean up
     text = processedLines.join('\n');
     text = text.replace(/\n{3,}/g, '\n\n'); // Max 2 consecutive newlines
 
@@ -114,65 +247,78 @@ export class FileReader {
   }
 
   private isLikelyHeader(line: string, allLines: string[], index: number): boolean {
-    // Check if line is likely a header based on various criteria
     const nextLine = allLines[index + 1]?.trim() || '';
     const prevLine = allLines[index - 1]?.trim() || '';
     
-    // Short lines (< 50 chars) that are followed by empty line or content
-    if (line.length < 50 && (nextLine === '' || nextLine.length > line.length)) {
-      return true;
-    }
+    // Check multiple criteria for header detection
+    const criteria = [
+      // Short lines followed by content
+      line.length < 60 && nextLine.length > line.length,
+      
+      // Lines with high uppercase ratio
+      (line.match(/[A-ZА-Я]/g) || []).length / line.length > 0.6 && line.length > 3,
+      
+      // Lines ending with colon
+      line.endsWith(':') && line.length < 80,
+      
+      // Chapter/section patterns
+      /^(Chapter|Section|Part|Глава|Раздел|ГЛАВА|РАЗДЕЛ)\s+\d+/i.test(line),
+      
+      // Roman numerals
+      /^[IVX]+\.\s+/.test(line),
+      
+      // All caps short lines
+      line === line.toUpperCase() && line.length < 50 && line.length > 3,
+      
+      // Lines surrounded by empty lines and short
+      prevLine === '' && nextLine === '' && line.length < 60
+    ];
     
-    // Lines that are mostly uppercase (excluding common words)
-    const upperRatio = (line.match(/[A-Z]/g) || []).length / line.length;
-    if (upperRatio > 0.7 && line.length > 3) {
-      return true;
-    }
-    
-    // Lines ending with colon
-    if (line.endsWith(':') && line.length < 80) {
-      return true;
-    }
-    
-    // Chapter/section patterns
-    if (/^(Chapter|Section|Part|Глава|Раздел)\s+\d+/i.test(line)) {
-      return true;
-    }
-    
-    return false;
+    return criteria.some(criterion => criterion);
   }
 
   private isListItem(line: string): boolean {
-    return /^[\-\*\•]\s+/.test(line);
+    return /^[\-\*\•▪▫]\s+/.test(line);
   }
 
   private isNumberedListItem(line: string): boolean {
-    return /^\d+[\.\)]\s+/.test(line);
+    return /^\d+[\.\)]\s+/.test(line) || /^[a-zA-Z][\.\)]\s+/.test(line);
   }
 
   private isQuotedText(line: string): boolean {
-    // Lines starting with quotes or heavily indented
-    return /^["'"']/.test(line) || /^\s{4,}/.test(line);
+    return /^["'"']/.test(line) || 
+           /^\s{4,}/.test(line) || 
+           line.startsWith('»') || 
+           line.startsWith('«');
   }
 
-  private detectEmphasis(line: string): string {
-    // Detect words in ALL CAPS (but not entire sentences)
-    return line.replace(/\b[A-ZА-Я]{2,}\b/g, (match) => {
-      // Don't format if it's a common abbreviation or the entire line is caps
-      if (match.length < 15 && line !== match && !/^(USD|EUR|PDF|HTML|XML|JSON|API|URL|HTTP|HTTPS|CEO|CTO|FAQ|USA|UK|EU)$/.test(match)) {
-        return `<b>${match}</b>`;
-      }
-      return match;
-    });
+  private detectAndPreserveEmphasis(line: string): string {
+    // Detect and preserve various emphasis patterns
+    return line
+      // ALL CAPS words (but not entire sentences or common abbreviations)
+      .replace(/\b[A-ZА-Я]{3,}\b/g, (match) => {
+        if (match.length < 15 && 
+            line !== match && 
+            !/^(USD|EUR|PDF|HTML|XML|JSON|API|URL|HTTP|HTTPS|CEO|CTO|FAQ|USA|UK|EU|NATO|USSR|USA)$/.test(match)) {
+          return `<b>${match}</b>`;
+        }
+        return match;
+      })
+      // Words surrounded by asterisks
+      .replace(/\*([^*]+)\*/g, '<b>$1</b>')
+      // Words surrounded by underscores
+      .replace(/\b_([^_]+)_\b/g, '<i>$1</i>')
+      // Words in quotes that might be emphasized
+      .replace(/"([^"]{1,50})"/g, '<i>"$1"</i>');
   }
 
   private extractFromTXT(buffer: Uint8Array): string {
     try {
-      // Try UTF-8 first, fallback to other encodings if needed
+      // Try UTF-8 first
       const decoder = new TextDecoder('utf-8');
       return decoder.decode(buffer);
     } catch (error) {
-      // Fallback to Windows-1251 for Cyrillic text
+      // Fallback to Windows-1251 for Cyrillic
       try {
         const decoder = new TextDecoder('windows-1251');
         return decoder.decode(buffer);
@@ -206,20 +352,17 @@ export class FileReader {
     for (const paragraph of paragraphs) {
       const paragraphWithSeparator = paragraph + (preserveFormatting ? '\n\n' : '\n');
       
-      // If a single paragraph is longer than the limit, split it
       if (paragraphWithSeparator.length > maxLength) {
         if (currentChunk) {
           chunks.push(currentChunk.trimEnd());
           currentChunk = '';
         }
         
-        // Split long paragraph by sentences or lines
         const subChunks = this.splitLongParagraph(paragraph, maxLength, preserveFormatting);
         chunks.push(...subChunks);
         continue;
       }
 
-      // If adding this paragraph would exceed the limit, save current chunk
       if (currentChunk.length + paragraphWithSeparator.length > maxLength) {
         if (currentChunk) {
           chunks.push(currentChunk.trimEnd());
@@ -230,7 +373,6 @@ export class FileReader {
       currentChunk += paragraphWithSeparator;
     }
 
-    // Add the last chunk if it exists
     if (currentChunk) {
       chunks.push(currentChunk.trimEnd());
     }
@@ -242,7 +384,6 @@ export class FileReader {
     const chunks: string[] = [];
     
     if (preserveFormatting) {
-      // Try to split by sentences first
       const sentences = paragraph.split(/(?<=[.!?])\s+/);
       let currentChunk = '';
       
@@ -254,7 +395,6 @@ export class FileReader {
             chunks.push(currentChunk);
             currentChunk = sentence;
           } else {
-            // Single sentence is too long, split by words
             const wordChunks = this.splitLineByWords(sentence, maxLength);
             chunks.push(...wordChunks);
           }
@@ -267,7 +407,6 @@ export class FileReader {
         chunks.push(currentChunk);
       }
     } else {
-      // Fallback to word splitting
       const wordChunks = this.splitLineByWords(paragraph, maxLength);
       chunks.push(...wordChunks);
     }
@@ -288,7 +427,6 @@ export class FileReader {
           chunks.push(currentChunk);
           currentChunk = word;
         } else {
-          // Single word is too long, force split
           chunks.push(word.substring(0, maxLength));
           currentChunk = word.substring(maxLength);
         }

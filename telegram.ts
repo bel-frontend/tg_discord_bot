@@ -96,7 +96,7 @@ export function initTelegramBot(
             // Send chunks to Telegram channels
             for (const channel of channelUsernames) {
               for (let i = 0; i < chunkedText.telegramChunks.length; i++) {
-                const chunkHeader = chunkedText.telegramChunks.length > 1 ? `` : ``;
+                const chunkHeader = chunkedText.telegramChunks.length > 1 ? `📄 ${fileName} (${i + 1}/${chunkedText.telegramChunks.length})\n\n` : `📄 ${fileName}\n\n`;
                 await bot.sendMessage(channel, chunkHeader + chunkedText.telegramChunks[i], {
                   parse_mode: "HTML",
                 });

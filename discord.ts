@@ -28,14 +28,53 @@ export async function sendMessageToChannels(
   discordChunks?: string[]
 ) {
   function htmlToDiscordMarkdown(html: string): string {
-    return html
+    let result = html;
+
+    // First, clean up any nested or malformed tags
+    result = result
+      // Remove nested bold tags
+      .replace(/<b><b>(.*?)<\/b><\/b>/gi, "**$1**")
+      .replace(/<b>\s*<b>(.*?)<\/b>\s*<\/b>/gi, "**$1**")
+      // Remove nested italic tags
+      .replace(/<i><i>(.*?)<\/i><\/i>/gi, "*$1*")
+      .replace(/<i>\s*<i>(.*?)<\/i>\s*<\/i>/gi, "*$1*")
+      // Clean up any remaining nested tags
+      .replace(/<(\w+)><\1>(.*?)<\/\1><\/\1>/gi, "<$1>$2</$1>");
+
+    // Now convert HTML to Discord markdown
+    result = result
       .replace(/<b>(.*?)<\/b>/gi, "**$1**")
       .replace(/<strong>(.*?)<\/strong>/gi, "**$1**")
       .replace(/<i>(.*?)<\/i>/gi, "*$1*")
       .replace(/<em>(.*?)<\/em>/gi, "*$1*")
       .replace(/<u>(.*?)<\/u>/gi, "__$1__")
       .replace(/<s>(.*?)<\/s>/gi, "~~$1~~")
-      .replace(/<br\s*\/?>/gi, "\n");
+      .replace(/<code>(.*?)<\/code>/gi, "`$1`")
+      .replace(/<pre>(.*?)<\/pre>/gi, "```\n$1\n```")
+      .replace(/<a href="([^"]*)">(.*?)<\/a>/gi, "[$2]($1)")
+      .replace(/<br\s*\/?>/gi, "\n")
+      // Handle HTML entities
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/&amp;/g, "&")
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'");
+
+    // Clean up any remaining malformed formatting
+    result = result
+      // Fix multiple asterisks
+      .replace(/\*{3,}/g, "**")
+      // Fix empty formatting
+      .replace(/\*\*\s*\*\*/g, "")
+      .replace(/\*\s*\*/g, "")
+      .replace(/__\s*__/g, "")
+      // Clean up extra spaces around formatting
+      .replace(/\*\*\s+/g, "**")
+      .replace(/\s+\*\*/g, "**")
+      .replace(/\*\s+/g, "*")
+      .replace(/\s+\*/g, "*");
+
+    return result;
   }
 
   for (const channelId of channelIds) {
@@ -53,11 +92,15 @@ export async function sendMessageToChannels(
             discordChunks.length > 1
               ? `📄 Part ${i + 1}/${discordChunks.length}\n\n`
               : "";
+
+          // Convert HTML formatting to Discord markdown
+          const convertedChunk = htmlToDiscordMarkdown(discordChunks[i]);
+
           const messagePayload: {
             content: string;
             files?: string[];
           } = {
-            content: chunkHeader + htmlToDiscordMarkdown(discordChunks[i]),
+            content: chunkHeader + convertedChunk,
           };
 
           if (imageUrls && imageUrls.length > 0 && i === 0) {
