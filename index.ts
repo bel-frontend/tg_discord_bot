@@ -1,4 +1,5 @@
 import TelegramBot from "node-telegram-bot-api";
+import { FileReader } from "./fileReader.js";
 
 import { sendMessageToChannels } from "./discord";
 import { initTelegramBot } from "./telegram";
@@ -6,13 +7,16 @@ import { initTelegramBot } from "./telegram";
 const telegramBot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN!, {
   polling: false,
 });
+const fileReader = new FileReader(telegramBot);
+
 console.log("Initializing bots...");
 
 // Example callback function to be called before sending a message to Telegram channels
 async function beforeTelegramSend(
   userId: number,
   text: string,
-  fileIds: string[]
+  fileIds: string[],
+  telegramChunks?: string[]
 ) {
   async function getTelegramFileUrl(fileId: string): Promise<string> {
     const file = await telegramBot.getFile(fileId);
@@ -22,7 +26,15 @@ async function beforeTelegramSend(
   const imageUrls = await Promise.all(fileIds.map(getTelegramFileUrl));
   console.log(imageUrls);
 
-  sendMessageToChannels(text, imageUrls);
+  // Handle chunked text (from file processing)
+  if (telegramChunks && telegramChunks.length > 0) {
+    const extractedContent = { text: text, isFormatted: true };
+    const discordChunks = fileReader.chunkText(extractedContent).discordChunks;
+    sendMessageToChannels(undefined, imageUrls, discordChunks);
+  } else {
+    // Handle regular messages
+    sendMessageToChannels(text, imageUrls);
+  }
 }
 
 // Initialize Telegram bot and pass the callback

@@ -1,4 +1,5 @@
 import TelegramBot from "node-telegram-bot-api";
+import { FileReader } from "./fileReader.js";
 
 const token = process.env.TELEGRAM_BOT_TOKEN || "";
 const channelUsernamesEnv = process.env.TELEGRAM_CHANNEL_USERNAMES;
@@ -11,7 +12,8 @@ const channelUsernames = channelUsernamesEnv.split(",").map((c) => c.trim());
 let beforeSendCallback: (
   userId: number,
   text: string,
-  images: string[]
+  images: string[],
+  telegramChunks?: string[]
 ) => void = () => {};
 
 function formatTextWithEntities(
@@ -58,10 +60,11 @@ function formatTextWithEntities(
 }
 
 export function initTelegramBot(
-  callback: (userId: number, text: string, images: string[]) => void
+  callback: (userId: number, text: string, images: string[], telegramChunks?: string[]) => void
 ) {
   beforeSendCallback = callback;
   const bot = new TelegramBot(token, { polling: true });
+  const fileReader = new FileReader(bot);
 
   bot.onText(/\/start/, (msg) => {
     bot.sendMessage(msg.chat.id, "Прывітанне! Я бот.");
@@ -75,6 +78,45 @@ export function initTelegramBot(
     if (text.startsWith("/")) return;
 
     try {
+      // Handle document files
+      if (msg.document) {
+        const fileName = msg.document.file_name || "";
+        const fileId = msg.document.file_id;
+        
+        if (fileName.toLowerCase().endsWith('.txt') || fileName.toLowerCase().endsWith('.pdf')) {
+          await bot.sendChatAction(userId, "typing");
+          
+          try {
+            const extractedContent = await fileReader.extractTextFromFile(fileId, fileName);
+            const chunkedText = fileReader.chunkText(extractedContent);
+            
+            // Send to callback with chunks
+            beforeSendCallback(userId, extractedContent.text, [], chunkedText.telegramChunks);
+            
+            // Send chunks to Telegram channels
+            for (const channel of channelUsernames) {
+              for (let i = 0; i < chunkedText.telegramChunks.length; i++) {
+                const chunkHeader = chunkedText.telegramChunks.length > 1 ? `` : ``;
+                await bot.sendMessage(channel, chunkHeader + chunkedText.telegramChunks[i], {
+                  parse_mode: "HTML",
+                });
+              }
+            }
+            
+            await bot.sendMessage(userId, `Файл "${fileName}" апрацаваны і адпраўлены ў каналы (${chunkedText.telegramChunks.length} частак).`);
+            return;
+          } catch (error) {
+            console.error("File processing error:", error);
+            await bot.sendMessage(userId, `Памылка апрацоўкі файла: ${error instanceof Error ? error.message : 'Невядомая памылка'}`);
+            return;
+          }
+        } else {
+          await bot.sendMessage(userId, "Падтрымліваюцца толькі файлы .txt і .pdf");
+          return;
+        }
+      }
+
+      // Handle regular messages (existing logic)
       const formattedText = msg.caption
         ? formatTextWithEntities(msg.caption, msg.caption_entities)
         : formatTextWithEntities(text, msg.entities);

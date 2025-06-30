@@ -24,7 +24,8 @@ const channelIds = channelIdsEnv.split(",").map((c) => c.trim());
 
 export async function sendMessageToChannels(
   text?: string,
-  imageUrls?: string[]
+  imageUrls?: string[],
+  discordChunks?: string[]
 ) {
   function htmlToDiscordMarkdown(html: string): string {
     return html
@@ -45,6 +46,30 @@ export async function sendMessageToChannels(
         continue;
       }
 
+      // Handle chunked messages (from file processing)
+      if (discordChunks && discordChunks.length > 0) {
+        for (let i = 0; i < discordChunks.length; i++) {
+          const chunkHeader =
+            discordChunks.length > 1
+              ? `📄 Part ${i + 1}/${discordChunks.length}\n\n`
+              : "";
+          const messagePayload: {
+            content: string;
+            files?: string[];
+          } = {
+            content: chunkHeader + htmlToDiscordMarkdown(discordChunks[i]),
+          };
+
+          if (imageUrls && imageUrls.length > 0 && i === 0) {
+            messagePayload.files = imageUrls;
+          }
+
+          await (channel as TextBasedChannel).send(messagePayload);
+        }
+        continue;
+      }
+
+      // Handle regular messages (existing logic)
       const markdownText = text ? htmlToDiscordMarkdown(text) : undefined;
 
       const messagePayload: {
