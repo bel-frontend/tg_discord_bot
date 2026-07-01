@@ -18,6 +18,8 @@ declare module '@toast-ui/editor' {
         constructor(options: EditorOptions);
         getMarkdown(): string;
         setMarkdown(markdown: string, cursorToEnd?: boolean): void;
+        setSelection(start: [number, number], end?: [number, number]): void;
+        focus(): void;
         destroy(): void;
     }
 }

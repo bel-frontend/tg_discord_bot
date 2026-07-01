@@ -36,6 +36,25 @@ export async function api<T = any>(
     return data as T;
 }
 
+export async function validatePost(markdown: string): Promise<{
+    ok: boolean;
+    issues: Array<{
+        platform: string;
+        chunk: number;
+        message: string;
+        tag?: string;
+        offset?: number;
+        line?: number;
+        excerpt?: string;
+        htmlContext?: string;
+    }>;
+}> {
+    return api('/api/validate', {
+        method: 'POST',
+        body: { markdown },
+    });
+}
+
 function authHeaders(): Record<string, string> {
     return getToken() ? { authorization: `Bearer ${getToken()}` } : {};
 }

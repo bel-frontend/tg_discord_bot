@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { api, fetchImageObjectUrl } from '../api';
+import { api, fetchImageObjectUrl, validatePost } from '../api';
 import { useToast } from '../toast';
 import type {
     ChannelOption,
@@ -17,10 +17,17 @@ interface Props {
     user: User;
     theme: 'dark' | 'light';
     onToggleTheme: () => void;
+    onManageResources: () => void;
     onLogout: () => void;
 }
 
-export function Composer({ user, theme, onToggleTheme, onLogout }: Props) {
+export function Composer({
+    user,
+    theme,
+    onToggleTheme,
+    onManageResources,
+    onLogout,
+}: Props) {
     const toast = useToast();
     const editorRef = useRef<MarkdownEditorHandle>(null);
 
@@ -35,6 +42,16 @@ export function Composer({ user, theme, onToggleTheme, onLogout }: Props) {
     const [charCount, setCharCount] = useState(0);
     const [results, setResults] = useState<PublishResult[] | null>(null);
     const [publishing, setPublishing] = useState(false);
+    const [validationIssues, setValidationIssues] = useState<
+        Array<{
+            platform: string;
+            chunk: number;
+            message: string;
+            line?: number;
+            excerpt?: string;
+            htmlContext?: string;
+        }>
+    >([]);
 
     // Mirror the latest state into refs so the debounced save reads fresh values.
     const draftIdRef = useRef(draftId);
@@ -50,6 +67,7 @@ export function Composer({ user, theme, onToggleTheme, onLogout }: Props) {
 
     const suppressSave = useRef(false);
     const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const validateTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     const parseImageUrls = () =>
         imageUrlsRef.current
@@ -113,7 +131,21 @@ export function Composer({ user, theme, onToggleTheme, onLogout }: Props) {
     }, [collect, saveDraft]);
 
     const handleEditorChange = useCallback(() => {
-        setCharCount(editorRef.current?.getMarkdown().length ?? 0);
+        const markdown = editorRef.current?.getMarkdown() ?? '';
+        setCharCount(markdown.length);
+        if (validateTimer.current) clearTimeout(validateTimer.current);
+        validateTimer.current = setTimeout(async () => {
+            if (!markdown.trim()) {
+                setValidationIssues([]);
+                return;
+            }
+            try {
+                const result = await validatePost(markdown);
+                setValidationIssues(result.issues);
+            } catch {
+                // Validation is advisory; publish still has server-side checks.
+            }
+        }, 350);
         scheduleSave();
     }, [scheduleSave]);
 
@@ -213,6 +245,9 @@ export function Composer({ user, theme, onToggleTheme, onLogout }: Props) {
 
     async function publish() {
         if (!targets.length) return toast('Select at least one channel', 'warn');
+        if (validationIssues.length) {
+            return toast(validationIssues[0].message, 'error');
+        }
         const markdown = editorRef.current?.getMarkdown() ?? '';
         const imageIds = images.map((i) => i.id);
         if (!markdown.trim() && !imageIds.length && !parseImageUrls().length)
@@ -269,6 +304,9 @@ export function Composer({ user, theme, onToggleTheme, onLogout }: Props) {
                     >
                         ◐
                     </button>
+                    <button className="btn ghost" onClick={onManageResources}>
+                        Resources
+                    </button>
                     <span className="user-email">{user.email}</span>
                     <button className="btn ghost" onClick={onLogout}>
                         Log out
@@ -301,6 +339,34 @@ export function Composer({ user, theme, onToggleTheme, onLogout }: Props) {
                         theme={theme}
                         onChange={handleEditorChange}
                     />
+                    {validationIssues.length > 0 && (
+                        <button
+                            type="button"
+                            className="validation-warning"
+                            title="Jump to likely source line"
+                            onClick={() => {
+                                const line = validationIssues[0].line;
+                                if (line) editorRef.current?.focusLine(line);
+                            }}
+                        >
+                            <strong>Telegram formatting problem</strong>
+                            <span>
+                                Chunk {validationIssues[0].chunk}:{' '}
+                                {validationIssues[0].message}
+                            </span>
+                            {validationIssues[0].line && (
+                                <span>
+                                    Likely source: line{' '}
+                                    {validationIssues[0].line}
+                                </span>
+                            )}
+                            {validationIssues[0].excerpt && (
+                                <code className="validation-excerpt">
+                                    {validationIssues[0].excerpt}
+                                </code>
+                            )}
+                        </button>
+                    )}
                     <div className="editor-foot">
                         <span className="save-status">{saveStatus}</span>
                         <span

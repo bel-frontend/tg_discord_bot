@@ -12,7 +12,17 @@ import {
     listDrafts,
     updateDraft,
 } from './drafts';
+import {
+    createChannelResource,
+    deleteChannelResource,
+    updateChannelResource,
+} from './channelResources';
 import { getUpload, resolveImages, saveUpload } from './uploads';
+import { markdownToTelegramHtml } from './converters/markdown';
+import { splitTextIntoChunks, TELEGRAM_LIMIT } from './chunk';
+import { validateTelegramHtml } from './telegramValidation';
+
+const MAX_UPLOAD_BYTES = 10 * 1024 * 1024; // 10 MB per image
 
 // The Vite build outputs the frontend here (see frontend/vite.config.ts).
 const PUBLIC_DIR = join(import.meta.dir, '..', 'public');
@@ -28,6 +38,47 @@ function json(data: unknown, status = 200): Response {
         status,
         headers: { 'content-type': 'application/json' },
     });
+}
+
+function lineInfo(markdown: string, index: number) {
+    const before = markdown.slice(0, Math.max(0, index));
+    const line = before.split('\n').length;
+    const lineStart = markdown.lastIndexOf('\n', Math.max(0, index - 1)) + 1;
+    const nextNewline = markdown.indexOf('\n', index);
+    const lineEnd = nextNewline === -1 ? markdown.length : nextNewline;
+    return {
+        line,
+        excerpt: markdown.slice(lineStart, lineEnd).trim(),
+    };
+}
+
+function findLikelyMarkdownSource(markdown: string, tag?: string) {
+    const checks: Array<[RegExp, string[]]> = [
+        [/^>\s?.+/m, ['blockquote']],
+        [/```[\s\S]*?```/, ['pre']],
+        [/`[^`\n]+`/, ['code']],
+        [/\|\|[\s\S]+?\|\|/, ['tg-spoiler']],
+        [/__[\s\S]+?__/, ['u', 'ins']],
+        [/\*\*[\s\S]+?\*\*/, ['b', 'strong']],
+        [/~~[\s\S]+?~~/, ['s', 'strike', 'del']],
+        [/\*[^*\n]+?\*/, ['i', 'em']],
+        [/\[[^\]]+]\([^)]+\)/, ['a']],
+    ];
+
+    for (const [pattern, tags] of checks) {
+        if (tag && !tags.includes(tag)) continue;
+        const match = pattern.exec(markdown);
+        if (match?.index !== undefined) return lineInfo(markdown, match.index);
+    }
+
+    return undefined;
+}
+
+function htmlContext(chunk: string, offset?: number) {
+    if (offset === undefined) return undefined;
+    const start = Math.max(0, offset - 80);
+    const end = Math.min(chunk.length, offset + 140);
+    return chunk.slice(start, end);
 }
 
 async function serveStatic(pathname: string): Promise<Response> {
@@ -78,26 +129,131 @@ async function handleApi(req: Request, url: URL): Promise<Response> {
         return json({ channels: await listAllChannels() });
     }
 
-    if (path === '/api/publish' && method === 'POST') {
+    if (path === '/api/validate' && method === 'POST') {
         const body = await req.json().catch(() => ({}));
-        const targets: PublishTarget[] = Array.isArray(body.targets)
-            ? body.targets
-            : [];
+        const markdown = String(body.markdown ?? '');
+        const telegramHtml = markdownToTelegramHtml(markdown);
+        const chunks = splitTextIntoChunks(telegramHtml, TELEGRAM_LIMIT, true);
+        const issues = chunks.flatMap((chunk, index) =>
+            validateTelegramHtml(chunk).map((issue) => {
+                const source = findLikelyMarkdownSource(markdown, issue.tag);
+                return {
+                    platform: 'telegram',
+                    chunk: index + 1,
+                    ...issue,
+                    line: source?.line,
+                    excerpt: source?.excerpt,
+                    htmlContext: htmlContext(chunk, issue.offset),
+                };
+            }),
+        );
+
+        return json({ ok: issues.length === 0, issues });
+    }
+
+    if (path === '/api/channels' && method === 'POST') {
+        const body = await req.json().catch(() => ({}));
+        try {
+            const channel = await createChannelResource(user.id, body);
+            return json({ channel }, 201);
+        } catch (err: any) {
+            return json({ error: err?.message || 'Failed to save channel' }, 400);
+        }
+    }
+
+    const channelMatch = path.match(/^\/api\/channels\/([^/]+)$/);
+    if (channelMatch) {
+        const id = channelMatch[1];
+        if (method === 'PUT') {
+            const body = await req.json().catch(() => ({}));
+            try {
+                const channel = await updateChannelResource(id, body);
+                return channel
+                    ? json({ channel })
+                    : json({ error: 'Not found' }, 404);
+            } catch (err: any) {
+                return json(
+                    { error: err?.message || 'Failed to update channel' },
+                    400,
+                );
+            }
+        }
+        if (method === 'DELETE') {
+            const ok = await deleteChannelResource(id);
+            return ok ? json({ ok: true }) : json({ error: 'Not found' }, 404);
+        }
+    }
+
+    if (path === '/api/publish' && method === 'POST') {
+        const contentType = req.headers.get('content-type') || '';
+        let markdown = '';
+        let targets: PublishTarget[] = [];
+        let imageUrls: string[] = [];
+        let images: Array<{
+            data: Uint8Array;
+            filename: string;
+            contentType?: string;
+        }> = [];
+
+        if (contentType.includes('multipart/form-data')) {
+            const form = await req.formData();
+            markdown = String(form.get('markdown') ?? '');
+            try {
+                targets = JSON.parse(String(form.get('targets') ?? '[]'));
+                imageUrls = JSON.parse(String(form.get('imageUrls') ?? '[]'));
+            } catch {
+                return json({ error: 'Invalid publish payload' }, 400);
+            }
+
+            const files = form
+                .getAll('images')
+                .filter((f): f is File => f instanceof File);
+            try {
+                images = await Promise.all(
+                    files.map(async (file) => {
+                        if (!(file.type || '').startsWith('image/')) {
+                            throw new Error(`"${file.name}" is not an image`);
+                        }
+                        if (file.size > MAX_UPLOAD_BYTES) {
+                            throw new Error(
+                                `"${file.name}" is larger than 10 MB`,
+                            );
+                        }
+                        return {
+                            data: new Uint8Array(await file.arrayBuffer()),
+                            filename: file.name || 'image',
+                            contentType: file.type,
+                        };
+                    }),
+                );
+            } catch (err: any) {
+                return json({ error: err?.message || 'Invalid image' }, 400);
+            }
+        } else {
+            const body = await req.json().catch(() => ({}));
+            markdown = String(body.markdown ?? '');
+            targets = Array.isArray(body.targets) ? body.targets : [];
+            imageUrls = Array.isArray(body.imageUrls)
+                ? body.imageUrls.map(String)
+                : [];
+            const imageIds: string[] = Array.isArray(body.imageIds)
+                ? body.imageIds.map(String)
+                : [];
+            images = await resolveImages(user.id, imageIds);
+        }
+
+        if (!Array.isArray(targets)) {
+            targets = [];
+        }
         if (!targets.length) {
             return json({ error: 'No channels selected' }, 400);
         }
-        if (!body.markdown || !String(body.markdown).trim()) {
+        if (!markdown.trim() && !imageUrls.length && !images.length) {
             return json({ error: 'Content is empty' }, 400);
         }
-        const imageIds: string[] = Array.isArray(body.imageIds)
-            ? body.imageIds.map(String)
-            : [];
-        const images = await resolveImages(user.id, imageIds);
         const results = await publishToTargets(targets, {
-            markdown: String(body.markdown),
-            imageUrls: Array.isArray(body.imageUrls)
-                ? body.imageUrls.map(String)
-                : [],
+            markdown,
+            imageUrls,
             images,
         });
         return json({ results });
@@ -170,10 +326,8 @@ async function handleApi(req: Request, url: URL): Promise<Response> {
     return json({ error: 'Not found' }, 404);
 }
 
-export function startServer(): void {
-    const port = Number(process.env.PORT) || 3000;
-
-    Bun.serve({
+function createServer(port: number) {
+    return Bun.serve({
         port,
         idleTimeout: 60,
         async fetch(req) {
@@ -195,6 +349,40 @@ export function startServer(): void {
             return serveStatic(url.pathname);
         },
     });
+}
 
-    console.log(`HTTP server listening on http://localhost:${port}`);
+function isPortBusyError(error: any): boolean {
+    const message = String(error?.message ?? error ?? '');
+    return (
+        error?.code === 'EADDRINUSE' ||
+        message.includes('EADDRINUSE') ||
+        message.includes('port') && message.includes('in use')
+    );
+}
+
+export function startServer(): void {
+    const requestedPort = Number(process.env.PORT) || 3000;
+    const maxPort = Number(process.env.PORT_MAX) || requestedPort + 50;
+
+    for (let port = requestedPort; port <= maxPort; port++) {
+        try {
+            createServer(port);
+            if (port !== requestedPort) {
+                console.warn(
+                    `Port ${requestedPort} is busy; using http://localhost:${port}`,
+                );
+            }
+            console.log(`HTTP server listening on http://localhost:${port}`);
+            return;
+        } catch (error: any) {
+            if (isPortBusyError(error)) {
+                continue;
+            }
+            throw error;
+        }
+    }
+
+    throw new Error(
+        `No free port found in range ${requestedPort}-${maxPort}`,
+    );
 }

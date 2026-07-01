@@ -3,6 +3,7 @@ import type { Channel, Platform, PublishContent, PublishResult } from './types';
 import { getConfiguredChannels } from '../channels';
 import { markdownToTelegramHtml } from '../converters/markdown';
 import { splitTextIntoChunks, TELEGRAM_LIMIT } from '../chunk';
+import { isValidTelegramHtml, validateTelegramHtml } from '../telegramValidation';
 
 /** True when a Telegram API error means "this channel just isn't reachable" (skip, don't crash). */
 function isChannelError(error: any): boolean {
@@ -46,13 +47,27 @@ export class TelegramPlatform implements Platform {
         const bot = this.getBot();
         const html = markdownToTelegramHtml(content.markdown);
         const chunks = splitTextIntoChunks(html, TELEGRAM_LIMIT, true);
+        const invalidChunk = chunks.find(
+            (chunk) => !isValidTelegramHtml(chunk),
+        );
+        if (invalidChunk) {
+            const issue = validateTelegramHtml(invalidChunk)[0];
+            throw new Error(
+                `Telegram HTML is invalid: ${issue?.message ?? 'unknown parse error'}`,
+            );
+        }
 
         // Photo sources: remote URLs (strings) + uploaded buffers.
-        const photos: Array<{ source: string | Buffer; filename?: string }> = [
+        const photos: Array<{
+            source: string | Buffer;
+            filename?: string;
+            contentType?: string;
+        }> = [
             ...(content.imageUrls ?? []).map((url) => ({ source: url })),
             ...(content.images ?? []).map((img) => ({
                 source: Buffer.from(img.data),
                 filename: img.filename,
+                contentType: img.contentType,
             })),
         ];
 
@@ -62,13 +77,17 @@ export class TelegramPlatform implements Platform {
             if (!id) continue;
             try {
                 if (photos.length) {
-                    // Photo caption is limited to 1024 chars; send the first photo with the
-                    // first chunk as caption, remaining photos plain, then remaining text.
+                    // Photo caption is limited to 1024 chars. Never slice HTML blindly:
+                    // it can cut a tag (e.g. <blockquote>) and Telegram will reject it.
+                    const firstChunk = chunks[0] ?? '';
+                    const canUseCaption =
+                        firstChunk.length <= 1024 &&
+                        isValidTelegramHtml(firstChunk);
                     for (let i = 0; i < photos.length; i++) {
                         const opts: TelegramBot.SendPhotoOptions =
-                            i === 0
+                            i === 0 && canUseCaption
                                 ? {
-                                      caption: chunks[0]?.slice(0, 1024),
+                                      caption: firstChunk,
                                       parse_mode: 'HTML',
                                   }
                                 : {};
@@ -77,11 +96,14 @@ export class TelegramPlatform implements Platform {
                             photos[i].source,
                             opts,
                             photos[i].filename
-                                ? { filename: photos[i].filename }
+                                ? {
+                                      filename: photos[i].filename,
+                                      contentType: photos[i].contentType,
+                                  }
                                 : undefined,
                         );
                     }
-                    for (const chunk of chunks.slice(1)) {
+                    for (const chunk of chunks.slice(canUseCaption ? 1 : 0)) {
                         await bot.sendMessage(id, chunk, { parse_mode: 'HTML' });
                     }
                 } else {

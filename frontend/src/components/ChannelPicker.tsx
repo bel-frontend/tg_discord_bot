@@ -20,7 +20,7 @@ export function ChannelPicker({ channels, selected, onChange }: Props) {
     if (!channels.length) {
         return (
             <p className="muted">
-                No channels configured. Add them to channels.json.
+                No resources configured. Open Resources and add a channel.
             </p>
         );
     }

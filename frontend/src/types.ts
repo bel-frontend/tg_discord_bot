@@ -8,6 +8,8 @@ export interface ChannelOption {
     platformName: string;
     id: string;
     name: string;
+    resourceId?: string;
+    source?: 'db' | 'config';
 }
 
 export interface Target {

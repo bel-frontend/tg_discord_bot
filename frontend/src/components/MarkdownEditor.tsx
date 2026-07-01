@@ -9,6 +9,7 @@ import Editor from '@toast-ui/editor';
 export interface MarkdownEditorHandle {
     getMarkdown: () => string;
     setMarkdown: (md: string) => void;
+    focusLine: (line: number) => void;
 }
 
 interface Props {
@@ -27,6 +28,21 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(
         useImperativeHandle(ref, () => ({
             getMarkdown: () => editor.current?.getMarkdown() ?? '',
             setMarkdown: (md: string) => editor.current?.setMarkdown(md ?? ''),
+            focusLine: (line: number) => {
+                const ed = editor.current;
+                if (!ed) return;
+                const safeLine = Math.max(1, Math.floor(line || 1));
+                ed.setSelection([safeLine, 1], [safeLine, 1]);
+                ed.focus();
+
+                // Toast UI scrolls selection into view, but do a DOM fallback for long docs.
+                requestAnimationFrame(() => {
+                    const active = holder.current?.querySelector(
+                        '.toastui-editor-md-container .toastui-editor',
+                    );
+                    active?.scrollIntoView({ block: 'center' });
+                });
+            },
         }));
 
         // Recreate the editor when the theme changes so its styling matches.

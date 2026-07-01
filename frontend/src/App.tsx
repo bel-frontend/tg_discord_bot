@@ -3,6 +3,7 @@ import { api, clearToken, getToken, setUnauthorizedHandler } from './api';
 import { ToastProvider } from './toast';
 import { Auth } from './components/Auth';
 import { Composer } from './components/Composer';
+import { ResourceManager } from './components/ResourceManager';
 import type { User } from './types';
 
 export function App() {
@@ -11,6 +12,7 @@ export function App() {
     const [theme, setTheme] = useState<'dark' | 'light'>(
         (localStorage.getItem('theme') as 'dark' | 'light') || 'dark',
     );
+    const [view, setView] = useState<'composer' | 'resources'>('composer');
 
     // Apply the theme to the document root (drives the CSS variables).
     useEffect(() => {
@@ -41,17 +43,29 @@ export function App() {
     function logout() {
         clearToken();
         setUser(null);
+        setView('composer');
     }
 
     return (
         <ToastProvider>
-            {!ready ? null : user ? (
+            {!ready ? null : user && view === 'resources' ? (
+                <ResourceManager
+                    user={user}
+                    theme={theme}
+                    onToggleTheme={() =>
+                        setTheme((t) => (t === 'dark' ? 'light' : 'dark'))
+                    }
+                    onBack={() => setView('composer')}
+                    onLogout={logout}
+                />
+            ) : user ? (
                 <Composer
                     user={user}
                     theme={theme}
                     onToggleTheme={() =>
                         setTheme((t) => (t === 'dark' ? 'light' : 'dark'))
                     }
+                    onManageResources={() => setView('resources')}
                     onLogout={logout}
                 />
             ) : (
