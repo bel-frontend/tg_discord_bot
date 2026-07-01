@@ -20,7 +20,9 @@ export function ImageUploader({ images, onChange }: Props) {
     const [uploading, setUploading] = useState(0);
 
     async function addFiles(files: FileList | File[]) {
-        const list = [...files].filter((f) => f.type.startsWith('image/'));
+        const list = Array.from(files).filter((f) =>
+            f.type.startsWith('image/'),
+        );
         if (!list.length) return;
 
         // Accumulate locally so sequential uploads don't race on a stale prop.

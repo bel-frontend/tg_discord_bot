@@ -55,6 +55,16 @@ export async function validatePost(markdown: string): Promise<{
     });
 }
 
+export async function fetchPreview(markdown: string): Promise<{
+    telegramHtml: string;
+    discord: string;
+}> {
+    return api('/api/preview', {
+        method: 'POST',
+        body: { markdown },
+    });
+}
+
 function authHeaders(): Record<string, string> {
     return getToken() ? { authorization: `Bearer ${getToken()}` } : {};
 }

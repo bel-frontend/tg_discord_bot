@@ -56,7 +56,7 @@ function htmlToDiscordMarkdown(html: string): string {
             'th',
             'td',
         ],
-    });
+    } as any);
     function cleanUpMarkdown(md: string): string {
         return md
             .replace(/•(?=\S)/g, '• ') // Дадае прабел пасля bullet
@@ -117,7 +117,7 @@ export async function sendMessageToChannels(
                         messagePayload.files = imageUrls;
                     }
 
-                    await (channel as TextBasedChannel).send(messagePayload);
+                    await (channel as any).send(messagePayload);
                 }
                 continue;
             }
@@ -137,7 +137,7 @@ export async function sendMessageToChannels(
                 messagePayload.files = imageUrls;
             }
 
-            await (channel as TextBasedChannel).send(messagePayload);
+            await (channel as any).send(messagePayload);
         } catch (error: any) {
             if (
                 error.code === 10003 ||

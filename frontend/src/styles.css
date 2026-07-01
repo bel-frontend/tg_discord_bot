@@ -400,6 +400,85 @@ select:focus {
     flex: 1;
     min-height: 0;
 }
+.editor-tabs {
+    display: inline-flex;
+    align-self: flex-start;
+    gap: 4px;
+    padding: 4px;
+    background: var(--bg-elev-2);
+    border-radius: var(--radius-sm);
+}
+.editor-tab {
+    border: none;
+    background: transparent;
+    color: var(--text-dim);
+    padding: 7px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    font: inherit;
+}
+.editor-tab.active {
+    background: var(--bg-elev);
+    color: var(--text);
+    box-shadow: var(--shadow);
+}
+.editor-tab-body {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+.editor-tab-pane {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Toast UI has its own Markdown Write/Preview tabs. We keep preview as our
+   separate top-level tab, so the embedded editor must stay edit-only. */
+.toastui-editor-md-tab-container {
+    display: none !important;
+}
+.toastui-editor-main .toastui-editor-md-tab-style > .toastui-editor,
+.toastui-editor-main .toastui-editor-md-vertical-style .toastui-editor {
+    display: block !important;
+    width: 100% !important;
+}
+.toastui-editor-main .toastui-editor-md-tab-style > .toastui-editor-md-preview,
+.toastui-editor-main .toastui-editor-md-vertical-style .toastui-editor-md-preview,
+.toastui-editor-main .toastui-editor-md-splitter {
+    display: none !important;
+}
+.toastui-editor-defaultUI-toolbar button.tui-custom-btn {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 32px !important;
+    height: 32px !important;
+    margin: 0 2px !important;
+    border: 0 !important;
+    border-radius: 4px !important;
+    background: transparent !important;
+    cursor: pointer !important;
+    opacity: 1 !important;
+}
+.toastui-editor-defaultUI-toolbar button.tui-custom-btn:hover {
+    background: var(--bg-elev-2) !important;
+}
+.tui-custom-btn-label {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text);
+    font-size: 18px;
+    font-weight: 800;
+    line-height: 1;
+}
+.toastui-editor-defaultUI-toolbar button[name='underline'] .tui-custom-btn-label {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
 .editor-foot {
     display: flex;
     justify-content: space-between;
@@ -446,6 +525,79 @@ select:focus {
     background: var(--bg-elev-2);
     color: var(--text);
     white-space: pre-wrap;
+}
+
+/* ---------- separate platform preview tab ---------- */
+.preview {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--bg-elev);
+    overflow: hidden;
+}
+.preview-tabs {
+    display: flex;
+    gap: 4px;
+    padding: 8px 8px 0;
+    border-bottom: 1px solid var(--border);
+}
+.ptab {
+    border: none;
+    background: transparent;
+    color: var(--text-dim);
+    padding: 8px 12px;
+    border-radius: 6px 6px 0 0;
+    cursor: pointer;
+    font: inherit;
+}
+.ptab.active {
+    background: var(--bg-elev-2);
+    color: var(--text);
+}
+.preview-bubble {
+    flex: 1;
+    overflow: auto;
+    padding: 18px;
+    line-height: 1.55;
+}
+.preview-bubble.telegram {
+    white-space: pre-wrap;
+}
+.preview-bubble h1,
+.preview-bubble h2,
+.preview-bubble h3 {
+    margin: 0.4em 0;
+}
+.preview-bubble blockquote {
+    margin: 0.35em 0;
+    padding-left: 10px;
+    border-left: 3px solid var(--accent);
+    color: var(--text-dim);
+}
+.preview-bubble pre {
+    padding: 10px;
+    border-radius: 6px;
+    background: var(--bg-elev-2);
+    white-space: pre-wrap;
+    overflow-x: auto;
+}
+.preview-bubble code {
+    padding: 1px 4px;
+    border-radius: 4px;
+    background: var(--bg-elev-2);
+}
+.preview-bubble a {
+    color: var(--accent);
+}
+.spoiler,
+tg-spoiler {
+    background: var(--text);
+    color: transparent;
+    border-radius: 3px;
+    padding: 0 3px;
 }
 
 /* ---------- publish sidebar ---------- */

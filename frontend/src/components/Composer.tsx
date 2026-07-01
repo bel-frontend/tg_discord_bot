@@ -12,6 +12,7 @@ import { MarkdownEditor, type MarkdownEditorHandle } from './MarkdownEditor';
 import { ChannelPicker, platformIcon } from './ChannelPicker';
 import { DraftsRail } from './DraftsRail';
 import { ImageUploader, type ImageItem } from './ImageUploader';
+import { PreviewPanel } from './PreviewPanel';
 
 interface Props {
     user: User;
@@ -40,6 +41,8 @@ export function Composer({
     const [targets, setTargets] = useState<Target[]>([]);
     const [saveStatus, setSaveStatus] = useState('');
     const [charCount, setCharCount] = useState(0);
+    const [markdown, setMarkdown] = useState('');
+    const [editorTab, setEditorTab] = useState<'edit' | 'preview'>('edit');
     const [results, setResults] = useState<PublishResult[] | null>(null);
     const [publishing, setPublishing] = useState(false);
     const [validationIssues, setValidationIssues] = useState<
@@ -133,6 +136,7 @@ export function Composer({
     const handleEditorChange = useCallback(() => {
         const markdown = editorRef.current?.getMarkdown() ?? '';
         setCharCount(markdown.length);
+        setMarkdown(markdown);
         if (validateTimer.current) clearTimeout(validateTimer.current);
         validateTimer.current = setTimeout(async () => {
             if (!markdown.trim()) {
@@ -206,6 +210,7 @@ export function Composer({
                 setImageUrls((draft.imageUrls || []).join(', '));
                 setTargets(draft.targets || []);
                 editorRef.current?.setMarkdown(draft.markdown || '');
+                setMarkdown(draft.markdown || '');
                 setCharCount((draft.markdown || '').length);
                 setSaveStatus('');
             });
@@ -226,6 +231,7 @@ export function Composer({
             setImageUrls('');
             setTargets([]);
             editorRef.current?.setMarkdown('');
+            setMarkdown('');
             setCharCount(0);
             setSaveStatus('');
         });
@@ -334,11 +340,46 @@ export function Composer({
                             scheduleSave();
                         }}
                     />
-                    <MarkdownEditor
-                        ref={editorRef}
-                        theme={theme}
-                        onChange={handleEditorChange}
-                    />
+                    <div className="editor-tabs">
+                        <button
+                            type="button"
+                            className={`editor-tab ${
+                                editorTab === 'edit' ? 'active' : ''
+                            }`}
+                            onClick={() => setEditorTab('edit')}
+                        >
+                            Edit
+                        </button>
+                        <button
+                            type="button"
+                            className={`editor-tab ${
+                                editorTab === 'preview' ? 'active' : ''
+                            }`}
+                            onClick={() => {
+                                setMarkdown(
+                                    editorRef.current?.getMarkdown() ?? '',
+                                );
+                                setEditorTab('preview');
+                            }}
+                        >
+                            Preview
+                        </button>
+                    </div>
+                    <div className="editor-tab-body">
+                        <div
+                            className="editor-tab-pane"
+                            hidden={editorTab !== 'edit'}
+                        >
+                            <MarkdownEditor
+                                ref={editorRef}
+                                theme={theme}
+                                onChange={handleEditorChange}
+                            />
+                        </div>
+                        {editorTab === 'preview' && (
+                            <PreviewPanel markdown={markdown} />
+                        )}
+                    </div>
                     {validationIssues.length > 0 && (
                         <button
                             type="button"
@@ -346,7 +387,12 @@ export function Composer({
                             title="Jump to likely source line"
                             onClick={() => {
                                 const line = validationIssues[0].line;
-                                if (line) editorRef.current?.focusLine(line);
+                                if (line) {
+                                    setEditorTab('edit');
+                                    requestAnimationFrame(() => {
+                                        editorRef.current?.focusLine(line);
+                                    });
+                                }
                             }}
                         >
                             <strong>Telegram formatting problem</strong>

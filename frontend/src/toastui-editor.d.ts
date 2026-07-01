@@ -9,7 +9,12 @@ declare module '@toast-ui/editor' {
         usageStatistics?: boolean;
         theme?: string;
         initialValue?: string;
-        toolbarItems?: string[][];
+        toolbarItems?: Array<
+            Array<
+                | string
+                | { name: string; tooltip?: string; el?: HTMLElement }
+            >
+        >;
         events?: Record<string, (...args: any[]) => void>;
         [key: string]: any;
     }
@@ -18,6 +23,8 @@ declare module '@toast-ui/editor' {
         constructor(options: EditorOptions);
         getMarkdown(): string;
         setMarkdown(markdown: string, cursorToEnd?: boolean): void;
+        getSelectedText(): string;
+        replaceSelection(text: string): void;
         setSelection(start: [number, number], end?: [number, number]): void;
         focus(): void;
         destroy(): void;

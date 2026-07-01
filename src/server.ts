@@ -19,6 +19,7 @@ import {
 } from './channelResources';
 import { getUpload, resolveImages, saveUpload } from './uploads';
 import { markdownToTelegramHtml } from './converters/markdown';
+import { markdownToDiscord } from './converters/markdown';
 import { splitTextIntoChunks, TELEGRAM_LIMIT } from './chunk';
 import { validateTelegramHtml } from './telegramValidation';
 
@@ -149,6 +150,15 @@ async function handleApi(req: Request, url: URL): Promise<Response> {
         );
 
         return json({ ok: issues.length === 0, issues });
+    }
+
+    if (path === '/api/preview' && method === 'POST') {
+        const body = await req.json().catch(() => ({}));
+        const markdown = String(body.markdown ?? '');
+        return json({
+            telegramHtml: markdownToTelegramHtml(markdown),
+            discord: markdownToDiscord(markdown),
+        });
     }
 
     if (path === '/api/channels' && method === 'POST') {

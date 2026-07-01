@@ -45,6 +45,37 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(
             },
         }));
 
+        function wrapSelection(open: string, close: string) {
+            const ed = editor.current;
+            if (!ed) return;
+            const selected = ed.getSelectedText() || '';
+            ed.replaceSelection(`${open}${selected}${close}`);
+            ed.focus();
+            onChangeRef.current();
+        }
+
+        function customButton(
+            name: string,
+            label: string,
+            title: string,
+            onClick: () => void,
+        ): HTMLButtonElement {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.name = name;
+            btn.className = 'tui-custom-btn';
+            btn.title = title;
+            const span = document.createElement('span');
+            span.className = 'tui-custom-btn-label';
+            span.textContent = label;
+            btn.appendChild(span);
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                onClick();
+            });
+            return btn;
+        }
+
         // Recreate the editor when the theme changes so its styling matches.
         useEffect(() => {
             if (!holder.current) return;
@@ -54,23 +85,49 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(
                 el: holder.current,
                 height: '100%',
                 initialEditType: 'markdown',
-                previewStyle: 'vertical',
+                previewStyle: 'tab',
                 usageStatistics: false,
                 theme: theme === 'dark' ? 'dark' : 'default',
                 initialValue: previous,
+                // Match the formatting Telegram/Discord can actually publish.
+                // No hr/table/task-list: those leak as unsupported markdown in targets.
                 toolbarItems: [
                     ['heading', 'bold', 'italic', 'strike'],
-                    ['hr', 'quote'],
-                    ['ul', 'ol', 'task'],
-                    ['table', 'link'],
-                    ['code', 'codeblock'],
+                    [
+                        {
+                            name: 'underline',
+                            tooltip: 'Underline (Ctrl/Cmd+U)',
+                            el: customButton('underline', 'U', 'Underline', () =>
+                                wrapSelection('__', '__'),
+                            ),
+                        },
+                        {
+                            name: 'spoiler',
+                            tooltip: 'Spoiler',
+                            el: customButton('spoiler', '▨', 'Spoiler', () =>
+                                wrapSelection('||', '||'),
+                            ),
+                        },
+                    ],
+                    ['quote', 'ul', 'ol'],
+                    ['link', 'code', 'codeblock'],
                 ],
                 events: {
                     change: () => onChangeRef.current(),
                 },
             });
 
+            const holderEl = holder.current;
+            const onKeyDown = (e: KeyboardEvent) => {
+                if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'u') {
+                    e.preventDefault();
+                    wrapSelection('__', '__');
+                }
+            };
+            holderEl.addEventListener('keydown', onKeyDown, true);
+
             return () => {
+                holderEl.removeEventListener('keydown', onKeyDown, true);
                 editor.current?.destroy();
                 editor.current = null;
             };

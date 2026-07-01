@@ -1,4 +1,7 @@
 // Canonical content is Markdown. Each platform converts it to its own native format here.
+// Cross-platform extras:
+//   __underline__ -> Telegram <u>, Discord __underline__
+//   ||spoiler||   -> Telegram <tg-spoiler>, Discord ||spoiler||
 import { marked } from 'marked';
 import { NodeHtmlMarkdown } from 'node-html-markdown';
 
@@ -8,6 +11,39 @@ function escapeHtml(s: string): string {
         .replaceAll('<', '&lt;')
         .replaceAll('>', '&gt;');
 }
+
+function inlineWrapExtension(name: string, open: string, close: string) {
+    const escOpen = open.replace(/[|]/g, '\\$&');
+    const escClose = close.replace(/[|]/g, '\\$&');
+    const rule = new RegExp(`^${escOpen}(?=\\S)([\\s\\S]*?\\S)${escClose}`);
+    return {
+        name,
+        level: 'inline' as const,
+        start(src: string) {
+            return src.indexOf(open);
+        },
+        tokenizer(this: any, src: string) {
+            const match = rule.exec(src);
+            if (!match) return;
+            return {
+                type: name,
+                raw: match[0],
+                text: match[1],
+                tokens: this.lexer.inlineTokens(match[1]),
+            };
+        },
+        renderer() {
+            return '';
+        },
+    };
+}
+
+marked.use({
+    extensions: [
+        inlineWrapExtension('underline', '__', '__'),
+        inlineWrapExtension('spoiler', '||', '||'),
+    ],
+});
 
 // --- Telegram: Markdown -> the small HTML subset Telegram's parse_mode=HTML supports ---
 // Supported tags: <b> <i> <u> <s> <a> <code> <pre> <blockquote>. Everything block-level
@@ -31,6 +67,12 @@ function renderInline(tokens: any[]): string {
                 break;
             case 'del':
                 out += `<s>${renderInline(t.tokens)}</s>`;
+                break;
+            case 'underline':
+                out += `<u>${renderInline(t.tokens)}</u>`;
+                break;
+            case 'spoiler':
+                out += `<tg-spoiler>${renderInline(t.tokens)}</tg-spoiler>`;
                 break;
             case 'codespan':
                 out += `<code>${escapeHtml(t.text)}</code>`;
@@ -95,7 +137,8 @@ function renderBlocks(tokens: any[]): string {
                 out += `${renderList(t)}\n`;
                 break;
             case 'hr':
-                out += '———\n\n';
+                // Social targets don't render Markdown HR consistently; use spacing.
+                out += '\n\n';
                 break;
             case 'space':
                 break;
@@ -116,7 +159,8 @@ export function markdownToTelegramHtml(markdown: string): string {
 
 // --- Discord: renders Markdown natively, so pass it through (lightly trimmed). ---
 export function markdownToDiscord(markdown: string): string {
-    return markdown.trim();
+    // Discord doesn't support Markdown horizontal rules; avoid leaking raw "---" separators.
+    return markdown.replace(/^\s{0,3}([-*_])(?:\s*\1){2,}\s*$/gm, '').trim();
 }
 
 // --- Legacy helper: convert HTML input to Discord Markdown (kept for the inbound bot path). ---
