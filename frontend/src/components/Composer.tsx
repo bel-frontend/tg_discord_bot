@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { api } from '../api';
+import { api, fetchImageObjectUrl } from '../api';
 import { useToast } from '../toast';
 import type {
     ChannelOption,
@@ -11,6 +11,7 @@ import type {
 import { MarkdownEditor, type MarkdownEditorHandle } from './MarkdownEditor';
 import { ChannelPicker, platformIcon } from './ChannelPicker';
 import { DraftsRail } from './DraftsRail';
+import { ImageUploader, type ImageItem } from './ImageUploader';
 
 interface Props {
     user: User;
@@ -28,6 +29,7 @@ export function Composer({ user, theme, onToggleTheme, onLogout }: Props) {
     const [draftId, setDraftId] = useState<string | null>(null);
     const [title, setTitle] = useState('');
     const [imageUrls, setImageUrls] = useState('');
+    const [images, setImages] = useState<ImageItem[]>([]);
     const [targets, setTargets] = useState<Target[]>([]);
     const [saveStatus, setSaveStatus] = useState('');
     const [charCount, setCharCount] = useState(0);
@@ -38,10 +40,12 @@ export function Composer({ user, theme, onToggleTheme, onLogout }: Props) {
     const draftIdRef = useRef(draftId);
     const titleRef = useRef(title);
     const imageUrlsRef = useRef(imageUrls);
+    const imagesRef = useRef(images);
     const targetsRef = useRef(targets);
     draftIdRef.current = draftId;
     titleRef.current = title;
     imageUrlsRef.current = imageUrls;
+    imagesRef.current = images;
     targetsRef.current = targets;
 
     const suppressSave = useRef(false);
@@ -58,6 +62,7 @@ export function Composer({ user, theme, onToggleTheme, onLogout }: Props) {
             title: titleRef.current.trim() || 'Untitled',
             markdown: editorRef.current?.getMarkdown() ?? '',
             imageUrls: parseImageUrls(),
+            imageIds: imagesRef.current.map((i) => i.id),
             targets: targetsRef.current,
         }),
         [],
@@ -137,9 +142,32 @@ export function Composer({ user, theme, onToggleTheme, onLogout }: Props) {
         }, 50);
     }
 
+    function revokeImages() {
+        for (const img of imagesRef.current) URL.revokeObjectURL(img.previewUrl);
+    }
+
+    async function loadImagePreviews(ids: string[]): Promise<ImageItem[]> {
+        const items = await Promise.all(
+            ids.map(async (id) => {
+                try {
+                    return {
+                        id,
+                        filename: 'image',
+                        previewUrl: await fetchImageObjectUrl(id),
+                    };
+                } catch {
+                    return null;
+                }
+            }),
+        );
+        return items.filter((i): i is ImageItem => i !== null);
+    }
+
     async function openDraft(id: string) {
         try {
             const { draft } = await api<{ draft: Draft }>(`/api/drafts/${id}`);
+            revokeImages();
+            setImages([]);
             withSuppressedSave(() => {
                 setDraftId(draft.id);
                 setTitle(draft.title === 'Untitled' ? '' : draft.title);
@@ -149,12 +177,17 @@ export function Composer({ user, theme, onToggleTheme, onLogout }: Props) {
                 setCharCount((draft.markdown || '').length);
                 setSaveStatus('');
             });
+            // Restore image thumbnails (fetched from the server, may take a moment).
+            const previews = await loadImagePreviews(draft.imageIds || []);
+            setImages(previews);
         } catch (err: any) {
             toast(err.message, 'error');
         }
     }
 
     function newDraft() {
+        revokeImages();
+        setImages([]);
         withSuppressedSave(() => {
             setDraftId(null);
             setTitle('');
@@ -181,7 +214,9 @@ export function Composer({ user, theme, onToggleTheme, onLogout }: Props) {
     async function publish() {
         if (!targets.length) return toast('Select at least one channel', 'warn');
         const markdown = editorRef.current?.getMarkdown() ?? '';
-        if (!markdown.trim()) return toast('Write something first', 'warn');
+        const imageIds = images.map((i) => i.id);
+        if (!markdown.trim() && !imageIds.length && !parseImageUrls().length)
+            return toast('Write something or add an image first', 'warn');
         if (
             targets.length > 5 &&
             !confirm(`Publish to ${targets.length} channels?`)
@@ -194,7 +229,12 @@ export function Composer({ user, theme, onToggleTheme, onLogout }: Props) {
                 '/api/publish',
                 {
                     method: 'POST',
-                    body: { markdown, imageUrls: parseImageUrls(), targets },
+                    body: {
+                        markdown,
+                        imageUrls: parseImageUrls(),
+                        imageIds,
+                        targets,
+                    },
                 },
             );
             setResults(results);
@@ -284,8 +324,16 @@ export function Composer({ user, theme, onToggleTheme, onLogout }: Props) {
                         }}
                     />
 
+                    <ImageUploader
+                        images={images}
+                        onChange={(next) => {
+                            setImages(next);
+                            scheduleSave();
+                        }}
+                    />
+
                     <label className="field">
-                        Image URLs (comma-separated)
+                        or image URLs (comma-separated)
                         <input
                             type="text"
                             placeholder="https://…"

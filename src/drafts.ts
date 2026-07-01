@@ -5,6 +5,7 @@ export interface DraftInput {
     title?: string;
     markdown?: string;
     imageUrls?: string[];
+    imageIds?: string[];
     targets?: DraftTarget[];
 }
 
@@ -14,6 +15,7 @@ function serialize(doc: DraftDoc) {
         title: doc.title,
         markdown: doc.markdown,
         imageUrls: doc.imageUrls,
+        imageIds: doc.imageIds ?? [],
         targets: doc.targets,
         createdAt: doc.createdAt,
         updatedAt: doc.updatedAt,
@@ -24,6 +26,7 @@ function sanitize(input: DraftInput): {
     title: string;
     markdown: string;
     imageUrls: string[];
+    imageIds: string[];
     targets: DraftTarget[];
 } {
     return {
@@ -31,6 +34,9 @@ function sanitize(input: DraftInput): {
         markdown: (input.markdown ?? '').toString(),
         imageUrls: Array.isArray(input.imageUrls)
             ? input.imageUrls.map(String)
+            : [],
+        imageIds: Array.isArray(input.imageIds)
+            ? input.imageIds.map(String)
             : [],
         targets: Array.isArray(input.targets)
             ? input.targets

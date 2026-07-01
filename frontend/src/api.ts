@@ -35,3 +35,34 @@ export async function api<T = any>(
     if (!res.ok) throw new Error((data as any).error || 'Request failed');
     return data as T;
 }
+
+function authHeaders(): Record<string, string> {
+    return getToken() ? { authorization: `Bearer ${getToken()}` } : {};
+}
+
+export async function uploadImage(
+    file: File,
+): Promise<{ id: string; filename: string; size: number }> {
+    const form = new FormData();
+    form.append('file', file);
+    const res = await fetch('/api/uploads', {
+        method: 'POST',
+        headers: authHeaders(),
+        body: form,
+    });
+    if (res.status === 401) {
+        clearToken();
+        onUnauthorized?.();
+        throw new Error('Session expired — please log in again');
+    }
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error((data as any).error || 'Upload failed');
+    return data;
+}
+
+/** Fetch an authenticated image as an object URL for previewing. */
+export async function fetchImageObjectUrl(id: string): Promise<string> {
+    const res = await fetch(`/api/uploads/${id}`, { headers: authHeaders() });
+    if (!res.ok) throw new Error('Failed to load image');
+    return URL.createObjectURL(await res.blob());
+}

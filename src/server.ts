@@ -12,6 +12,7 @@ import {
     listDrafts,
     updateDraft,
 } from './drafts';
+import { getUpload, resolveImages, saveUpload } from './uploads';
 
 // The Vite build outputs the frontend here (see frontend/vite.config.ts).
 const PUBLIC_DIR = join(import.meta.dir, '..', 'public');
@@ -88,13 +89,55 @@ async function handleApi(req: Request, url: URL): Promise<Response> {
         if (!body.markdown || !String(body.markdown).trim()) {
             return json({ error: 'Content is empty' }, 400);
         }
+        const imageIds: string[] = Array.isArray(body.imageIds)
+            ? body.imageIds.map(String)
+            : [];
+        const images = await resolveImages(user.id, imageIds);
         const results = await publishToTargets(targets, {
             markdown: String(body.markdown),
             imageUrls: Array.isArray(body.imageUrls)
                 ? body.imageUrls.map(String)
                 : [],
+            images,
         });
         return json({ results });
+    }
+
+    // --- Image uploads ---
+    if (path === '/api/uploads' && method === 'POST') {
+        const form = await req.formData();
+        const file = form.get('file');
+        if (!(file instanceof File)) {
+            return json({ error: 'No file provided' }, 400);
+        }
+        const bytes = Buffer.from(await file.arrayBuffer());
+        try {
+            const saved = await saveUpload(
+                user.id,
+                file.name,
+                file.type || 'application/octet-stream',
+                bytes,
+            );
+            return json(saved, 201);
+        } catch (err: any) {
+            // Validation failures (not-an-image, too large) → 400, not 500.
+            return json({ error: err?.message || 'Upload failed' }, 400);
+        }
+    }
+
+    const uploadMatch = path.match(/^\/api\/uploads\/([^/]+)$/);
+    if (uploadMatch && method === 'GET') {
+        const doc = await getUpload(user.id, uploadMatch[1]);
+        if (!doc) return json({ error: 'Not found' }, 404);
+        const data = Buffer.isBuffer(doc.data)
+            ? doc.data
+            : Buffer.from(doc.data as any);
+        return new Response(data, {
+            headers: {
+                'content-type': doc.contentType,
+                'cache-control': 'private, max-age=86400',
+            },
+        });
     }
 
     // --- Drafts CRUD ---

@@ -46,20 +46,41 @@ export class TelegramPlatform implements Platform {
         const bot = this.getBot();
         const html = markdownToTelegramHtml(content.markdown);
         const chunks = splitTextIntoChunks(html, TELEGRAM_LIMIT, true);
-        const firstImage = content.imageUrls?.[0];
+
+        // Photo sources: remote URLs (strings) + uploaded buffers.
+        const photos: Array<{ source: string | Buffer; filename?: string }> = [
+            ...(content.imageUrls ?? []).map((url) => ({ source: url })),
+            ...(content.images ?? []).map((img) => ({
+                source: Buffer.from(img.data),
+                filename: img.filename,
+            })),
+        ];
 
         const results: PublishResult[] = [];
         for (const channelId of channelIds) {
             const id = channelId.trim();
             if (!id) continue;
             try {
-                if (firstImage) {
-                    // Photo caption is limited to 1024 chars; send the photo with the
-                    // first chunk as caption, then any remaining chunks as messages.
-                    await bot.sendPhoto(id, firstImage, {
-                        caption: chunks[0]?.slice(0, 1024),
-                        parse_mode: 'HTML',
-                    });
+                if (photos.length) {
+                    // Photo caption is limited to 1024 chars; send the first photo with the
+                    // first chunk as caption, remaining photos plain, then remaining text.
+                    for (let i = 0; i < photos.length; i++) {
+                        const opts: TelegramBot.SendPhotoOptions =
+                            i === 0
+                                ? {
+                                      caption: chunks[0]?.slice(0, 1024),
+                                      parse_mode: 'HTML',
+                                  }
+                                : {};
+                        await bot.sendPhoto(
+                            id,
+                            photos[i].source,
+                            opts,
+                            photos[i].filename
+                                ? { filename: photos[i].filename }
+                                : undefined,
+                        );
+                    }
                     for (const chunk of chunks.slice(1)) {
                         await bot.sendMessage(id, chunk, { parse_mode: 'HTML' });
                     }

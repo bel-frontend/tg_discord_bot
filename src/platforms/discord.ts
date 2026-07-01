@@ -71,7 +71,15 @@ export class DiscordPlatform implements Platform {
         const client = await this.getClient();
         const text = markdownToDiscord(content.markdown);
         const chunks = splitTextIntoChunks(text, DISCORD_LIMIT, true);
-        const imageUrls = content.imageUrls;
+
+        // Attachments: remote URLs (strings) + uploaded buffers.
+        const files: Array<string | { attachment: Buffer; name: string }> = [
+            ...(content.imageUrls ?? []),
+            ...(content.images ?? []).map((img) => ({
+                attachment: Buffer.from(img.data),
+                name: img.filename,
+            })),
+        ];
 
         const results: PublishResult[] = [];
         for (const channelId of channelIds) {
@@ -90,11 +98,11 @@ export class DiscordPlatform implements Platform {
                 }
                 const textChannel = channel as TextChannel;
                 for (let i = 0; i < chunks.length; i++) {
-                    const payload: { content: string; files?: string[] } = {
+                    const payload: { content: string; files?: typeof files } = {
                         content: chunks[i],
                     };
-                    if (imageUrls?.length && i === 0) payload.files = imageUrls;
-                    await textChannel.send(payload);
+                    if (files.length && i === 0) payload.files = files;
+                    await textChannel.send(payload as any);
                 }
                 results.push({ platform: this.id, channelId: id, ok: true });
             } catch (error: any) {

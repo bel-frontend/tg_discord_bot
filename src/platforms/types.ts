@@ -5,9 +5,16 @@ export interface Channel {
     name: string; // human-readable label (shown in the UI)
 }
 
+export interface PublishImage {
+    data: Uint8Array;
+    filename: string;
+    contentType?: string;
+}
+
 export interface PublishContent {
     markdown: string;
-    imageUrls?: string[];
+    imageUrls?: string[]; // remote image URLs
+    images?: PublishImage[]; // uploaded image bytes to send as attachments
 }
 
 export interface PublishResult {

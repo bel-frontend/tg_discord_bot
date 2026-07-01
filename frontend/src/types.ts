@@ -20,6 +20,7 @@ export interface Draft {
     title: string;
     markdown: string;
     imageUrls: string[];
+    imageIds: string[];
     targets: Target[];
     createdAt: string;
     updatedAt: string;
