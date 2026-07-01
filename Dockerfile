@@ -1,14 +1,19 @@
-# Use official Bun image for Node.js + Bun support
-FROM oven/bun:1.1
+# Use the official Bun image
+FROM oven/bun:1
 
 WORKDIR /app
 
-# Copy package files and install dependencies
+# Install server dependencies
 COPY package.json bun.lockb ./
 RUN bun install
 
-# Copy source code
-COPY . .
+# Install frontend dependencies (cached separately from source)
+COPY frontend/package.json ./frontend/package.json
+RUN cd frontend && bun install
 
-# Expose no ports (bots connect out)
+# Copy the rest of the source and build the frontend into ./public
+COPY . .
+RUN cd frontend && bun run build
+
+# The server serves the built frontend and the API on $PORT (default 3000)
 CMD ["bun", "run", "index.ts"]

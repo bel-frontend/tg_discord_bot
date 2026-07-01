@@ -1,160 +1,121 @@
-# tg_discord_bot
+# Composer — multi-platform publishing
 
-A simple bridge bot that forwards messages (including formatted text and images) from Telegram channels to Discord channels.  
-Built with [Bun](https://bun.sh), [node-telegram-bot-api](https://github.com/yagop/node-telegram-bot-api), and [discord.js](https://discord.js.org/).
+A small web app for composing a post once in a **Markdown editor** and publishing it to the
+**channels you pick** across multiple social platforms. Ships with **Telegram** and **Discord**
+adapters and a **pluggable architecture** so new networks are easy to add. Includes **user
+accounts** and **draft saving** backed by MongoDB.
+
+Built with [Bun](https://bun.sh), [discord.js](https://discord.js.org/),
+[node-telegram-bot-api](https://github.com/yagop/node-telegram-bot-api),
+[MongoDB](https://www.mongodb.com/), and a [React](https://react.dev/) +
+[Vite](https://vite.dev/) frontend using [Toast UI Editor](https://ui.toast.com/tui-editor).
 
 ---
 
 ## Features
 
-- Forwards messages from specified Telegram channels to specified Discord channels.
-- Preserves basic text formatting (bold, italic, underline, strikethrough) by converting Telegram HTML to Discord Markdown.
-- Supports forwarding images/photos.
-- Easy configuration via environment variables.
+- **Markdown composer** (Toast UI Editor: WYSIWYG + Markdown, live preview, light/dark theme).
+- **Pick channels by name** (mapped internally to real channel IDs), grouped by platform.
+- **Publish** to Telegram + Discord in one click, with a per-channel success/error report.
+- **Accounts**: register / login (passwords hashed with `Bun.password`, sessions via JWT).
+- **Drafts**: create, autosave, reopen, and delete per-user posts (stored in MongoDB).
+- **Universal adapters**: add a platform by implementing one interface and registering it.
+- Canonical content is Markdown; each adapter converts it (Telegram → HTML, Discord → native MD)
+  and chunks it to the platform size limit (4096 / 2000).
 
 ---
 
-## Prerequisites
+## How it works
 
-- [Bun](https://bun.sh/) (v1.1.26 or newer recommended)
-- Discord bot token and channel IDs
-- Telegram bot token and channel usernames
+```
+frontend/ ── React + Vite SPA (auth, drafts, channel picker, publish)
+   │  built into public/, served as static files
+   │  HTTP (JWT)
+src/server.ts ── Bun.serve router
+   ├─ auth.ts / drafts.ts ── users & drafts (MongoDB via db.ts)
+   └─ platforms/registry.ts ── fans a post out to selected {platform, channel} targets
+         ├─ platforms/telegram.ts  (Markdown → Telegram HTML)
+         └─ platforms/discord.ts   (Markdown → native, live channel discovery)
+```
 
----
-
-## Installation
-
-1. **Clone the repository:**
-
-   ```bash
-   git clone https://github.com/bel-frontend/tg_discord_bot.git
-   cd tg_discord_bot
-   ```
-
-2. **Install dependencies:**
-   ```bash
-   bun install
-   ```
+**Adding a new platform:** implement the `Platform` interface in
+`src/platforms/types.ts` (`isConfigured`, `listChannels`, `publish`) and `register(...)` it in
+`index.ts`. No server or frontend changes are needed — it shows up in the picker automatically.
 
 ---
 
 ## Configuration
 
-Create a `.env` file in the project root with the following variables:
+Create a `.env` (see `.env.example`):
 
 ```env
-DISCORD_BOT_TOKEN=your_discord_bot_token
-DISCORD_CHANNEL_IDS=channel_id1,channel_id2
-TELEGRAM_BOT_TOKEN=your_telegram_bot_token
-TELEGRAM_CHANNEL_USERNAMES=@channel1,@channel2
+PORT=3000
+MONGODB_URI=mongodb://localhost:27017      # or mongodb://mongo:27017 with docker-compose
+MONGODB_DB=tg_discord_bot
+JWT_SECRET=please-change-this-to-a-long-random-string
+
+DISCORD_BOT_TOKEN=your-discord-bot-token
+TELEGRAM_BOT_TOKEN=your-telegram-bot-token
+
+# Channels shown in the picker (comma-separated; entry = "id" or "id|Friendly name")
+TELEGRAM_CHANNEL_USERNAMES="@my_channel|News (TG), 553518183|Team chat"
+DISCORD_CHANNEL_IDS="1374368491771002970|announcements"
+DISCORD_GUILD_ID=123456789012345678        # optional: also pulls the server's channels live
 ```
 
-- `DISCORD_BOT_TOKEN`: Your Discord bot token (see [Discord Developer Portal](https://discord.com/developers/applications)).
-- `DISCORD_CHANNEL_IDS`: Comma-separated list of Discord channel IDs to forward messages to.
-- `TELEGRAM_BOT_TOKEN`: Your Telegram bot token (get from [@BotFather](https://t.me/BotFather)).
-- `TELEGRAM_CHANNEL_USERNAMES`: Comma-separated list of Telegram channel usernames (with `@`).
+The picker's channels come from these env lists. Each entry is a bare id/username or
+`id|Friendly name` (the name is shown; the id is used to publish). Telegram bots cannot
+enumerate their own channels, so Telegram is always listed here; Discord additionally pulls the
+`DISCORD_GUILD_ID` server's text channels live (with real `#names`) and merges them in.
+
+You can also add channels from an optional `channels.json` (copy `channels.example.json`); env
+entries take precedence.
 
 ---
 
-## Usage
+## Running
 
-Start the bot with:
+**Production / single process** — build the React frontend, then run the Bun server (which
+serves the built UI + API on one port):
 
 ```bash
-bun run index.ts
+bun install
+bun run start        # builds frontend into public/, then starts the server
 ```
 
-The bot will listen for messages in the specified Telegram channels and forward them (with formatting and images) to the specified Discord channels.
+Open `http://localhost:3000`, register an account, write a post, pick channels, and Publish.
+
+**Development** — run the API server and the Vite dev server (HMR) in two terminals:
+
+```bash
+bun run dev          # terminal 1: Bun API server on :3000 (watch mode)
+bun run web          # terminal 2: Vite dev server on :5173 (proxies /api -> :3000)
+```
+
+Then open `http://localhost:5173`. The frontend lives in `frontend/` (its own package);
+`bun run build` compiles it into `public/`.
+
+### Docker
+
+`docker compose up -d --build` starts the app **and** a MongoDB service. Set
+`MONGODB_URI=mongodb://mongo:27017` in `.env` so the app reaches the bundled database, and mount
+your `channels.json` (see the commented volume in `docker-compose.yml`). The web UI is exposed on
+`PORT` (default 3000).
+
+> **Note:** on Bun 1.2.8 the MongoDB driver is pinned to `mongodb@6` with a `bson@6.7.0` override
+> (`package.json`) to avoid an unimplemented `node:v8` API in newer `bson`.
 
 ---
 
-## How It Works
+## Legacy inbound bridge (optional)
 
-- **Telegram Side:**  
-  The bot listens for new messages in the configured Telegram channels. When a message is received, it extracts the text (with formatting) and any attached images.
-- **Formatting:**  
-  Telegram formatting (HTML tags like `<b>`, `<i>`, etc.) is converted to Discord Markdown (`**bold**`, `*italic*`, etc.) before sending.
-- **Discord Side:**  
-  The bot sends the formatted message and any images to all configured Discord channels.
-
----
-
-## File Structure
-
-- `index.ts` — Entry point; initializes both bots and sets up the forwarding logic.
-- `telegram.ts` — Handles Telegram bot logic and message formatting.
-- `discord.ts` — Handles Discord bot logic and HTML-to-Markdown conversion.
-- `README.md` — This documentation.
-
----
-
-## Example
-
-**Telegram message:**
-
-```
-<b>Hello</b> <i>world</i>!
-```
-
-**Discord output:**
-
-```
-**Hello** *world*!
-```
-
----
-
-## Troubleshooting
-
-- Make sure all environment variables are set correctly.
-- The Discord bot must be invited to your server and have permission to send messages in the target channels.
-- The Telegram bot must be an admin in the source channels.
+The original behavior — forward a message sent *to* the Telegram bot on to preconfigured
+channels — is still available behind a flag. Set `ENABLE_INBOUND_BOTS=true` (plus
+`TELEGRAM_CHANNEL_USERNAMES` / `DISCORD_CHANNEL_IDS`). It runs its own Telegram poller / Discord
+gateway using the same tokens as the editor, so enable it only if that trade-off is understood.
 
 ---
 
 ## License
 
 MIT
-
----
-
-## Credits
-
-- [discord.js](https://discord.js.org/)
-- [node-telegram-bot-api](https://github.com/yagop/node-telegram-bot-api)
-- [Bun](https://bun.sh)
-
----
-
-## Running with Docker
-
-You can run the bot permanently on your server using Docker and Docker Compose.
-
-### 1. Build and Run
-
-Make sure you have a `.env` file in your project root with all required variables.
-
-Build and start the bot with:
-
-```bash
-docker compose up -d --build
-```
-
-This will:
-
-- Build the Docker image using the provided `Dockerfile`
-- Start the bot as a background service
-- Automatically restart the bot if it crashes or your server reboots
-
-### 2. Stopping the Bot
-
-To stop the bot, run:
-
-```bash
-docker compose down
-```
-
-### 3. Customization
-
-- The bot does **not** expose any ports, as it only connects to Telegram and Discord APIs.
-- To persist logs or other files, you can uncomment and adjust the `volumes` section in `docker-compose.yml`.

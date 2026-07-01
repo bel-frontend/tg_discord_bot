@@ -1,52 +1,28 @@
-import TelegramBot from "node-telegram-bot-api";
-import { FileReader } from "./fileReader.js";
+import { connect } from './src/db';
+import { register } from './src/platforms/registry';
+import { TelegramPlatform } from './src/platforms/telegram';
+import { DiscordPlatform } from './src/platforms/discord';
+import { startServer } from './src/server';
 
-import { sendMessageToChannels } from "./discord";
-import { initTelegramBot } from "./telegram";
+console.log('Starting Composer…');
 
-const telegramBot = new TelegramBot(process.env.TELEGRAM_BOT_TOKEN!, {
-  polling: false,
-});
-const fileReader = new FileReader(telegramBot);
+// 1. Persistence
+await connect();
 
-console.log("Initializing bots...");
+// 2. Register publishing platforms. Add a new social network by implementing the
+//    Platform interface (src/platforms/types.ts) and registering it here.
+register(new TelegramPlatform());
+register(new DiscordPlatform());
 
-// Example callback function to be called before sending a message to Telegram channels
-async function beforeTelegramSend(
-  userId: number,
-  text: string,
-  fileIds: string[],
-  telegramChunks?: string[]
-) {
-  async function getTelegramFileUrl(fileId: string): Promise<string> {
-    const file = await telegramBot.getFile(fileId);
-    return `https://api.telegram.org/file/bot${process.env.TELEGRAM_BOT_TOKEN}/${file.file_path}`;
-  }
+// 3. HTTP API + editor frontend
+startServer();
 
-  const imageUrls = await Promise.all(fileIds.map(getTelegramFileUrl));
-  console.log(imageUrls);
-
-  // Check if Discord is configured before attempting to send
-  const discordChannelIds = process.env.DISCORD_CHANNEL_IDS || "";
-  const hasDiscordChannels = discordChannelIds.split(",").some((id) => id.trim());
-
-  if (!hasDiscordChannels) {
-    console.warn("No Discord channels configured - skipping Discord sending");
-    return;
-  }
-
-  // Handle chunked text (from file processing)
-  if (telegramChunks && telegramChunks.length > 0) {
-    const extractedContent = { text: text, isFormatted: true };
-    const discordChunks = fileReader.chunkText(extractedContent).discordChunks;
-    sendMessageToChannels(undefined, imageUrls, discordChunks);
-  } else {
-    // Handle regular messages
-    sendMessageToChannels(text, imageUrls);
-  }
+// 4. Optional legacy inbound bridge (send a message to the Telegram bot -> forward).
+//    Off by default: it opens its own Telegram poller / Discord gateway using the same
+//    tokens as the editor's publishers, so only enable it if you understand that trade-off.
+if (process.env.ENABLE_INBOUND_BOTS === 'true') {
+    console.log('Enabling legacy inbound bot bridge…');
+    await import('./inbound');
 }
 
-// Initialize Telegram bot and pass the callback
-initTelegramBot(beforeTelegramSend);
-
-console.log("Bots initialized.");
+console.log('Composer ready.');

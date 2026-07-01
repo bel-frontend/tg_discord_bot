@@ -1,5 +1,7 @@
 import TelegramBot from "node-telegram-bot-api";
 import { createRequire } from 'module';
+import { chunkText as chunkTextUtil } from './src/chunk';
+import type { ChunkedText, ParsedContent } from './src/chunk';
 const require = createRequire(import.meta.url);
 
 // We'll use pdf2pic and then OCR, or try pdf-lib for better formatting extraction
@@ -11,16 +13,6 @@ try {
   pdfLib = require('pdf-lib');
 } catch (error) {
   console.warn('PDF parsing libraries not installed. Install pdf-parse and pdf-lib for better PDF support.');
-}
-
-interface ChunkedText {
-  telegramChunks: string[];
-  discordChunks: string[];
-}
-
-interface ParsedContent {
-  text: string;
-  isFormatted: boolean;
 }
 
 interface PDFTextItem {
@@ -329,116 +321,6 @@ export class FileReader {
   }
 
   chunkText(content: ParsedContent): ChunkedText {
-    const telegramLimit = 4096;
-    const discordLimit = 2000;
-
-    return {
-      telegramChunks: this.splitTextIntoChunks(content.text, telegramLimit, content.isFormatted),
-      discordChunks: this.splitTextIntoChunks(content.text, discordLimit, content.isFormatted)
-    };
-  }
-
-  private splitTextIntoChunks(text: string, maxLength: number, preserveFormatting: boolean): string[] {
-    if (text.length <= maxLength) {
-      return [text];
-    }
-
-    const chunks: string[] = [];
-    let currentChunk = '';
-    
-    // Split by paragraphs first if we have formatting
-    const paragraphs = preserveFormatting ? text.split('\n\n') : text.split('\n');
-    
-    for (const paragraph of paragraphs) {
-      const paragraphWithSeparator = paragraph + (preserveFormatting ? '\n\n' : '\n');
-      
-      if (paragraphWithSeparator.length > maxLength) {
-        if (currentChunk) {
-          chunks.push(currentChunk.trimEnd());
-          currentChunk = '';
-        }
-        
-        const subChunks = this.splitLongParagraph(paragraph, maxLength, preserveFormatting);
-        chunks.push(...subChunks);
-        continue;
-      }
-
-      if (currentChunk.length + paragraphWithSeparator.length > maxLength) {
-        if (currentChunk) {
-          chunks.push(currentChunk.trimEnd());
-          currentChunk = '';
-        }
-      }
-
-      currentChunk += paragraphWithSeparator;
-    }
-
-    if (currentChunk) {
-      chunks.push(currentChunk.trimEnd());
-    }
-
-    return chunks.filter(chunk => chunk.length > 0);
-  }
-
-  private splitLongParagraph(paragraph: string, maxLength: number, preserveFormatting: boolean): string[] {
-    const chunks: string[] = [];
-    
-    if (preserveFormatting) {
-      const sentences = paragraph.split(/(?<=[.!?])\s+/);
-      let currentChunk = '';
-      
-      for (const sentence of sentences) {
-        const sentenceWithSpace = (currentChunk ? ' ' : '') + sentence;
-        
-        if (currentChunk.length + sentenceWithSpace.length > maxLength) {
-          if (currentChunk) {
-            chunks.push(currentChunk);
-            currentChunk = sentence;
-          } else {
-            const wordChunks = this.splitLineByWords(sentence, maxLength);
-            chunks.push(...wordChunks);
-          }
-        } else {
-          currentChunk += sentenceWithSpace;
-        }
-      }
-      
-      if (currentChunk) {
-        chunks.push(currentChunk);
-      }
-    } else {
-      const wordChunks = this.splitLineByWords(paragraph, maxLength);
-      chunks.push(...wordChunks);
-    }
-    
-    return chunks;
-  }
-
-  private splitLineByWords(line: string, maxLength: number): string[] {
-    const words = line.split(' ');
-    const chunks: string[] = [];
-    let currentChunk = '';
-
-    for (const word of words) {
-      const wordWithSpace = (currentChunk ? ' ' : '') + word;
-      
-      if (currentChunk.length + wordWithSpace.length > maxLength) {
-        if (currentChunk) {
-          chunks.push(currentChunk);
-          currentChunk = word;
-        } else {
-          chunks.push(word.substring(0, maxLength));
-          currentChunk = word.substring(maxLength);
-        }
-      } else {
-        currentChunk += wordWithSpace;
-      }
-    }
-
-    if (currentChunk) {
-      chunks.push(currentChunk);
-    }
-
-    return chunks;
+    return chunkTextUtil(content);
   }
 }

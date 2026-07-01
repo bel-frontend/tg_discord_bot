@@ -7,6 +7,22 @@ services:
     restart: unless-stopped
     env_file:
       - .env
-    # No ports exposed, as this is a bot
+    ports:
+      - "${PORT:-3000}:3000"
+    depends_on:
+      - mongo
     # volumes:
-    #   - ./logs:/app/logs   # Optional: mount logs if you want
+    #   - ./channels.json:/app/channels.json:ro   # mount the channel mapping
+
+  mongo:
+    image: mongo:7
+    container_name: tg_discord_mongo
+    restart: unless-stopped
+    volumes:
+      - mongo_data:/data/db
+    # Expose only if you need to connect from the host:
+    # ports:
+    #   - "27017:27017"
+
+volumes:
+  mongo_data:

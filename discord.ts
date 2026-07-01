@@ -22,14 +22,6 @@ const client = new Client({
 const channelIdsEnv = process.env.DISCORD_CHANNEL_IDS || '';
 const channelIds = channelIdsEnv.split(',').map((c) => c.trim());
 
-// Папярэдняя апрацоўка HTML перад канвертацыяй
-// function preprocessHtml(html: string): string {
-//     return html
-//         .replace(/<br\s*\/?>/gi, '\n') // Замяняем <br> на перанос
-//         .replace(/&nbsp;/g, ' ') // Замяняем &nbsp; на звычайны прабел
-//         .trim();
-// }
-
 // Канвертацыя HTML у Discord Markdown
 function htmlToDiscordMarkdown(html: string): string {
     const nhm = new NodeHtmlMarkdown({
