@@ -1,4 +1,7 @@
-import type { PlatformMeta } from '../../shared/types';
+import type {
+    PlatformMeta,
+    ScheduledPublication,
+} from '../../shared/types';
 
 let onUnauthorized: (() => void) | null = null;
 export function setUnauthorizedHandler(fn: () => void) {
@@ -71,6 +74,39 @@ export async function fetchPlatforms(): Promise<PlatformMeta[]> {
         '/api/platforms',
     );
     return platforms;
+}
+
+export async function fetchScheduledPublications(): Promise<
+    ScheduledPublication[]
+> {
+    const { scheduledPublications } = await api<{
+        scheduledPublications: ScheduledPublication[];
+    }>('/api/scheduled-publications');
+    return scheduledPublications;
+}
+
+export async function schedulePublication(
+    draftId: string,
+    scheduledAt: string,
+): Promise<ScheduledPublication> {
+    const { scheduledPublication } = await api<{
+        scheduledPublication: ScheduledPublication;
+    }>('/api/scheduled-publications', {
+        method: 'POST',
+        body: { draftId, scheduledAt },
+    });
+    return scheduledPublication;
+}
+
+export async function cancelScheduledPublication(
+    id: string,
+): Promise<ScheduledPublication> {
+    const { scheduledPublication } = await api<{
+        scheduledPublication: ScheduledPublication;
+    }>(`/api/scheduled-publications/${id}`, {
+        method: 'DELETE',
+    });
+    return scheduledPublication;
 }
 
 function authHeaders(): Record<string, string> {

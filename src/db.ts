@@ -1,5 +1,9 @@
 import { MongoClient, type Collection, type ObjectId } from 'mongodb';
-import type { Target } from '../shared/types';
+import type {
+    PublishResult,
+    ScheduledPublicationStatus,
+    Target,
+} from '../shared/types';
 
 export interface UserDoc {
     _id?: ObjectId;
@@ -62,12 +66,27 @@ export interface PublicationDoc {
     updatedAt: Date;
 }
 
+export interface ScheduledPublicationDoc {
+    _id?: ObjectId;
+    userId: string;
+    draftId: string;
+    title: string;
+    scheduledAt: Date;
+    status: ScheduledPublicationStatus;
+    error?: string;
+    results?: PublishResult[];
+    publicationId?: string;
+    createdAt: Date;
+    updatedAt: Date;
+}
+
 let client: MongoClient | null = null;
 let usersColl: Collection<UserDoc> | null = null;
 let draftsColl: Collection<DraftDoc> | null = null;
 let uploadsColl: Collection<UploadDoc> | null = null;
 let channelResourcesColl: Collection<ChannelResourceDoc> | null = null;
 let publicationsColl: Collection<PublicationDoc> | null = null;
+let scheduledPublicationsColl: Collection<ScheduledPublicationDoc> | null = null;
 
 export async function connect(): Promise<void> {
     if (client) return;
@@ -87,6 +106,8 @@ export async function connect(): Promise<void> {
     channelResourcesColl =
         db.collection<ChannelResourceDoc>('channelResources');
     publicationsColl = db.collection<PublicationDoc>('publications');
+    scheduledPublicationsColl =
+        db.collection<ScheduledPublicationDoc>('scheduledPublications');
 
     await usersColl.createIndex({ email: 1 }, { unique: true });
     await draftsColl.createIndex({ userId: 1, updatedAt: -1 });
@@ -96,6 +117,14 @@ export async function connect(): Promise<void> {
         { unique: true },
     );
     await publicationsColl.createIndex({ userId: 1, draftId: 1, updatedAt: -1 });
+    await scheduledPublicationsColl.createIndex({
+        status: 1,
+        scheduledAt: 1,
+    });
+    await scheduledPublicationsColl.createIndex({
+        userId: 1,
+        scheduledAt: 1,
+    });
 
     console.log(`Connected to MongoDB (db: ${dbName}).`);
 }
@@ -127,4 +156,11 @@ export function publications(): Collection<PublicationDoc> {
         throw new Error('DB not connected — call connect() first');
     }
     return publicationsColl;
+}
+
+export function scheduledPublications(): Collection<ScheduledPublicationDoc> {
+    if (!scheduledPublicationsColl) {
+        throw new Error('DB not connected — call connect() first');
+    }
+    return scheduledPublicationsColl;
 }

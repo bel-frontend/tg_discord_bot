@@ -1,4 +1,11 @@
-import { useCallback, useRef, useState, type Dispatch, type RefObject, type SetStateAction } from 'react';
+import {
+    useCallback,
+    useRef,
+    useState,
+    type Dispatch,
+    type RefObject,
+    type SetStateAction,
+} from 'react';
 import { api } from '../api';
 import { useToast } from '../toast';
 import type { Draft, Target } from '../../../shared/types';
@@ -96,7 +103,7 @@ export function useDraftEditor(
         for (const img of imagesRef.current) URL.revokeObjectURL(img.previewUrl);
     }
 
-    /** Apply a loaded draft's fields into editor state (caller wraps this with autosave suppression). */
+    /** Apply a loaded draft's fields into editor state. */
     function applyDraft(draft: Draft) {
         setDraftId(draft.id);
         setTitle(draft.title === 'Untitled' ? '' : draft.title);
@@ -124,6 +131,31 @@ export function useDraftEditor(
         if (draftIdRef.current) return draftIdRef.current;
 
         const data = collect();
+        const { draft } = await api<{ draft: Draft }>('/api/drafts', {
+            method: 'POST',
+            body: data,
+        });
+        setDraftId(draft.id);
+        setDrafts((cur) => [draft, ...cur]);
+        setSaveStatus('Saved ✓');
+        return draft.id;
+    }
+
+    async function ensureDraftSaved(): Promise<string> {
+        const data = collect();
+        if (draftIdRef.current) {
+            const { draft } = await api<{ draft: Draft }>(
+                `/api/drafts/${draftIdRef.current}`,
+                { method: 'PUT', body: data },
+            );
+            setDrafts((cur) => [
+                draft,
+                ...cur.filter((d) => d.id !== draft.id),
+            ]);
+            setSaveStatus('Saved ✓');
+            return draft.id;
+        }
+
         const { draft } = await api<{ draft: Draft }>('/api/drafts', {
             method: 'POST',
             body: data,
@@ -162,6 +194,7 @@ export function useDraftEditor(
         applyDraft,
         resetForNewDraft,
         ensureDraftForPublish,
+        ensureDraftSaved,
         handleEditorContentChange,
     };
 }

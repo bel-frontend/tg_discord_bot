@@ -4,12 +4,15 @@ import { ToastProvider } from './toast';
 import { Auth } from './components/Auth';
 import { Composer } from './components/Composer';
 import { ResourceManager } from './components/ResourceManager';
+import { ScheduledQueue } from './components/ScheduledQueue';
 import type { User } from '../../shared/types';
 
-type AppRoute = 'composer' | 'resources';
+type AppRoute = 'composer' | 'resources' | 'scheduled';
 
 function routeFromLocation(): AppRoute {
-    return window.location.pathname === '/resources' ? 'resources' : 'composer';
+    if (window.location.pathname === '/resources') return 'resources';
+    if (window.location.pathname === '/scheduled') return 'scheduled';
+    return 'composer';
 }
 
 export function App() {
@@ -60,7 +63,12 @@ export function App() {
     }
 
     function navigate(next: AppRoute) {
-        const path = next === 'resources' ? '/resources' : '/';
+        const path =
+            next === 'resources'
+                ? '/resources'
+                : next === 'scheduled'
+                  ? '/scheduled'
+                  : '/';
         if (window.location.pathname !== path) {
             window.history.pushState({}, '', path);
         }
@@ -79,6 +87,16 @@ export function App() {
                     onBack={() => navigate('composer')}
                     onLogout={logout}
                 />
+            ) : user && view === 'scheduled' ? (
+                <ScheduledQueue
+                    user={user}
+                    theme={theme}
+                    onToggleTheme={() =>
+                        setTheme((t) => (t === 'dark' ? 'light' : 'dark'))
+                    }
+                    onBack={() => navigate('composer')}
+                    onLogout={logout}
+                />
             ) : user ? (
                 <Composer
                     user={user}
@@ -87,6 +105,7 @@ export function App() {
                         setTheme((t) => (t === 'dark' ? 'light' : 'dark'))
                     }
                     onManageResources={() => navigate('resources')}
+                    onOpenScheduled={() => navigate('scheduled')}
                     onLogout={logout}
                 />
             ) : (

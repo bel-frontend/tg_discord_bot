@@ -68,3 +68,23 @@ export interface Publication {
     createdAt: string;
     updatedAt: string;
 }
+
+export type ScheduledPublicationStatus =
+    | 'scheduled'
+    | 'publishing'
+    | 'published'
+    | 'failed'
+    | 'cancelled';
+
+export interface ScheduledPublication {
+    id: string;
+    draftId: string;
+    title: string;
+    scheduledAt: string;
+    status: ScheduledPublicationStatus;
+    error?: string;
+    results?: PublishResult[];
+    publicationId?: string;
+    createdAt: string;
+    updatedAt: string;
+}

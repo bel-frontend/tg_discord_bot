@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { PanelRightClose, PanelRightOpen } from 'lucide-react';
-import { api } from '../api';
+import { api, schedulePublication } from '../api';
 import { useToast } from '../toast';
 import type { Draft, Publication, User } from '../../../shared/types';
 import { type MarkdownEditorHandle } from './MarkdownEditor';
@@ -21,6 +21,7 @@ interface Props {
     theme: 'dark' | 'light';
     onToggleTheme: () => void;
     onManageResources: () => void;
+    onOpenScheduled: () => void;
     onLogout: () => void;
 }
 
@@ -29,6 +30,7 @@ export function Composer({
     theme,
     onToggleTheme,
     onManageResources,
+    onOpenScheduled,
     onLogout,
 }: Props) {
     const toast = useToast();
@@ -42,6 +44,7 @@ export function Composer({
     const [editorFullscreen, setEditorFullscreen] = useState(
         localStorage.getItem('composer.editorFullscreen') === 'true',
     );
+    const [scheduling, setScheduling] = useState(false);
 
     useEffect(() => {
         localStorage.setItem('composer.focusMode', String(focusMode));
@@ -140,6 +143,35 @@ export function Composer({
         });
     }
 
+    async function schedule(scheduledAt: string) {
+        if (!draftEditor.targets.length) {
+            return toast('Select at least one channel', 'warn');
+        }
+        if (validationIssues.length) {
+            return toast(validationIssues[0].message, 'error');
+        }
+        draftEditor.handleEditorContentChange();
+        const markdown = editorRef.current?.getMarkdown() ?? '';
+        if (
+            !markdown.trim() &&
+            !draftEditor.images.length &&
+            !draftEditor.parseImageUrls().length
+        ) {
+            return toast('Write something or add an image first', 'warn');
+        }
+
+        setScheduling(true);
+        try {
+            const draftId = await draftEditor.ensureDraftSaved();
+            await schedulePublication(draftId, scheduledAt);
+            toast('Publication scheduled', 'success');
+        } catch (err: any) {
+            toast(err.message, 'error');
+        } finally {
+            setScheduling(false);
+        }
+    }
+
     function updatePublished(publication: Publication) {
         publications.updatePublished(publication, {
             editorRef,
@@ -168,6 +200,9 @@ export function Composer({
                     </button>
                     <button className="btn ghost" onClick={onManageResources}>
                         Resources
+                    </button>
+                    <button className="btn ghost" onClick={onOpenScheduled}>
+                        Scheduled
                     </button>
                     <span className="user-email">{user.email}</span>
                     <button className="btn ghost" onClick={onLogout}>
@@ -266,8 +301,10 @@ export function Composer({
                         }}
                         publications={publications.publications}
                         publishing={publications.publishing}
+                        scheduling={scheduling}
                         onSaveDraft={() => draftEditor.saveDraft(false)}
                         onPublish={publish}
+                        onSchedule={schedule}
                     />
                 )}
             </main>

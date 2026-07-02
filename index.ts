@@ -2,6 +2,7 @@ import { connect } from './src/db';
 import { register } from './src/platforms/registry';
 import { TelegramPlatform } from './src/platforms/telegram';
 import { DiscordPlatform } from './src/platforms/discord';
+import { startScheduler } from './src/scheduler';
 import { startServer } from './src/server';
 
 console.log('Starting Composer…');
@@ -14,7 +15,10 @@ await connect();
 register(new TelegramPlatform());
 register(new DiscordPlatform());
 
-// 3. HTTP API + editor frontend
+// 3. Scheduled publication worker
+startScheduler();
+
+// 4. HTTP API + editor frontend
 startServer();
 
 console.log('Composer ready.');

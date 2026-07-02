@@ -193,6 +193,7 @@ body {
 input[type='email'],
 input[type='password'],
 input[type='text'],
+input[type='datetime-local'],
 select {
     font: inherit;
     padding: 10px 12px;
@@ -295,6 +296,54 @@ select:focus {
 .resource-panel h2 {
     margin: 0 0 8px;
     font-size: 26px;
+}
+.scheduled-page {
+    flex: 1;
+    overflow: auto;
+    padding: 24px;
+}
+.scheduled-panel {
+    max-width: 980px;
+    margin: 0 auto;
+}
+.scheduled-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 18px;
+}
+.scheduled-head h2 {
+    margin: 0;
+    font-size: 26px;
+}
+.scheduled-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.scheduled-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 14px 16px;
+    background: var(--bg-elev);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+}
+.scheduled-row.published {
+    border-color: color-mix(in srgb, var(--success) 35%, var(--border));
+}
+.scheduled-row.failed {
+    border-color: color-mix(in srgb, var(--danger) 35%, var(--border));
+}
+.scheduled-error {
+    color: var(--danger);
+    margin: 8px 0 0;
+}
+.scheduled-actions {
+    flex-shrink: 0;
 }
 .resource-form {
     display: grid;
@@ -828,6 +877,7 @@ tg-spoiler {
 }
 .actions {
     display: flex;
+    flex-wrap: wrap;
     gap: 10px;
 }
 .actions .btn {
@@ -837,6 +887,41 @@ tg-spoiler {
 .count {
     font-weight: 500;
     opacity: 0.85;
+}
+
+.modal-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    display: grid;
+    place-items: center;
+    padding: 20px;
+    background: rgba(0, 0, 0, 0.55);
+}
+.schedule-modal {
+    width: min(420px, 100%);
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding: 18px;
+    background: var(--bg-elev);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+}
+.schedule-modal h3 {
+    margin: 0;
+}
+.schedule-modal label {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    color: var(--text-dim);
+}
+.modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
 }
 
 /* ---------- published tab ---------- */

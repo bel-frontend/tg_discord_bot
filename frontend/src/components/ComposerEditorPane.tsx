@@ -106,8 +106,10 @@ export function ComposerEditorPane({
                             editorTab === 'published' ? 'active' : ''
                         }`}
                         onClick={onPublishedTab}
+                        title="Update or delete sent messages"
+                        aria-label="Update or delete sent messages"
                     >
-                        Update
+                        Sent
                         {publications.length > 0 &&
                             ` (${publications.length})`}
                     </button>

@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import type {
     ChannelOption,
     PlatformMeta,
@@ -6,6 +7,12 @@ import type {
 } from '../../../shared/types';
 import { ChannelPicker } from './ChannelPicker';
 import { ImageUploader, type ImageItem } from './ImageUploader';
+
+function defaultScheduledAt(): string {
+    const date = new Date(Date.now() + 20 * 60 * 1000);
+    const offsetMs = date.getTimezoneOffset() * 60 * 1000;
+    return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16);
+}
 
 interface Props {
     channels: ChannelOption[];
@@ -18,8 +25,10 @@ interface Props {
     onImageUrlsChange: (value: string) => void;
     publications: Publication[];
     publishing: boolean;
+    scheduling: boolean;
     onSaveDraft: () => void;
     onPublish: () => void;
+    onSchedule: (scheduledAt: string) => Promise<void>;
 }
 
 export function ComposerSidebar({
@@ -33,9 +42,25 @@ export function ComposerSidebar({
     onImageUrlsChange,
     publications,
     publishing,
+    scheduling,
     onSaveDraft,
     onPublish,
+    onSchedule,
 }: Props) {
+    const [scheduleOpen, setScheduleOpen] = useState(false);
+    const [scheduledAt, setScheduledAt] = useState(defaultScheduledAt);
+
+    function openSchedule() {
+        setScheduledAt(defaultScheduledAt());
+        setScheduleOpen(true);
+    }
+
+    async function submitSchedule(e: React.FormEvent) {
+        e.preventDefault();
+        await onSchedule(new Date(scheduledAt).toISOString());
+        setScheduleOpen(false);
+    }
+
     return (
         <aside className="sidebar">
             <h3 className="side-title">Publish to</h3>
@@ -78,7 +103,50 @@ export function ComposerSidebar({
                         <span className="count"> ({targets.length})</span>
                     )}
                 </button>
+                <button
+                    className={`btn ${scheduling ? 'loading' : ''}`}
+                    onClick={openSchedule}
+                    disabled={scheduling || targets.length === 0}
+                >
+                    Schedule publish
+                </button>
             </div>
+
+            {scheduleOpen && (
+                <div
+                    className="modal-backdrop"
+                    onClick={() => setScheduleOpen(false)}
+                >
+                    <form
+                        className="schedule-modal"
+                        onSubmit={submitSchedule}
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <h3>Schedule publish</h3>
+                        <label>
+                            Date and time
+                            <input
+                                type="datetime-local"
+                                value={scheduledAt}
+                                onChange={(e) => setScheduledAt(e.target.value)}
+                                required
+                            />
+                        </label>
+                        <div className="modal-actions">
+                            <button
+                                type="button"
+                                className="btn ghost"
+                                onClick={() => setScheduleOpen(false)}
+                            >
+                                Cancel
+                            </button>
+                            <button className="btn primary" disabled={scheduling}>
+                                Schedule
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            )}
         </aside>
     );
 }

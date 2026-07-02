@@ -25,6 +25,11 @@ import {
     listPublications,
     updatePublishedTargets,
 } from './publications';
+import {
+    cancelScheduledPublication,
+    createScheduledPublication,
+    listScheduledPublications,
+} from './scheduledPublications';
 
 // The Vite build outputs the frontend here (see frontend/vite.config.ts).
 const PUBLIC_DIR = join(import.meta.dir, '..', 'public');
@@ -146,6 +151,38 @@ async function handleApi(req: Request, url: URL): Promise<Response> {
         return json({
             publications: await listPublications(user.id, draftId),
         });
+    }
+
+    if (path === '/api/scheduled-publications' && method === 'GET') {
+        return json({
+            scheduledPublications: await listScheduledPublications(user.id),
+        });
+    }
+
+    if (path === '/api/scheduled-publications' && method === 'POST') {
+        const body = await req.json().catch(() => ({}));
+        try {
+            const scheduledPublication = await createScheduledPublication(
+                user.id,
+                body,
+            );
+            return json({ scheduledPublication }, 201);
+        } catch (err: any) {
+            return json({ error: err?.message || 'Failed to schedule' }, 400);
+        }
+    }
+
+    const scheduledMatch = path.match(
+        /^\/api\/scheduled-publications\/([^/]+)$/,
+    );
+    if (scheduledMatch && method === 'DELETE') {
+        const scheduledPublication = await cancelScheduledPublication(
+            user.id,
+            scheduledMatch[1],
+        );
+        return scheduledPublication
+            ? json({ scheduledPublication })
+            : json({ error: 'Not found' }, 404);
     }
 
     const publicationMatch = path.match(/^\/api\/publications\/([^/]+)\/(update|delete)$/);
