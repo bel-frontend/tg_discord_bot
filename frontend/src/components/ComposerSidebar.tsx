@@ -85,7 +85,7 @@ export function ComposerSidebar({
 
             {publications.length > 0 && (
                 <p className="muted">
-                    Creates a separate new post — use the Update tab to edit
+                    Creates a separate new post — use the Sent tab to edit
                     what's already published.
                 </p>
             )}
