@@ -1,4 +1,4 @@
-import { useCallback, useState, type RefObject } from 'react';
+import { useCallback, useRef, useState, type RefObject } from 'react';
 import { api } from '../api';
 import { useToast } from '../toast';
 import type { Publication, PublishResult, Target } from '../../../shared/types';
@@ -27,8 +27,28 @@ interface UpdatePublishedParams {
 export function usePublications() {
     const toast = useToast();
     const [publications, setPublications] = useState<Publication[]>([]);
-    const [results, setResults] = useState<PublishResult[] | null>(null);
     const [publishing, setPublishing] = useState(false);
+    const [highlightedPublicationId, setHighlightedPublicationId] = useState<
+        string | null
+    >(null);
+    const highlightTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+        null,
+    );
+
+    const clearHighlight = useCallback(() => {
+        if (highlightTimeoutRef.current) clearTimeout(highlightTimeoutRef.current);
+        highlightTimeoutRef.current = null;
+        setHighlightedPublicationId(null);
+    }, []);
+
+    const flashHighlight = useCallback((id: string) => {
+        if (highlightTimeoutRef.current) clearTimeout(highlightTimeoutRef.current);
+        setHighlightedPublicationId(id);
+        highlightTimeoutRef.current = setTimeout(() => {
+            setHighlightedPublicationId(null);
+            highlightTimeoutRef.current = null;
+        }, 2200);
+    }, []);
 
     const loadPublications = useCallback(async (draftId: string) => {
         const { publications } = await api<{ publications: Publication[] }>(
@@ -39,8 +59,8 @@ export function usePublications() {
 
     const reset = useCallback(() => {
         setPublications([]);
-        setResults(null);
-    }, []);
+        clearHighlight();
+    }, [clearHighlight]);
 
     const publish = useCallback(
         async (params: PublishParams) => {
@@ -67,22 +87,22 @@ export function usePublications() {
             setPublishing(true);
             try {
                 const savedDraftId = await params.ensureDraftForPublish();
-                const { results } = await api<{ results: PublishResult[] }>(
-                    '/api/publish',
-                    {
-                        method: 'POST',
-                        body: {
-                            draftId: savedDraftId,
-                            title: params.title.trim() || 'Untitled',
-                            markdown,
-                            imageUrls: params.parseImageUrls(),
-                            imageIds,
-                            targets: params.targets,
-                        },
+                const { results, publication } = await api<{
+                    results: PublishResult[];
+                    publication: Publication | null;
+                }>('/api/publish', {
+                    method: 'POST',
+                    body: {
+                        draftId: savedDraftId,
+                        title: params.title.trim() || 'Untitled',
+                        markdown,
+                        imageUrls: params.parseImageUrls(),
+                        imageIds,
+                        targets: params.targets,
                     },
-                );
-                setResults(results);
+                });
                 await loadPublications(savedDraftId);
+                if (publication) flashHighlight(publication.id);
                 const okCount = results.filter((r) => r.ok).length;
                 toast(
                     `Published to ${okCount}/${results.length} channels`,
@@ -94,7 +114,7 @@ export function usePublications() {
                 setPublishing(false);
             }
         },
-        [toast, loadPublications],
+        [toast, loadPublications, flashHighlight],
     );
 
     const updatePublished = useCallback(
@@ -120,11 +140,11 @@ export function usePublications() {
                         imageUrls: params.parseImageUrls(),
                     },
                 });
-                setResults(results);
                 setPublications((cur) => [
                     updated,
                     ...cur.filter((p) => p.id !== updated.id),
                 ]);
+                flashHighlight(updated.id);
                 const okCount = results.filter((r) => r.ok).length;
                 toast(
                     `Updated ${okCount}/${results.length} published messages`,
@@ -136,7 +156,7 @@ export function usePublications() {
                 setPublishing(false);
             }
         },
-        [toast],
+        [toast, flashHighlight],
     );
 
     const deletePublished = useCallback(
@@ -150,7 +170,6 @@ export function usePublications() {
                 }>(`/api/publications/${publication.id}/delete`, {
                     method: 'POST',
                 });
-                setResults(results);
                 if (deleted) {
                     setPublications((cur) =>
                         cur.filter((p) => p.id !== publication.id),
@@ -172,8 +191,9 @@ export function usePublications() {
 
     return {
         publications,
-        results,
         publishing,
+        highlightedPublicationId,
+        clearHighlight,
         loadPublications,
         reset,
         publish,

@@ -748,73 +748,93 @@ tg-spoiler {
     opacity: 0.85;
 }
 
-/* ---------- published state ---------- */
-.published-panel {
+/* ---------- published tab ---------- */
+.published-tab {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
-    padding: 10px;
     background: var(--bg-elev);
+    padding: 14px;
 }
-.published-panel h4 {
-    margin: 0 0 8px;
+.pub-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
 }
-.published-item {
+.pub-card {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 12px;
+    transition: background-color 0.3s ease;
+}
+.pub-card.highlight {
+    animation: publish-pulse 2.2s ease-out;
+}
+@keyframes publish-pulse {
+    0% {
+        background-color: color-mix(in srgb, var(--success) 28%, var(--bg-elev));
+    }
+    100% {
+        background-color: var(--bg-elev);
+    }
+}
+.pub-card-head {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 10px;
-    padding: 8px 0;
-    border-top: 1px solid var(--border);
+    margin-bottom: 10px;
 }
-.published-item:first-of-type {
-    border-top: 0;
-}
-.published-item strong,
-.published-item span {
+.pub-card-head strong {
     display: block;
-    font-size: 12px;
+    font-size: 14px;
 }
-.published-item span {
-    color: var(--text-dim);
-}
-.published-actions {
+.pub-card-actions {
     display: flex;
     gap: 6px;
     flex-shrink: 0;
 }
-
-/* ---------- results ---------- */
-.results {
-    border-top: 1px solid var(--border);
-    padding-top: 12px;
+.pub-targets {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
 }
-.results h4 {
-    margin: 0 0 8px;
-}
-.result-row {
+.pub-target-row {
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 6px 0;
+    padding: 6px 8px;
+    border-radius: var(--radius-sm);
+    background: var(--bg-elev-2);
     font-size: 13px;
 }
-.result-row .badge {
-    width: 20px;
-    height: 20px;
+.pub-target-badge {
+    width: 18px;
+    height: 18px;
     display: grid;
     place-items: center;
     border-radius: 50%;
-    font-size: 12px;
+    font-size: 11px;
     color: #fff;
     flex-shrink: 0;
 }
-.result-row.ok .badge {
+.pub-target-row.ok .pub-target-badge {
     background: var(--success);
 }
-.result-row.fail .badge {
+.pub-target-row.fail .pub-target-badge {
     background: var(--danger);
 }
-.result-err {
+.pub-target-name {
+    flex: 1;
+}
+.pub-target-link {
+    color: var(--accent);
+    font-size: 12px;
+    white-space: nowrap;
+}
+.pub-target-err {
     color: var(--danger);
     font-size: 12px;
 }

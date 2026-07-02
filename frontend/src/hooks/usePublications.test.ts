@@ -69,9 +69,6 @@ describe('usePublications', () => {
                 targets: [{ platform: 'telegram', channelId: 'c1' }],
             },
         });
-        expect(result.current.results).toEqual([
-            { platform: 'telegram', channelId: 'c1', ok: true, messageIds: ['1'] },
-        ]);
     });
 
     it('publish() makes no API call when there are no targets', async () => {
@@ -226,7 +223,7 @@ describe('usePublications', () => {
         expect(result.current.publications).toHaveLength(1);
     });
 
-    it('reset() clears publications and results', async () => {
+    it('reset() clears publications', async () => {
         vi.mocked(api).mockResolvedValueOnce({
             publications: [
                 {
@@ -252,6 +249,5 @@ describe('usePublications', () => {
         });
 
         expect(result.current.publications).toEqual([]);
-        expect(result.current.results).toBeNull();
     });
 });

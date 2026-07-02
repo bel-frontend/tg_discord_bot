@@ -19,6 +19,7 @@ export interface ChannelOption {
     name: string; // channel name
     resourceId?: string; // db document id (only for DB-managed channels)
     source?: 'db' | 'config';
+    guildId?: string; // Discord only — needed to link to a published message
 }
 
 export interface Draft {

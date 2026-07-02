@@ -21,6 +21,11 @@ export function listPlatforms(): Platform[] {
     return [...platforms.values()];
 }
 
+/** Discord's guild id is a single bot-wide env var, needed client-side to link to a published message. */
+function discordGuildId(): string | undefined {
+    return process.env.DISCORD_GUILD_ID || undefined;
+}
+
 /** Aggregate the channel options of every configured platform for the picker. */
 export async function listAllChannels(): Promise<ChannelOption[]> {
     const options: ChannelOption[] = [];
@@ -38,6 +43,7 @@ export async function listAllChannels(): Promise<ChannelOption[]> {
             name: channel.name,
             resourceId: channel.resourceId,
             source: 'db',
+            guildId: channel.platform === 'discord' ? discordGuildId() : undefined,
         });
         seen.add(`${channel.platform}:${channel.channelId}`);
     }
@@ -55,6 +61,7 @@ export async function listAllChannels(): Promise<ChannelOption[]> {
                     id: channel.id,
                     name: channel.name,
                     source: 'config',
+                    guildId: platform.id === 'discord' ? discordGuildId() : undefined,
                 });
                 seen.add(key);
             }

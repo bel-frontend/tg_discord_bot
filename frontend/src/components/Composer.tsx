@@ -31,7 +31,9 @@ export function Composer({
 }: Props) {
     const toast = useToast();
     const editorRef = useRef<MarkdownEditorHandle>(null);
-    const [editorTab, setEditorTab] = useState<'edit' | 'preview'>('edit');
+    const [editorTab, setEditorTab] = useState<
+        'edit' | 'preview' | 'published'
+    >('edit');
 
     const { channels, loadChannels } = useChannels();
     const {
@@ -74,6 +76,7 @@ export function Composer({
             // Restore image thumbnails (fetched from the server, may take a moment).
             const previews = await loadImagePreviews(draft.imageIds || []);
             draftEditor.setImages(previews);
+            publications.clearHighlight();
             await publications.loadPublications(draft.id);
         } catch (err: any) {
             toast(err.message, 'error');
@@ -161,11 +164,20 @@ export function Composer({
                         draftEditor.handleEditorContentChange();
                         setEditorTab('preview');
                     }}
+                    onPublishedTab={() => setEditorTab('published')}
                     markdown={draftEditor.markdown}
                     onEditorChange={handleEditorChange}
                     validationIssues={validationIssues}
                     saveStatus={draftEditor.saveStatus}
                     charCount={draftEditor.charCount}
+                    publications={publications.publications}
+                    channels={channels}
+                    publishing={publications.publishing}
+                    highlightedPublicationId={
+                        publications.highlightedPublicationId
+                    }
+                    onUpdatePublished={updatePublished}
+                    onDeletePublished={publications.deletePublished}
                 />
 
                 <ComposerSidebar
@@ -187,11 +199,8 @@ export function Composer({
                     }}
                     publications={publications.publications}
                     publishing={publications.publishing}
-                    onUpdatePublished={updatePublished}
-                    onDeletePublished={publications.deletePublished}
                     onSaveDraft={() => draftEditor.saveDraft(false)}
                     onPublish={publish}
-                    results={publications.results}
                 />
             </main>
         </div>

@@ -1,13 +1,6 @@
-import type {
-    ChannelOption,
-    Publication,
-    PublishResult,
-    Target,
-} from '../../../shared/types';
+import type { ChannelOption, Publication, Target } from '../../../shared/types';
 import { ChannelPicker } from './ChannelPicker';
 import { ImageUploader, type ImageItem } from './ImageUploader';
-import { PublishedPanel } from './PublishedPanel';
-import { ResultsPanel } from './ResultsPanel';
 
 interface Props {
     channels: ChannelOption[];
@@ -19,11 +12,8 @@ interface Props {
     onImageUrlsChange: (value: string) => void;
     publications: Publication[];
     publishing: boolean;
-    onUpdatePublished: (publication: Publication) => void;
-    onDeletePublished: (publication: Publication) => void;
     onSaveDraft: () => void;
     onPublish: () => void;
-    results: PublishResult[] | null;
 }
 
 export function ComposerSidebar({
@@ -36,11 +26,8 @@ export function ComposerSidebar({
     onImageUrlsChange,
     publications,
     publishing,
-    onUpdatePublished,
-    onDeletePublished,
     onSaveDraft,
     onPublish,
-    results,
 }: Props) {
     return (
         <aside className="sidebar">
@@ -63,13 +50,12 @@ export function ComposerSidebar({
                 />
             </label>
 
-            <PublishedPanel
-                publications={publications}
-                publishing={publishing}
-                onUpdate={onUpdatePublished}
-                onDelete={onDeletePublished}
-            />
-
+            {publications.length > 0 && (
+                <p className="muted">
+                    Creates a separate new post — use "Update" in the
+                    Published tab to edit what's already published.
+                </p>
+            )}
             <div className="actions">
                 <button className="btn" onClick={onSaveDraft}>
                     Save draft
@@ -79,14 +65,12 @@ export function ComposerSidebar({
                     onClick={onPublish}
                     disabled={publishing || targets.length === 0}
                 >
-                    {publications.length ? 'Republish as new' : 'Publish'}
+                    {publications.length ? 'Publish as new post' : 'Publish'}
                     {targets.length > 0 && (
                         <span className="count"> ({targets.length})</span>
                     )}
                 </button>
             </div>
-
-            <ResultsPanel results={results} channels={channels} />
         </aside>
     );
 }

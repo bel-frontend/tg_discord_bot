@@ -1,6 +1,8 @@
 import type { RefObject } from 'react';
+import type { ChannelOption, Publication } from '../../../shared/types';
 import { MarkdownEditor, type MarkdownEditorHandle } from './MarkdownEditor';
 import { PreviewPanel } from './PreviewPanel';
+import { PublishedTab } from './PublishedTab';
 import type { ValidationIssue } from '../hooks/useValidation';
 
 interface Props {
@@ -8,14 +10,21 @@ interface Props {
     theme: 'dark' | 'light';
     title: string;
     onTitleChange: (value: string) => void;
-    editorTab: 'edit' | 'preview';
+    editorTab: 'edit' | 'preview' | 'published';
     onEditTab: () => void;
     onPreviewTab: () => void;
+    onPublishedTab: () => void;
     markdown: string;
     onEditorChange: () => void;
     validationIssues: ValidationIssue[];
     saveStatus: string;
     charCount: number;
+    publications: Publication[];
+    channels: ChannelOption[];
+    publishing: boolean;
+    highlightedPublicationId: string | null;
+    onUpdatePublished: (publication: Publication) => void;
+    onDeletePublished: (publication: Publication) => void;
 }
 
 export function ComposerEditorPane({
@@ -26,11 +35,18 @@ export function ComposerEditorPane({
     editorTab,
     onEditTab,
     onPreviewTab,
+    onPublishedTab,
     markdown,
     onEditorChange,
     validationIssues,
     saveStatus,
     charCount,
+    publications,
+    channels,
+    publishing,
+    highlightedPublicationId,
+    onUpdatePublished,
+    onDeletePublished,
 }: Props) {
     return (
         <section className="editor-pane">
@@ -60,6 +76,16 @@ export function ComposerEditorPane({
                 >
                     Preview
                 </button>
+                <button
+                    type="button"
+                    className={`editor-tab ${
+                        editorTab === 'published' ? 'active' : ''
+                    }`}
+                    onClick={onPublishedTab}
+                >
+                    Published
+                    {publications.length > 0 && ` (${publications.length})`}
+                </button>
             </div>
             <div className="editor-tab-body">
                 <div className="editor-tab-pane" hidden={editorTab !== 'edit'}>
@@ -71,6 +97,16 @@ export function ComposerEditorPane({
                 </div>
                 {editorTab === 'preview' && (
                     <PreviewPanel markdown={markdown} />
+                )}
+                {editorTab === 'published' && (
+                    <PublishedTab
+                        publications={publications}
+                        channels={channels}
+                        publishing={publishing}
+                        highlightedPublicationId={highlightedPublicationId}
+                        onUpdate={onUpdatePublished}
+                        onDelete={onDeletePublished}
+                    />
                 )}
             </div>
             {validationIssues.length > 0 && (
