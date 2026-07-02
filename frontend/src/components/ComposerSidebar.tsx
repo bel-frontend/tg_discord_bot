@@ -1,9 +1,15 @@
-import type { ChannelOption, Publication, Target } from '../../../shared/types';
+import type {
+    ChannelOption,
+    PlatformMeta,
+    Publication,
+    Target,
+} from '../../../shared/types';
 import { ChannelPicker } from './ChannelPicker';
 import { ImageUploader, type ImageItem } from './ImageUploader';
 
 interface Props {
     channels: ChannelOption[];
+    platforms: PlatformMeta[];
     targets: Target[];
     onTargetsChange: (next: Target[]) => void;
     images: ImageItem[];
@@ -18,6 +24,7 @@ interface Props {
 
 export function ComposerSidebar({
     channels,
+    platforms,
     targets,
     onTargetsChange,
     images,
@@ -34,6 +41,7 @@ export function ComposerSidebar({
             <h3 className="side-title">Publish to</h3>
             <ChannelPicker
                 channels={channels}
+                platforms={platforms}
                 selected={targets}
                 onChange={onTargetsChange}
             />

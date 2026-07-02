@@ -1,46 +1,24 @@
 import { useEffect, useState } from 'react';
 import { fetchPreview } from '../api';
-
-function escapeHtml(value: string): string {
-    return value
-        .replaceAll('&', '&amp;')
-        .replaceAll('<', '&lt;')
-        .replaceAll('>', '&gt;');
-}
-
-function renderDiscord(markdown: string): string {
-    let html = escapeHtml(markdown);
-    html = html.replace(/```(?:\w+)?\n?([\s\S]*?)```/g, (_m, code) => {
-        return `<pre>${code.replace(/\n$/, '')}</pre>`;
-    });
-    html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
-    html = html.replace(/\|\|([\s\S]+?)\|\|/g, '<span class="spoiler">$1</span>');
-    html = html.replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>');
-    html = html.replace(/__([^_]+)__/g, '<u>$1</u>');
-    html = html.replace(/\*([^*]+)\*/g, '<i>$1</i>');
-    html = html.replace(/~~([^~]+)~~/g, '<s>$1</s>');
-    html = html.replace(/^### (.*)$/gm, '<h3>$1</h3>');
-    html = html.replace(/^## (.*)$/gm, '<h2>$1</h2>');
-    html = html.replace(/^# (.*)$/gm, '<h1>$1</h1>');
-    html = html.replace(/^&gt; (.*)$/gm, '<blockquote>$1</blockquote>');
-    html = html.replace(/^[-*] (.*)$/gm, '<li>$1</li>');
-    html = html.replace(/^\d+\. (.*)$/gm, '<li>$1</li>');
-    html = html.replace(/\[([^\]]+)]\((https?:[^)]+)\)/g, '<a href="$2">$1</a>');
-    return html.replace(/\n/g, '<br/>');
-}
+import type { PlatformMeta } from '../../../shared/types';
 
 interface Props {
     markdown: string;
+    platforms: PlatformMeta[];
 }
 
-export function PreviewPanel({ markdown }: Props) {
-    const [tab, setTab] = useState<'telegram' | 'discord'>('telegram');
-    const [preview, setPreview] = useState({ telegramHtml: '', discord: '' });
+export function PreviewPanel({ markdown, platforms }: Props) {
+    const [tab, setTab] = useState('');
+    const [preview, setPreview] = useState<Record<string, string>>({});
+
+    useEffect(() => {
+        if (!tab && platforms.length) setTab(platforms[0].id);
+    }, [platforms, tab]);
 
     useEffect(() => {
         const timer = setTimeout(async () => {
             if (!markdown.trim()) {
-                setPreview({ telegramHtml: '', discord: '' });
+                setPreview({});
                 return;
             }
             try {
@@ -53,28 +31,21 @@ export function PreviewPanel({ markdown }: Props) {
         return () => clearTimeout(timer);
     }, [markdown]);
 
-    const html =
-        tab === 'telegram'
-            ? preview.telegramHtml
-            : renderDiscord(preview.discord);
+    const html = preview[tab] ?? '';
 
     return (
         <div className="preview">
             <div className="preview-tabs">
-                <button
-                    className={`ptab ${tab === 'telegram' ? 'active' : ''}`}
-                    onClick={() => setTab('telegram')}
-                    type="button"
-                >
-                    ✈️ Telegram
-                </button>
-                <button
-                    className={`ptab ${tab === 'discord' ? 'active' : ''}`}
-                    onClick={() => setTab('discord')}
-                    type="button"
-                >
-                    🎮 Discord
-                </button>
+                {platforms.map((p) => (
+                    <button
+                        key={p.id}
+                        className={`ptab ${tab === p.id ? 'active' : ''}`}
+                        onClick={() => setTab(p.id)}
+                        type="button"
+                    >
+                        {p.icon ?? '🌐'} {p.name}
+                    </button>
+                ))}
             </div>
             <div className={`preview-bubble ${tab}`}>
                 {html ? (

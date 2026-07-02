@@ -31,6 +31,7 @@ function serialize(doc: PublicationDoc): Publication {
                 ok: target.ok,
                 error: target.error,
                 updatedAt: target.updatedAt.toISOString(),
+                link: target.link,
             }),
         ),
         createdAt: doc.createdAt.toISOString(),
@@ -47,6 +48,7 @@ function resultsToTargets(results: PublishResult[]) {
         ok: result.ok,
         error: result.error,
         updatedAt: now,
+        link: result.link,
     }));
 }
 
@@ -150,6 +152,7 @@ function mergeUntouchedTargets(
             ok: target.ok,
             messageIds: target.messageIds,
             error: target.error,
+            link: target.link,
         }));
     return [...results, ...untouched];
 }

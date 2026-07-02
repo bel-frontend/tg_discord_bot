@@ -1,9 +1,7 @@
-import type { ChannelOption, Target } from '../../../shared/types';
+import type { ChannelOption, PlatformMeta, Target } from '../../../shared/types';
 
-export function platformIcon(id: string): string {
-    if (id === 'telegram') return '✈️';
-    if (id === 'discord') return '🎮';
-    return '🌐';
+export function platformIcon(id: string, platforms: PlatformMeta[]): string {
+    return platforms.find((p) => p.id === id)?.icon ?? '🌐';
 }
 
 function key(t: { platform: string; channelId: string }): string {
@@ -12,11 +10,12 @@ function key(t: { platform: string; channelId: string }): string {
 
 interface Props {
     channels: ChannelOption[];
+    platforms: PlatformMeta[];
     selected: Target[];
     onChange: (next: Target[]) => void;
 }
 
-export function ChannelPicker({ channels, selected, onChange }: Props) {
+export function ChannelPicker({ channels, platforms, selected, onChange }: Props) {
     if (!channels.length) {
         return (
             <p className="muted">
@@ -79,7 +78,7 @@ export function ChannelPicker({ channels, selected, onChange }: Props) {
                 <div className="chan-group" key={platform}>
                     <div className="chan-group-head">
                         <span className="chan-plat">
-                            {platformIcon(platform)} {group.name}
+                            {platformIcon(platform, platforms)} {group.name}
                         </span>
                         <button
                             className="chan-all btn small"

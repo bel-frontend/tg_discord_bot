@@ -1,9 +1,8 @@
-// Canonical content is Markdown. Each platform converts it to its own native format here.
-// Cross-platform extras:
-//   __underline__ -> Telegram <u>, Discord __underline__
-//   ||spoiler||   -> Telegram <tg-spoiler>, Discord ||spoiler||
+// Telegram owns its Markdown -> Telegram HTML conversion.
+// Cross-platform editor extras supported here:
+//   __underline__ -> <u>
+//   ||spoiler||   -> <tg-spoiler>
 import { marked } from 'marked';
-import { NodeHtmlMarkdown } from 'node-html-markdown';
 
 function escapeHtml(s: string): string {
     return s
@@ -45,10 +44,6 @@ marked.use({
     ],
 });
 
-// --- Telegram: Markdown -> the small HTML subset Telegram's parse_mode=HTML supports ---
-// Supported tags: <b> <i> <u> <s> <a> <code> <pre> <blockquote>. Everything block-level
-// (headings, paragraphs, lists) is flattened to plain text + newlines.
-
 function renderInline(tokens: any[]): string {
     let out = '';
     for (const t of tokens) {
@@ -89,7 +84,7 @@ function renderInline(tokens: any[]): string {
                 out += escapeHtml(t.text || t.title || t.href || '');
                 break;
             case 'html':
-                // Telegram rejects unknown tags — escape raw HTML instead.
+                // Telegram rejects unknown tags, so escape raw HTML instead.
                 out += escapeHtml(t.text);
                 break;
             default:
@@ -137,7 +132,6 @@ function renderBlocks(tokens: any[]): string {
                 out += `${renderList(t)}\n`;
                 break;
             case 'hr':
-                // Social targets don't render Markdown HR consistently; use spacing.
                 out += '\n\n';
                 break;
             case 'space':
@@ -146,7 +140,9 @@ function renderBlocks(tokens: any[]): string {
                 out += escapeHtml(t.text);
                 break;
             default:
-                out += t.tokens ? `${renderInline(t.tokens)}\n` : escapeHtml(t.raw ?? '');
+                out += t.tokens
+                    ? `${renderInline(t.tokens)}\n`
+                    : escapeHtml(t.raw ?? '');
         }
     }
     return out;
@@ -155,58 +151,4 @@ function renderBlocks(tokens: any[]): string {
 export function markdownToTelegramHtml(markdown: string): string {
     const tokens = marked.lexer(markdown);
     return renderBlocks(tokens).replace(/\n{3,}/g, '\n\n').trim();
-}
-
-// --- Discord: renders Markdown natively, so pass it through (lightly trimmed). ---
-export function markdownToDiscord(markdown: string): string {
-    // Discord doesn't support Markdown horizontal rules; avoid leaking raw "---" separators.
-    return markdown.replace(/^\s{0,3}([-*_])(?:\s*\1){2,}\s*$/gm, '').trim();
-}
-
-// --- Legacy helper: convert HTML input to Discord Markdown (kept for the inbound bot path). ---
-export function htmlToDiscordMarkdown(html: string): string {
-    // `headingStyle`/`bulletMarker` are valid runtime options but missing from the
-    // shipped type defs, so widen to keep the type-check clean.
-    const nhm = new NodeHtmlMarkdown({
-        strongDelimiter: '**',
-        emDelimiter: '*',
-        codeBlockStyle: 'fenced',
-        bulletMarker: '•',
-        headingStyle: 'atx',
-        hr: '---',
-        br: '\n',
-        keepDataImages: false,
-        useLinkReferenceDefinitions: false,
-        useInlineLinks: true,
-        blockElements: [
-            'p',
-            'div',
-            'blockquote',
-            'pre',
-            'h1',
-            'h2',
-            'h3',
-            'h4',
-            'h5',
-            'h6',
-            'ul',
-            'ol',
-            'li',
-            'table',
-            'thead',
-            'tbody',
-            'tr',
-            'th',
-            'td',
-        ],
-    } as any);
-    function cleanUpMarkdown(md: string): string {
-        return md
-            .replace(/•(?=\S)/g, '• ')
-            .replace(/\*\*(.+?)\*\*(?=\S)/g, '**$1**\n')
-            .trim();
-    }
-    const cleanedHtml = html.replaceAll(/\n/g, '<br/>');
-    const md = nhm.translate(cleanedHtml);
-    return cleanUpMarkdown(md);
 }

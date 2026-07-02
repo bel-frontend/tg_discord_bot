@@ -14,6 +14,7 @@ import { useAutosave } from '../hooks/useAutosave';
 import { useValidation } from '../hooks/useValidation';
 import { usePublications } from '../hooks/usePublications';
 import { loadImagePreviews } from '../hooks/useImagePreviews';
+import { usePlatforms } from '../hooks/usePlatforms';
 
 interface Props {
     user: User;
@@ -63,6 +64,7 @@ export function Composer({
     }, [editorFullscreen]);
 
     const { channels, loadChannels } = useChannels();
+    const { platforms, loadPlatforms } = usePlatforms();
     const {
         drafts,
         setDrafts,
@@ -78,16 +80,20 @@ export function Composer({
     const { validationIssues } = useValidation(draftEditor.markdown);
     const publications = usePublications();
 
-    // Load channels + drafts once.
+    // Load platform metadata, channels, and drafts once.
     useEffect(() => {
         (async () => {
             try {
-                await Promise.all([loadChannels(), loadDrafts()]);
+                await Promise.all([
+                    loadPlatforms(),
+                    loadChannels(),
+                    loadDrafts(),
+                ]);
             } catch (err: any) {
                 toast(err.message, 'error');
             }
         })();
-    }, [toast, loadChannels, loadDrafts]);
+    }, [toast, loadPlatforms, loadChannels, loadDrafts]);
 
     function handleEditorChange() {
         draftEditor.handleEditorContentChange();
@@ -230,6 +236,7 @@ export function Composer({
                     charCount={draftEditor.charCount}
                     publications={publications.publications}
                     channels={channels}
+                    platforms={platforms}
                     publishing={publications.publishing}
                     highlightedPublicationId={
                         publications.highlightedPublicationId
@@ -241,6 +248,7 @@ export function Composer({
                 {!focusMode && (
                     <ComposerSidebar
                         channels={channels}
+                        platforms={platforms}
                         targets={draftEditor.targets}
                         onTargetsChange={(next) => {
                             draftEditor.setTargets(next);

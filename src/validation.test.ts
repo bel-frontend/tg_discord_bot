@@ -1,9 +1,13 @@
 import { describe, expect, test } from 'bun:test';
 import { validateMarkdown, previewContent } from './validation';
+import { TelegramPlatform } from './platforms/telegram';
+import { DiscordPlatform } from './platforms/discord';
+
+const platforms = [new TelegramPlatform(), new DiscordPlatform()];
 
 describe('validateMarkdown', () => {
     test('returns ok with no issues for clean markdown', () => {
-        const result = validateMarkdown('**bold** and _italic_ text');
+        const result = validateMarkdown('**bold** and _italic_ text', platforms);
         expect(result.ok).toBe(true);
         expect(result.issues).toEqual([]);
     });
@@ -13,7 +17,7 @@ describe('validateMarkdown', () => {
         // chunk.ts to land inside the bold span's content, splitting the <b>...</b> pair
         // across two independently-validated chunks.
         const markdown = '**' + 'x'.repeat(5000) + '**';
-        const result = validateMarkdown(markdown);
+        const result = validateMarkdown(markdown, platforms);
         expect(result.ok).toBe(false);
         expect(result.issues).toHaveLength(2);
 
@@ -34,7 +38,7 @@ describe('validateMarkdown', () => {
 
     test('numbers chunks starting at 1 and increments across multiple chunks', () => {
         const markdown = '**' + 'x'.repeat(5000) + '**';
-        const result = validateMarkdown(markdown);
+        const result = validateMarkdown(markdown, platforms);
         const chunkNumbers = result.issues.map((i) => i.chunk);
         expect(chunkNumbers).toEqual([1, 2]);
     });
@@ -42,8 +46,8 @@ describe('validateMarkdown', () => {
 
 describe('previewContent', () => {
     test('converts markdown to both telegram HTML and discord markdown', () => {
-        const result = previewContent('**hello** world');
-        expect(result.telegramHtml).toBe('<b>hello</b> world');
-        expect(result.discord).toBe('**hello** world');
+        const result = previewContent('**hello** world', platforms);
+        expect(result.telegram).toBe('<b>hello</b> world');
+        expect(result.discord).toBe('<b>hello</b> world');
     });
 });

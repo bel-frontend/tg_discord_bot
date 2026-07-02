@@ -47,6 +47,7 @@ export interface PublicationTargetDoc {
     ok: boolean;
     error?: string;
     updatedAt: Date;
+    link?: string;
 }
 
 export interface PublicationDoc {

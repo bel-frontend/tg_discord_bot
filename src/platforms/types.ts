@@ -26,9 +26,22 @@ export interface PublishedMessageRef {
     messageIds: string[];
 }
 
+export interface ValidationIssue {
+    platform: string;
+    chunk: number;
+    message: string;
+    tag?: string;
+    offset?: number;
+    line?: number;
+    excerpt?: string;
+    htmlContext?: string;
+}
+
 export interface Platform {
-    readonly id: string; // "telegram" | "discord" | ...
+    readonly id: string; // stable platform id used in targets and publications
     readonly name: string; // display name
+    readonly icon?: string; // emoji/label for pickers; UI falls back to 🌐 when absent
+    readonly charLimit?: number; // per-message length limit, shown as a UI hint
     /** Whether the adapter has the config/tokens it needs to run. */
     isConfigured(): boolean;
     /** name -> id options for the channel picker. */
@@ -45,4 +58,10 @@ export interface Platform {
     ): Promise<PublishResult[]>;
     /** Delete previously published messages, when the platform can delete them. */
     delete?(refs: PublishedMessageRef[]): Promise<PublishResult[]>;
+    /** Render markdown as this platform's preview HTML. */
+    toPreviewHtml(markdown: string): string;
+    /** Check markdown/content for platform-specific formatting problems. */
+    validateContent?(markdown: string): ValidationIssue[];
+    /** Build a link to a previously published message, or null when not linkable. */
+    buildMessageLink?(channelId: string, messageId: string): string | null;
 }

@@ -19,7 +19,13 @@ export interface ChannelOption {
     name: string; // channel name
     resourceId?: string; // db document id (only for DB-managed channels)
     source?: 'db' | 'config';
-    guildId?: string; // Discord only — needed to link to a published message
+}
+
+export interface PlatformMeta {
+    id: string;
+    name: string;
+    icon?: string;
+    charLimit?: number;
 }
 
 export interface Draft {
@@ -39,6 +45,7 @@ export interface PublishResult {
     ok: boolean;
     messageIds?: string[];
     error?: string;
+    link?: string;
 }
 
 export interface PublicationTarget {
@@ -48,6 +55,7 @@ export interface PublicationTarget {
     ok: boolean;
     error?: string;
     updatedAt: string;
+    link?: string;
 }
 
 export interface Publication {

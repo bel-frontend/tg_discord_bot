@@ -8,12 +8,17 @@ import type {
     PublishResult,
 } from './types';
 import { getConfiguredChannels } from '../channels';
-import { markdownToDiscord } from '../converters/markdown';
+import {
+    markdownToDiscord,
+    markdownToDiscordPreviewHtml,
+} from './discord/markdown';
 import { splitTextIntoChunks, DISCORD_LIMIT } from '../chunk';
 
 export class DiscordPlatform implements Platform {
     readonly id = 'discord';
     readonly name = 'Discord';
+    readonly icon = '🎮';
+    readonly charLimit = DISCORD_LIMIT;
     private client: Client | null = null;
     private ready: Promise<void> | null = null;
 
@@ -24,6 +29,15 @@ export class DiscordPlatform implements Platform {
 
     isConfigured(): boolean {
         return Boolean(this.token);
+    }
+
+    toPreviewHtml(markdown: string): string {
+        return markdownToDiscordPreviewHtml(markdown);
+    }
+
+    buildMessageLink(channelId: string, messageId: string): string | null {
+        if (!this.guildId) return null;
+        return `https://discord.com/channels/${this.guildId}/${channelId}/${messageId}`;
     }
 
     /** Log in once and reuse the connection for both listing and publishing. */

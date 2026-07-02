@@ -4,7 +4,7 @@ import type {
     PublishContent,
     PublishedMessageRef,
 } from './types';
-import type { ChannelOption } from '../../shared/types';
+import type { ChannelOption, PlatformMeta } from '../../shared/types';
 import { listChannelResources } from '../channelResources';
 
 const platforms = new Map<string, Platform>();
@@ -21,9 +21,13 @@ export function listPlatforms(): Platform[] {
     return [...platforms.values()];
 }
 
-/** Discord's guild id is a single bot-wide env var, needed client-side to link to a published message. */
-function discordGuildId(): string | undefined {
-    return process.env.DISCORD_GUILD_ID || undefined;
+export function listPlatformsMeta(): PlatformMeta[] {
+    return [...platforms.values()].map((platform) => ({
+        id: platform.id,
+        name: platform.name,
+        icon: platform.icon,
+        charLimit: platform.charLimit,
+    }));
 }
 
 /** Aggregate the channel options of every configured platform for the picker. */
@@ -43,7 +47,6 @@ export async function listAllChannels(): Promise<ChannelOption[]> {
             name: channel.name,
             resourceId: channel.resourceId,
             source: 'db',
-            guildId: channel.platform === 'discord' ? discordGuildId() : undefined,
         });
         seen.add(`${channel.platform}:${channel.channelId}`);
     }
@@ -61,7 +64,6 @@ export async function listAllChannels(): Promise<ChannelOption[]> {
                     id: channel.id,
                     name: channel.name,
                     source: 'config',
-                    guildId: platform.id === 'discord' ? discordGuildId() : undefined,
                 });
                 seen.add(key);
             }
@@ -73,6 +75,21 @@ export async function listAllChannels(): Promise<ChannelOption[]> {
         }
     }
     return options;
+}
+
+/** Attach a message link to each successful result, if the adapter can build one. */
+function withLinks(
+    platform: Platform,
+    results: PublishResult[],
+): PublishResult[] {
+    if (!platform.buildMessageLink) return results;
+    return results.map((result) => {
+        if (!result.ok || !result.messageIds?.length) return result;
+        const link =
+            platform.buildMessageLink!(result.channelId, result.messageIds[0]) ??
+            undefined;
+        return link ? { ...result, link } : result;
+    });
 }
 
 export interface PublishTarget {
@@ -108,7 +125,9 @@ export async function publishToTargets(
             continue;
         }
         try {
-            results.push(...(await platform.publish(channelIds, content)));
+            results.push(
+                ...withLinks(platform, await platform.publish(channelIds, content)),
+            );
         } catch (error: any) {
             results.push(
                 ...channelIds.map((channelId) => ({
@@ -169,7 +188,9 @@ export async function updateTargets(
             continue;
         }
         try {
-            results.push(...(await platform.update(refs, content)));
+            results.push(
+                ...withLinks(platform, await platform.update(refs, content)),
+            );
         } catch (error: any) {
             results.push(
                 ...refs.map((ref) => ({

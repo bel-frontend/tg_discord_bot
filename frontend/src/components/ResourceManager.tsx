@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { api } from '../api';
 import { useToast } from '../toast';
 import type { ChannelOption, User } from '../../../shared/types';
 import { platformIcon } from './ChannelPicker';
 import { useChannels } from '../hooks/useChannels';
+import { usePlatforms } from '../hooks/usePlatforms';
 
 interface Props {
     user: User;
@@ -13,7 +14,9 @@ interface Props {
     onLogout: () => void;
 }
 
-const PLATFORM_OPTIONS = [
+// Fallback platform names for ids without a registered adapter yet — lets users
+// pre-provision channel resources before the platform module exists.
+const PLATFORM_PLACEHOLDERS = [
     { id: 'telegram', name: 'Telegram' },
     { id: 'discord', name: 'Discord' },
     { id: 'mastodon', name: 'Mastodon' },
@@ -30,13 +33,22 @@ export function ResourceManager({
 }: Props) {
     const toast = useToast();
     const { channels, loadChannels } = useChannels();
+    const { platforms, loadPlatforms } = usePlatforms();
     const [platform, setPlatform] = useState('telegram');
     const [name, setName] = useState('');
     const [channelId, setChannelId] = useState('');
     const [busy, setBusy] = useState(false);
 
+    const platformOptions = useMemo(() => {
+        const known = new Map(PLATFORM_PLACEHOLDERS.map((p) => [p.id, p]));
+        for (const p of platforms) known.set(p.id, { id: p.id, name: p.name });
+        return [...known.values()];
+    }, [platforms]);
+
     useEffect(() => {
-        loadChannels().catch((err) => toast(err.message, 'error'));
+        Promise.all([loadChannels(), loadPlatforms()]).catch((err) =>
+            toast(err.message, 'error'),
+        );
     }, []);
 
     async function submit(e: React.FormEvent) {
@@ -113,7 +125,7 @@ export function ResourceManager({
                                 value={platform}
                                 onChange={(e) => setPlatform(e.target.value)}
                             >
-                                {PLATFORM_OPTIONS.map((p) => (
+                                {platformOptions.map((p) => (
                                     <option key={p.id} value={p.id}>
                                         {p.name}
                                     </option>
@@ -153,7 +165,10 @@ export function ResourceManager({
                             >
                                 <div>
                                     <div className="resource-name">
-                                        {platformIcon(channel.platform)}{' '}
+                                        {platformIcon(
+                                            channel.platform,
+                                            platforms,
+                                        )}{' '}
                                         {channel.name}
                                     </div>
                                     <div className="resource-meta">

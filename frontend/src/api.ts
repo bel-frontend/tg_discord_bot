@@ -1,3 +1,5 @@
+import type { PlatformMeta } from '../../shared/types';
+
 let onUnauthorized: (() => void) | null = null;
 export function setUnauthorizedHandler(fn: () => void) {
     onUnauthorized = fn;
@@ -55,14 +57,20 @@ export async function validatePost(markdown: string): Promise<{
     });
 }
 
-export async function fetchPreview(markdown: string): Promise<{
-    telegramHtml: string;
-    discord: string;
-}> {
+export async function fetchPreview(
+    markdown: string,
+): Promise<Record<string, string>> {
     return api('/api/preview', {
         method: 'POST',
         body: { markdown },
     });
+}
+
+export async function fetchPlatforms(): Promise<PlatformMeta[]> {
+    const { platforms } = await api<{ platforms: PlatformMeta[] }>(
+        '/api/platforms',
+    );
+    return platforms;
 }
 
 function authHeaders(): Record<string, string> {

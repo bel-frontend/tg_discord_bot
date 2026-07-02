@@ -1,6 +1,10 @@
 import type { RefObject } from 'react';
 import { Maximize2, Minimize2 } from 'lucide-react';
-import type { ChannelOption, Publication } from '../../../shared/types';
+import type {
+    ChannelOption,
+    PlatformMeta,
+    Publication,
+} from '../../../shared/types';
 import { MarkdownEditor, type MarkdownEditorHandle } from './MarkdownEditor';
 import { PreviewPanel } from './PreviewPanel';
 import { PublishedTab } from './PublishedTab';
@@ -24,6 +28,7 @@ interface Props {
     charCount: number;
     publications: Publication[];
     channels: ChannelOption[];
+    platforms: PlatformMeta[];
     publishing: boolean;
     highlightedPublicationId: string | null;
     onUpdatePublished: (publication: Publication) => void;
@@ -48,11 +53,22 @@ export function ComposerEditorPane({
     charCount,
     publications,
     channels,
+    platforms,
     publishing,
     highlightedPublicationId,
     onUpdatePublished,
     onDeletePublished,
 }: Props) {
+    const platformName = (id: string) =>
+        platforms.find((p) => p.id === id)?.name ?? id;
+    const limitLabels = platforms
+        .filter((p) => p.charLimit)
+        .map((p) => `${p.icon ?? p.name} ≤${p.charLimit}`)
+        .join(' · ');
+    const knownLimits = platforms
+        .map((p) => p.charLimit)
+        .filter((limit): limit is number => Boolean(limit));
+    const maxKnownLimit = knownLimits.length ? Math.max(...knownLimits) : null;
     const FullscreenIcon = fullscreen ? Minimize2 : Maximize2;
 
     return (
@@ -122,13 +138,14 @@ export function ComposerEditorPane({
                     />
                 </div>
                 {editorTab === 'preview' && (
-                    <PreviewPanel markdown={markdown} />
+                    <PreviewPanel markdown={markdown} platforms={platforms} />
                 )}
                 {editorTab === 'published' && (
                     <div className="update-panel">
                         <PublishedTab
                             publications={publications}
                             channels={channels}
+                            platforms={platforms}
                             publishing={publishing}
                             highlightedPublicationId={highlightedPublicationId}
                             onUpdate={onUpdatePublished}
@@ -152,7 +169,10 @@ export function ComposerEditorPane({
                         }
                     }}
                 >
-                    <strong>Telegram formatting problem</strong>
+                    <strong>
+                        {platformName(validationIssues[0].platform)}{' '}
+                        formatting problem
+                    </strong>
                     <span>
                         Chunk {validationIssues[0].chunk}:{' '}
                         {validationIssues[0].message}
@@ -172,9 +192,14 @@ export function ComposerEditorPane({
             <div className="editor-foot">
                 <span className="save-status">{saveStatus}</span>
                 <span
-                    className={`char-count ${charCount > 4096 ? 'warn' : ''}`}
+                    className={`char-count ${
+                        maxKnownLimit !== null && charCount > maxKnownLimit
+                            ? 'warn'
+                            : ''
+                    }`}
                 >
-                    {charCount} chars · TG ≤4096 · Discord ≤2000
+                    {charCount} chars
+                    {limitLabels && ` · ${limitLabels}`}
                 </span>
             </div>
         </section>

@@ -5,9 +5,10 @@ import type {
     PublishContent,
     PublishedMessageRef,
     PublishResult,
+    ValidationIssue,
 } from './types';
 import { getConfiguredChannels } from '../channels';
-import { markdownToTelegramHtml } from '../converters/markdown';
+import { markdownToTelegramHtml } from './telegram/markdown';
 import { splitTextIntoChunks, TELEGRAM_LIMIT } from '../chunk';
 import { isValidTelegramHtml, validateTelegramHtml } from '../telegramValidation';
 
@@ -23,15 +24,86 @@ function isChannelError(error: any): boolean {
     );
 }
 
+function lineInfo(markdown: string, index: number) {
+    const before = markdown.slice(0, Math.max(0, index));
+    const line = before.split('\n').length;
+    const lineStart = markdown.lastIndexOf('\n', Math.max(0, index - 1)) + 1;
+    const nextNewline = markdown.indexOf('\n', index);
+    const lineEnd = nextNewline === -1 ? markdown.length : nextNewline;
+    return {
+        line,
+        excerpt: markdown.slice(lineStart, lineEnd).trim(),
+    };
+}
+
+function findLikelyMarkdownSource(markdown: string, tag?: string) {
+    const checks: Array<[RegExp, string[]]> = [
+        [/^>\s?.+/m, ['blockquote']],
+        [/```[\s\S]*?```/, ['pre']],
+        [/`[^`\n]+`/, ['code']],
+        [/\|\|[\s\S]+?\|\|/, ['tg-spoiler']],
+        [/__[\s\S]+?__/, ['u', 'ins']],
+        [/\*\*[\s\S]+?\*\*/, ['b', 'strong']],
+        [/~~[\s\S]+?~~/, ['s', 'strike', 'del']],
+        [/\*[^*\n]+?\*/, ['i', 'em']],
+        [/\[[^\]]+]\([^)]+\)/, ['a']],
+    ];
+
+    for (const [pattern, tags] of checks) {
+        if (tag && !tags.includes(tag)) continue;
+        const match = pattern.exec(markdown);
+        if (match?.index !== undefined) return lineInfo(markdown, match.index);
+    }
+
+    return undefined;
+}
+
+function htmlContext(chunk: string, offset?: number) {
+    if (offset === undefined) return undefined;
+    const start = Math.max(0, offset - 80);
+    const end = Math.min(chunk.length, offset + 140);
+    return chunk.slice(start, end);
+}
+
 export class TelegramPlatform implements Platform {
     readonly id = 'telegram';
     readonly name = 'Telegram';
+    readonly icon = '✈️';
+    readonly charLimit = TELEGRAM_LIMIT;
     private bot: TelegramBot | null = null;
 
     constructor(private token = process.env.TELEGRAM_BOT_TOKEN || '') {}
 
     isConfigured(): boolean {
         return Boolean(this.token);
+    }
+
+    toPreviewHtml(markdown: string): string {
+        return markdownToTelegramHtml(markdown);
+    }
+
+    validateContent(markdown: string): ValidationIssue[] {
+        const html = markdownToTelegramHtml(markdown);
+        const chunks = splitTextIntoChunks(html, TELEGRAM_LIMIT, true);
+        return chunks.flatMap((chunk, index) =>
+            validateTelegramHtml(chunk).map((issue) => {
+                const source = findLikelyMarkdownSource(markdown, issue.tag);
+                return {
+                    platform: this.id,
+                    chunk: index + 1,
+                    ...issue,
+                    line: source?.line,
+                    excerpt: source?.excerpt,
+                    htmlContext: htmlContext(chunk, issue.offset),
+                };
+            }),
+        );
+    }
+
+    buildMessageLink(channelId: string, messageId: string): string | null {
+        if (!channelId.startsWith('@')) return null;
+        const username = channelId.slice(1);
+        return `https://t.me/${username}/${messageId}`;
     }
 
     private getBot(): TelegramBot {

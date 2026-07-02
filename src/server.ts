@@ -1,6 +1,10 @@
 import { join, normalize } from 'path';
 import { AuthError, loginUser, registerUser, requireAuth } from './auth';
-import { listAllChannels } from './platforms/registry';
+import {
+    listAllChannels,
+    listPlatforms,
+    listPlatformsMeta,
+} from './platforms/registry';
 import {
     createDraft,
     deleteDraft,
@@ -86,14 +90,22 @@ async function handleApi(req: Request, url: URL): Promise<Response> {
         return json({ channels: await listAllChannels() });
     }
 
+    if (path === '/api/platforms' && method === 'GET') {
+        return json({ platforms: listPlatformsMeta() });
+    }
+
     if (path === '/api/validate' && method === 'POST') {
         const body = await req.json().catch(() => ({}));
-        return json(validateMarkdown(String(body.markdown ?? '')));
+        return json(
+            validateMarkdown(String(body.markdown ?? ''), listPlatforms()),
+        );
     }
 
     if (path === '/api/preview' && method === 'POST') {
         const body = await req.json().catch(() => ({}));
-        return json(previewContent(String(body.markdown ?? '')));
+        return json(
+            previewContent(String(body.markdown ?? ''), listPlatforms()),
+        );
     }
 
     if (path === '/api/channels' && method === 'POST') {

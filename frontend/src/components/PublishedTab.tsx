@@ -1,11 +1,15 @@
-import type { ChannelOption, Publication } from '../../../shared/types';
+import type {
+    ChannelOption,
+    PlatformMeta,
+    Publication,
+} from '../../../shared/types';
 import { findChannelName } from '../lib/channels';
-import { buildMessageUrl } from '../lib/messageLinks';
 import { platformIcon } from './ChannelPicker';
 
 interface Props {
     publications: Publication[];
     channels: ChannelOption[];
+    platforms: PlatformMeta[];
     publishing: boolean;
     highlightedPublicationId: string | null;
     onUpdate: (publication: Publication) => void;
@@ -15,6 +19,7 @@ interface Props {
 export function PublishedTab({
     publications,
     channels,
+    platforms,
     publishing,
     highlightedPublicationId,
     onUpdate,
@@ -79,10 +84,7 @@ export function PublishedTab({
                                             target.platform,
                                             target.channelId,
                                         );
-                                        const url = buildMessageUrl(
-                                            target,
-                                            channels,
-                                        );
+                                        const url = target.link ?? null;
                                         return (
                                             <div
                                                 className={`pub-target-row ${
@@ -96,6 +98,7 @@ export function PublishedTab({
                                                 <span className="pub-target-name">
                                                     {platformIcon(
                                                         target.platform,
+                                                        platforms,
                                                     )}{' '}
                                                     {name}
                                                 </span>
