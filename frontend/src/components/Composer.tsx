@@ -35,6 +35,7 @@ export function Composer({
 }: Props) {
     const toast = useToast();
     const editorRef = useRef<MarkdownEditorHandle>(null);
+    const draftLoadSeq = useRef(0);
     const [editorTab, setEditorTab] = useState<
         'edit' | 'preview' | 'published'
     >('edit');
@@ -104,13 +105,16 @@ export function Composer({
     }
 
     async function openDraft(id: string) {
+        const seq = ++draftLoadSeq.current;
         try {
             const { draft } = await api<{ draft: Draft }>(`/api/drafts/${id}`);
+            if (seq !== draftLoadSeq.current) return;
             draftEditor.revokeImages();
             draftEditor.setImages([]);
             autosave.withSuppressed(() => draftEditor.applyDraft(draft));
             // Restore image thumbnails (fetched from the server, may take a moment).
             const previews = await loadImagePreviews(draft.imageIds || []);
+            if (seq !== draftLoadSeq.current) return;
             draftEditor.setImages(previews);
             publications.clearHighlight();
             await publications.loadPublications(draft.id);
@@ -120,6 +124,7 @@ export function Composer({
     }
 
     function newDraft() {
+        draftLoadSeq.current++;
         draftEditor.revokeImages();
         draftEditor.setImages([]);
         autosave.withSuppressed(() => draftEditor.resetForNewDraft());

@@ -22,12 +22,21 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(
     ({ theme, onChange }, ref) => {
         const holder = useRef<HTMLDivElement>(null);
         const editor = useRef<Editor | null>(null);
+        const pendingMarkdown = useRef<string | null>(null);
         const onChangeRef = useRef(onChange);
         onChangeRef.current = onChange;
 
         useImperativeHandle(ref, () => ({
             getMarkdown: () => editor.current?.getMarkdown() ?? '',
-            setMarkdown: (md: string) => editor.current?.setMarkdown(md ?? ''),
+            setMarkdown: (md: string) => {
+                const next = md ?? '';
+                if (editor.current) {
+                    editor.current.setMarkdown(next);
+                    pendingMarkdown.current = null;
+                } else {
+                    pendingMarkdown.current = next;
+                }
+            },
             focusLine: (line: number) => {
                 const ed = editor.current;
                 if (!ed) return;
@@ -79,16 +88,18 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(
         // Recreate the editor when the theme changes so its styling matches.
         useEffect(() => {
             if (!holder.current) return;
-            const previous = editor.current?.getMarkdown() ?? '';
+            const initialValue =
+                pendingMarkdown.current ?? editor.current?.getMarkdown() ?? '';
+            pendingMarkdown.current = null;
 
-            editor.current = new Editor({
+            const nextEditor = new Editor({
                 el: holder.current,
                 height: '100%',
                 initialEditType: 'markdown',
                 previewStyle: 'tab',
                 usageStatistics: false,
                 theme: theme === 'dark' ? 'dark' : 'default',
-                initialValue: previous,
+                initialValue,
                 // Match the formatting Telegram/Discord can actually publish.
                 // No hr/table/task-list: those leak as unsupported markdown in targets.
                 toolbarItems: [
@@ -113,9 +124,13 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(
                     ['link', 'code', 'codeblock'],
                 ],
                 events: {
-                    change: () => onChangeRef.current(),
+                    change: () => {
+                        pendingMarkdown.current = null;
+                        onChangeRef.current();
+                    },
                 },
             });
+            editor.current = nextEditor;
 
             const holderEl = holder.current;
             const onKeyDown = (e: KeyboardEvent) => {
@@ -128,8 +143,10 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(
 
             return () => {
                 holderEl.removeEventListener('keydown', onKeyDown, true);
-                editor.current?.destroy();
-                editor.current = null;
+                nextEditor.destroy();
+                if (editor.current === nextEditor) {
+                    editor.current = null;
+                }
             };
         }, [theme]);
 
