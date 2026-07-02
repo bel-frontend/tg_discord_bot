@@ -65,6 +65,10 @@ function htmlContext(chunk: string, offset?: number) {
     return chunk.slice(start, end);
 }
 
+function telegramErrorDescription(error: any): string {
+    return error?.response?.body?.description || error?.message || '';
+}
+
 export class TelegramPlatform implements Platform {
     readonly id = 'telegram';
     readonly name = 'Telegram';
@@ -280,11 +284,22 @@ export class TelegramPlatform implements Platform {
                     messageIds: ref.messageIds,
                 });
             } catch (error: any) {
+                const description = telegramErrorDescription(error);
+                if (description.includes('message is not modified')) {
+                    results.push({
+                        platform: this.id,
+                        channelId: ref.channelId,
+                        ok: true,
+                        messageIds: ref.messageIds,
+                    });
+                    continue;
+                }
                 results.push({
                     platform: this.id,
                     channelId: ref.channelId,
                     ok: false,
-                    error: error?.response?.body?.description || error?.message || 'Update failed',
+                    messageIds: ref.messageIds,
+                    error: description || 'Update failed',
                 });
             }
         }

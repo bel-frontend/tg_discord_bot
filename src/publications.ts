@@ -123,7 +123,7 @@ export async function deletePublicationRecord(userId: string, id: string) {
 
 function buildRefs(publication: Publication): ExistingPublishTarget[] {
     return publication.targets
-        .filter((target) => target.ok && target.messageIds.length)
+        .filter((target) => target.messageIds.length)
         .map((target) => ({
             platform: target.platform,
             channelId: target.channelId,
@@ -134,10 +134,9 @@ function buildRefs(publication: Publication): ExistingPublishTarget[] {
 /**
  * `updatePublicationResults` replaces the whole stored `targets` array with
  * whatever this action's results contain. `buildRefs` only attempts targets
- * that are currently `ok` with a stored message id, so a target that already
- * failed a previous update (or was never sendable) is silently excluded from
- * `results` — without this merge, replacing the array would permanently erase
- * it even though this action never touched it.
+ * with a stored message id, so a target that was never sendable is silently
+ * excluded from `results` — without this merge, replacing the array would
+ * permanently erase it even though this action never touched it.
  */
 function mergeUntouchedTargets(
     existing: PublicationTarget[],
