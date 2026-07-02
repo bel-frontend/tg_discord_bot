@@ -1,6 +1,12 @@
 import { Client, GatewayIntentBits, ChannelType } from 'discord.js';
 import type { TextChannel } from 'discord.js';
-import type { Channel, Platform, PublishContent, PublishResult } from './types';
+import type {
+    Channel,
+    Platform,
+    PublishContent,
+    PublishedMessageRef,
+    PublishResult,
+} from './types';
 import { getConfiguredChannels } from '../channels';
 import { markdownToDiscord } from '../converters/markdown';
 import { splitTextIntoChunks, DISCORD_LIMIT } from '../chunk';
@@ -85,6 +91,7 @@ export class DiscordPlatform implements Platform {
         for (const channelId of channelIds) {
             const id = channelId.trim();
             if (!id) continue;
+            const messageIds: string[] = [];
             try {
                 const channel = await client.channels.fetch(id);
                 if (!channel?.isTextBased() || channel.isDMBased()) {
@@ -102,9 +109,15 @@ export class DiscordPlatform implements Platform {
                         content: chunks[i],
                     };
                     if (files.length && i === 0) payload.files = files;
-                    await textChannel.send(payload as any);
+                    const message = await textChannel.send(payload as any);
+                    messageIds.push(message.id);
                 }
-                results.push({ platform: this.id, channelId: id, ok: true });
+                results.push({
+                    platform: this.id,
+                    channelId: id,
+                    ok: true,
+                    messageIds,
+                });
             } catch (error: any) {
                 const skippable =
                     error.code === 10003 ||
@@ -124,6 +137,101 @@ export class DiscordPlatform implements Platform {
                 });
             }
         }
+        return results;
+    }
+
+    async update(
+        refs: PublishedMessageRef[],
+        content: PublishContent,
+    ): Promise<PublishResult[]> {
+        const client = await this.getClient();
+        const text = markdownToDiscord(content.markdown);
+        const chunks = splitTextIntoChunks(text, DISCORD_LIMIT, true);
+        const results: PublishResult[] = [];
+
+        for (const ref of refs) {
+            const [messageId] = ref.messageIds;
+            if (!messageId) {
+                results.push({
+                    platform: this.id,
+                    channelId: ref.channelId,
+                    ok: false,
+                    error: 'No Discord message id stored',
+                });
+                continue;
+            }
+            if (chunks.length !== 1) {
+                results.push({
+                    platform: this.id,
+                    channelId: ref.channelId,
+                    ok: false,
+                    error: 'Update is supported only for posts that fit in one Discord message',
+                });
+                continue;
+            }
+
+            try {
+                const channel = await client.channels.fetch(ref.channelId);
+                if (!channel?.isTextBased() || channel.isDMBased()) {
+                    throw new Error('Channel not found or not a text channel');
+                }
+                const message = await (channel as TextChannel).messages.fetch(
+                    messageId,
+                );
+                await message.edit({ content: chunks[0] });
+                results.push({
+                    platform: this.id,
+                    channelId: ref.channelId,
+                    ok: true,
+                    messageIds: ref.messageIds,
+                });
+            } catch (error: any) {
+                results.push({
+                    platform: this.id,
+                    channelId: ref.channelId,
+                    ok: false,
+                    messageIds: ref.messageIds,
+                    error: error?.message || 'Update failed',
+                });
+            }
+        }
+
+        return results;
+    }
+
+    async delete(refs: PublishedMessageRef[]): Promise<PublishResult[]> {
+        const client = await this.getClient();
+        const results: PublishResult[] = [];
+
+        for (const ref of refs) {
+            try {
+                const channel = await client.channels.fetch(ref.channelId);
+                if (!channel?.isTextBased() || channel.isDMBased()) {
+                    throw new Error('Channel not found or not a text channel');
+                }
+                for (const messageId of ref.messageIds) {
+                    const message = await (channel as TextChannel).messages.fetch(
+                        messageId,
+                    );
+                    await message.delete();
+                }
+                results.push({
+                    platform: this.id,
+                    channelId: ref.channelId,
+                    ok: true,
+                    messageIds: ref.messageIds,
+                });
+            } catch (error: any) {
+                results.push({
+                    platform: this.id,
+                    channelId: ref.channelId,
+                    ok: false,
+                    messageIds: ref.messageIds,
+                    error: error?.message || 'Delete failed',
+                });
+            }
+        }
+
         return results;
     }
 }

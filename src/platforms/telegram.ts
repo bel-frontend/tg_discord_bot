@@ -1,5 +1,11 @@
 import TelegramBot from 'node-telegram-bot-api';
-import type { Channel, Platform, PublishContent, PublishResult } from './types';
+import type {
+    Channel,
+    Platform,
+    PublishContent,
+    PublishedMessageRef,
+    PublishResult,
+} from './types';
 import { getConfiguredChannels } from '../channels';
 import { markdownToTelegramHtml } from '../converters/markdown';
 import { splitTextIntoChunks, TELEGRAM_LIMIT } from '../chunk';
@@ -75,6 +81,7 @@ export class TelegramPlatform implements Platform {
         for (const channelId of channelIds) {
             const id = channelId.trim();
             if (!id) continue;
+            const messageIds: string[] = [];
             try {
                 if (photos.length) {
                     // Photo caption is limited to 1024 chars. Never slice HTML blindly:
@@ -91,7 +98,7 @@ export class TelegramPlatform implements Platform {
                                       parse_mode: 'HTML',
                                   }
                                 : {};
-                        await bot.sendPhoto(
+                        const message = await bot.sendPhoto(
                             id,
                             photos[i].source,
                             opts,
@@ -102,16 +109,28 @@ export class TelegramPlatform implements Platform {
                                   }
                                 : undefined,
                         );
+                        messageIds.push(String(message.message_id));
                     }
                     for (const chunk of chunks.slice(canUseCaption ? 1 : 0)) {
-                        await bot.sendMessage(id, chunk, { parse_mode: 'HTML' });
+                        const message = await bot.sendMessage(id, chunk, {
+                            parse_mode: 'HTML',
+                        });
+                        messageIds.push(String(message.message_id));
                     }
                 } else {
                     for (const chunk of chunks) {
-                        await bot.sendMessage(id, chunk, { parse_mode: 'HTML' });
+                        const message = await bot.sendMessage(id, chunk, {
+                            parse_mode: 'HTML',
+                        });
+                        messageIds.push(String(message.message_id));
                     }
                 }
-                results.push({ platform: this.id, channelId: id, ok: true });
+                results.push({
+                    platform: this.id,
+                    channelId: id,
+                    ok: true,
+                    messageIds,
+                });
             } catch (error: any) {
                 const message = isChannelError(error)
                     ? error.response?.body?.description || error.message
@@ -130,6 +149,103 @@ export class TelegramPlatform implements Platform {
                 });
             }
         }
+        return results;
+    }
+
+    async update(
+        refs: PublishedMessageRef[],
+        content: PublishContent,
+    ): Promise<PublishResult[]> {
+        const bot = this.getBot();
+        const html = markdownToTelegramHtml(content.markdown);
+        const chunks = splitTextIntoChunks(html, TELEGRAM_LIMIT, true);
+        const results: PublishResult[] = [];
+
+        for (const ref of refs) {
+            const [messageId] = ref.messageIds;
+            if (!messageId) {
+                results.push({
+                    platform: this.id,
+                    channelId: ref.channelId,
+                    ok: false,
+                    error: 'No Telegram message id stored',
+                });
+                continue;
+            }
+            if (chunks.length !== 1) {
+                results.push({
+                    platform: this.id,
+                    channelId: ref.channelId,
+                    ok: false,
+                    error: 'Update is supported only for posts that fit in one Telegram message',
+                });
+                continue;
+            }
+
+            try {
+                try {
+                    await bot.editMessageText(chunks[0], {
+                        chat_id: ref.channelId,
+                        message_id: Number(messageId),
+                        parse_mode: 'HTML',
+                    });
+                } catch (error: any) {
+                    const description =
+                        error?.response?.body?.description || '';
+                    if (!description.includes('no text in the message')) {
+                        throw error;
+                    }
+                    await bot.editMessageCaption(chunks[0], {
+                        chat_id: ref.channelId,
+                        message_id: Number(messageId),
+                        parse_mode: 'HTML',
+                    });
+                }
+                results.push({
+                    platform: this.id,
+                    channelId: ref.channelId,
+                    ok: true,
+                    messageIds: ref.messageIds,
+                });
+            } catch (error: any) {
+                results.push({
+                    platform: this.id,
+                    channelId: ref.channelId,
+                    ok: false,
+                    error: error?.response?.body?.description || error?.message || 'Update failed',
+                });
+            }
+        }
+
+        return results;
+    }
+
+    async delete(refs: PublishedMessageRef[]): Promise<PublishResult[]> {
+        const bot = this.getBot();
+        const results: PublishResult[] = [];
+
+        for (const ref of refs) {
+            try {
+                for (const messageId of ref.messageIds) {
+                    await bot.deleteMessage(ref.channelId, Number(messageId));
+                }
+                results.push({
+                    platform: this.id,
+                    channelId: ref.channelId,
+                    ok: true,
+                    messageIds: ref.messageIds,
+                });
+            } catch (error: any) {
+                results.push({
+                    platform: this.id,
+                    channelId: ref.channelId,
+                    ok: false,
+                    messageIds: ref.messageIds,
+                    error: error?.response?.body?.description || error?.message || 'Delete failed',
+                });
+            }
+        }
+
         return results;
     }
 }

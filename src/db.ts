@@ -44,11 +44,33 @@ export interface ChannelResourceDoc {
     updatedAt: Date;
 }
 
+export interface PublicationTargetDoc {
+    platform: string;
+    channelId: string;
+    messageIds: string[];
+    ok: boolean;
+    error?: string;
+    updatedAt: Date;
+}
+
+export interface PublicationDoc {
+    _id?: ObjectId;
+    userId: string;
+    draftId: string;
+    title: string;
+    markdown: string;
+    imageUrls: string[];
+    targets: PublicationTargetDoc[];
+    createdAt: Date;
+    updatedAt: Date;
+}
+
 let client: MongoClient | null = null;
 let usersColl: Collection<UserDoc> | null = null;
 let draftsColl: Collection<DraftDoc> | null = null;
 let uploadsColl: Collection<UploadDoc> | null = null;
 let channelResourcesColl: Collection<ChannelResourceDoc> | null = null;
+let publicationsColl: Collection<PublicationDoc> | null = null;
 
 export async function connect(): Promise<void> {
     if (client) return;
@@ -67,6 +89,7 @@ export async function connect(): Promise<void> {
     uploadsColl = db.collection<UploadDoc>('uploads');
     channelResourcesColl =
         db.collection<ChannelResourceDoc>('channelResources');
+    publicationsColl = db.collection<PublicationDoc>('publications');
 
     await usersColl.createIndex({ email: 1 }, { unique: true });
     await draftsColl.createIndex({ userId: 1, updatedAt: -1 });
@@ -75,6 +98,7 @@ export async function connect(): Promise<void> {
         { platform: 1, channelId: 1 },
         { unique: true },
     );
+    await publicationsColl.createIndex({ userId: 1, draftId: 1, updatedAt: -1 });
 
     console.log(`Connected to MongoDB (db: ${dbName}).`);
 }
@@ -99,4 +123,11 @@ export function channelResources(): Collection<ChannelResourceDoc> {
         throw new Error('DB not connected — call connect() first');
     }
     return channelResourcesColl;
+}
+
+export function publications(): Collection<PublicationDoc> {
+    if (!publicationsColl) {
+        throw new Error('DB not connected — call connect() first');
+    }
+    return publicationsColl;
 }

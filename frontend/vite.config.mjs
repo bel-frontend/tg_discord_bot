@@ -1,6 +1,11 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
+const apiProxyTarget =
+    process.env.API_PROXY_TARGET ||
+    process.env.BACKEND_URL ||
+    'http://localhost:3001';
+
 // Build output goes to ../public so the Bun server can serve it as static files.
 export default defineConfig({
     plugins: [react()],
@@ -10,9 +15,10 @@ export default defineConfig({
     },
     server: {
         port: 5173,
-        // In dev, proxy API calls to the Bun server so cookies/JWT work same-origin.
+        // In dev, proxy API calls to the Bun server so JWT works same-origin.
+        // scripts/dev.ts sets API_PROXY_TARGET to the actual backend port.
         proxy: {
-            '/api': 'http://localhost:3000',
+            '/api': apiProxyTarget,
         },
     },
 });

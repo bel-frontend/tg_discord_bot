@@ -4,10 +4,8 @@
   "type": "module",
   "scripts": {
     "start": "bun run build && bun run index.ts",
-    "start:server": "bun run index.ts",
-    "dev": "bun --watch index.ts",
-    "build": "cd frontend && bun install && bun run build",
-    "web": "cd frontend && bun run dev"
+    "dev": "bun run scripts/dev.ts",
+    "build": "cd frontend && bun install && bun run build -- --configLoader runner"
   },
   "devDependencies": {
     "@types/bun": "latest",

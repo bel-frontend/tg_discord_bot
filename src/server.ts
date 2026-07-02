@@ -1,8 +1,10 @@
 import { join, normalize } from 'path';
 import { AuthError, loginUser, registerUser, requireAuth } from './auth';
 import {
+    deleteTargets,
     listAllChannels,
     publishToTargets,
+    updateTargets,
     type PublishTarget,
 } from './platforms/registry';
 import {
@@ -22,6 +24,13 @@ import { markdownToTelegramHtml } from './converters/markdown';
 import { markdownToDiscord } from './converters/markdown';
 import { splitTextIntoChunks, TELEGRAM_LIMIT } from './chunk';
 import { validateTelegramHtml } from './telegramValidation';
+import {
+    createPublication,
+    deletePublicationRecord,
+    getPublication,
+    listPublications,
+    updatePublicationResults,
+} from './publications';
 
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024; // 10 MB per image
 
@@ -194,9 +203,67 @@ async function handleApi(req: Request, url: URL): Promise<Response> {
         }
     }
 
+    if (path === '/api/publications' && method === 'GET') {
+        const draftId = url.searchParams.get('draftId') || undefined;
+        return json({
+            publications: await listPublications(user.id, draftId),
+        });
+    }
+
+    const publicationMatch = path.match(/^\/api\/publications\/([^/]+)\/(update|delete)$/);
+    if (publicationMatch) {
+        const publicationId = publicationMatch[1];
+        const action = publicationMatch[2];
+        const publication = await getPublication(user.id, publicationId);
+        if (!publication) return json({ error: 'Not found' }, 404);
+
+        const refs = publication.targets
+            .filter((target) => target.ok && target.messageIds.length)
+            .map((target) => ({
+                platform: target.platform,
+                channelId: target.channelId,
+                messageIds: target.messageIds,
+            }));
+
+        if (!refs.length) {
+            return json({ error: 'No stored message ids for this publication' }, 400);
+        }
+
+        if (action === 'delete' && method === 'POST') {
+            const results = await deleteTargets(refs);
+            const ok = results.every((result) => result.ok);
+            if (ok) await deletePublicationRecord(user.id, publicationId);
+            return json({ results, deleted: ok });
+        }
+
+        if (action === 'update' && method === 'POST') {
+            const body = await req.json().catch(() => ({}));
+            const markdown = String(body.markdown ?? publication.markdown ?? '');
+            const imageUrls = Array.isArray(body.imageUrls)
+                ? body.imageUrls.map(String)
+                : [];
+            if (!markdown.trim() && !imageUrls.length) {
+                return json({ error: 'Content is empty' }, 400);
+            }
+            const results = await updateTargets(refs, {
+                markdown,
+                imageUrls,
+            });
+            const updated = await updatePublicationResults(user.id, publicationId, {
+                title: String(body.title ?? publication.title ?? 'Untitled'),
+                markdown,
+                imageUrls,
+                results,
+            });
+            return json({ results, publication: updated });
+        }
+    }
+
     if (path === '/api/publish' && method === 'POST') {
         const contentType = req.headers.get('content-type') || '';
         let markdown = '';
+        let draftId = '';
+        let title = '';
         let targets: PublishTarget[] = [];
         let imageUrls: string[] = [];
         let images: Array<{
@@ -208,6 +275,8 @@ async function handleApi(req: Request, url: URL): Promise<Response> {
         if (contentType.includes('multipart/form-data')) {
             const form = await req.formData();
             markdown = String(form.get('markdown') ?? '');
+            draftId = String(form.get('draftId') ?? '');
+            title = String(form.get('title') ?? '');
             try {
                 targets = JSON.parse(String(form.get('targets') ?? '[]'));
                 imageUrls = JSON.parse(String(form.get('imageUrls') ?? '[]'));
@@ -242,6 +311,8 @@ async function handleApi(req: Request, url: URL): Promise<Response> {
         } else {
             const body = await req.json().catch(() => ({}));
             markdown = String(body.markdown ?? '');
+            draftId = String(body.draftId ?? '');
+            title = String(body.title ?? '');
             targets = Array.isArray(body.targets) ? body.targets : [];
             imageUrls = Array.isArray(body.imageUrls)
                 ? body.imageUrls.map(String)
@@ -266,7 +337,16 @@ async function handleApi(req: Request, url: URL): Promise<Response> {
             imageUrls,
             images,
         });
-        return json({ results });
+        const publication = draftId
+            ? await createPublication(user.id, {
+                  draftId,
+                  title: title || 'Untitled',
+                  markdown,
+                  imageUrls,
+                  results,
+              })
+            : null;
+        return json({ results, publication });
     }
 
     // --- Image uploads ---
@@ -371,18 +451,26 @@ function isPortBusyError(error: any): boolean {
 }
 
 export function startServer(): void {
-    const requestedPort = Number(process.env.PORT) || 3000;
+    const rawPort = process.env.PORT;
+    const requestedPort = rawPort === '0' ? 0 : Number(rawPort) || 3000;
+
+    if (requestedPort === 0) {
+        const server = createServer(0);
+        console.log(`HTTP server listening on http://localhost:${server.port}`);
+        return;
+    }
+
     const maxPort = Number(process.env.PORT_MAX) || requestedPort + 50;
 
     for (let port = requestedPort; port <= maxPort; port++) {
         try {
-            createServer(port);
+            const server = createServer(port);
             if (port !== requestedPort) {
                 console.warn(
-                    `Port ${requestedPort} is busy; using http://localhost:${port}`,
+                    `Port ${requestedPort} is busy; using http://localhost:${server.port}`,
                 );
             }
-            console.log(`HTTP server listening on http://localhost:${port}`);
+            console.log(`HTTP server listening on http://localhost:${server.port}`);
             return;
         } catch (error: any) {
             if (isPortBusyError(error)) {

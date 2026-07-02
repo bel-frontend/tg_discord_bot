@@ -1,4 +1,9 @@
-import type { Platform, PublishResult, PublishContent } from './types';
+import type {
+    Platform,
+    PublishResult,
+    PublishContent,
+    PublishedMessageRef,
+} from './types';
 import { listChannelResources } from '../channelResources';
 
 const platforms = new Map<string, Platform>();
@@ -115,6 +120,101 @@ export async function publishToTargets(
                 })),
             );
         }
+    }
+    return results;
+}
+
+export interface ExistingPublishTarget extends PublishTarget {
+    messageIds: string[];
+}
+
+export async function updateTargets(
+    targets: ExistingPublishTarget[],
+    content: PublishContent,
+): Promise<PublishResult[]> {
+    const byPlatform = new Map<string, PublishedMessageRef[]>();
+    for (const target of targets) {
+        const list = byPlatform.get(target.platform) ?? [];
+        list.push({
+            channelId: target.channelId,
+            messageIds: target.messageIds,
+        });
+        byPlatform.set(target.platform, list);
+    }
+
+    const results: PublishResult[] = [];
+    for (const [platformId, refs] of byPlatform) {
+        const platform = platforms.get(platformId);
+        if (!platform) {
+            results.push(
+                ...refs.map((ref) => ({
+                    platform: platformId,
+                    channelId: ref.channelId,
+                    ok: false,
+                    messageIds: ref.messageIds,
+                    error: `Unknown platform "${platformId}"`,
+                })),
+            );
+            continue;
+        }
+        if (!platform.update) {
+            results.push(
+                ...refs.map((ref) => ({
+                    platform: platformId,
+                    channelId: ref.channelId,
+                    ok: false,
+                    messageIds: ref.messageIds,
+                    error: `${platform.name} does not support updates yet`,
+                })),
+            );
+            continue;
+        }
+        results.push(...(await platform.update(refs, content)));
+    }
+    return results;
+}
+
+export async function deleteTargets(
+    targets: ExistingPublishTarget[],
+): Promise<PublishResult[]> {
+    const byPlatform = new Map<string, PublishedMessageRef[]>();
+    for (const target of targets) {
+        const list = byPlatform.get(target.platform) ?? [];
+        list.push({
+            channelId: target.channelId,
+            messageIds: target.messageIds,
+        });
+        byPlatform.set(target.platform, list);
+    }
+
+    const results: PublishResult[] = [];
+    for (const [platformId, refs] of byPlatform) {
+        const platform = platforms.get(platformId);
+        if (!platform) {
+            results.push(
+                ...refs.map((ref) => ({
+                    platform: platformId,
+                    channelId: ref.channelId,
+                    ok: false,
+                    messageIds: ref.messageIds,
+                    error: `Unknown platform "${platformId}"`,
+                })),
+            );
+            continue;
+        }
+        if (!platform.delete) {
+            results.push(
+                ...refs.map((ref) => ({
+                    platform: platformId,
+                    channelId: ref.channelId,
+                    ok: false,
+                    messageIds: ref.messageIds,
+                    error: `${platform.name} does not support deletes yet`,
+                })),
+            );
+            continue;
+        }
+        results.push(...(await platform.delete(refs)));
     }
     return results;
 }

@@ -32,7 +32,28 @@ export interface PublishResult {
     platform: string;
     channelId: string;
     ok: boolean;
+    messageIds?: string[];
     error?: string;
+}
+
+export interface PublicationTarget {
+    platform: string;
+    channelId: string;
+    messageIds: string[];
+    ok: boolean;
+    error?: string;
+    updatedAt: string;
+}
+
+export interface Publication {
+    id: string;
+    draftId: string;
+    title: string;
+    markdown: string;
+    imageUrls: string[];
+    targets: PublicationTarget[];
+    createdAt: string;
+    updatedAt: string;
 }
 
 export type ToastKind = 'info' | 'success' | 'warn' | 'error';

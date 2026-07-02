@@ -60,20 +60,45 @@ export async function createChannelResource(
     input: ChannelResourceInput,
 ): Promise<ChannelResource> {
     const now = new Date();
+    const sanitized = sanitize(input);
     const doc: ChannelResourceDoc = {
-        ...sanitize(input),
+        ...sanitized,
         createdBy: userId,
         createdAt: now,
         updatedAt: now,
     };
 
     try {
-        const result = await channelResources().insertOne(doc);
-        doc._id = result.insertedId;
-        return serialize(doc);
+        const existing = await channelResources().findOneAndUpdate(
+            {
+                platform: sanitized.platform,
+                channelId: sanitized.channelId,
+            },
+            {
+                $set: {
+                    name: sanitized.name,
+                    updatedAt: now,
+                },
+                $setOnInsert: {
+                    platform: sanitized.platform,
+                    channelId: sanitized.channelId,
+                    createdBy: userId,
+                    createdAt: now,
+                },
+            },
+            {
+                upsert: true,
+                returnDocument: 'after',
+            },
+        );
+
+        if (!existing) {
+            throw new Error('Failed to save channel resource');
+        }
+        return serialize(existing);
     } catch (error: any) {
         if (error?.code === 11000) {
-            throw new Error('This channel is already configured');
+            throw new Error('This channel is already configured by another write');
         }
         throw error;
     }

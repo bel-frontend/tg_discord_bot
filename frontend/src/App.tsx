@@ -6,13 +6,19 @@ import { Composer } from './components/Composer';
 import { ResourceManager } from './components/ResourceManager';
 import type { User } from './types';
 
+type AppRoute = 'composer' | 'resources';
+
+function routeFromLocation(): AppRoute {
+    return window.location.pathname === '/resources' ? 'resources' : 'composer';
+}
+
 export function App() {
     const [user, setUser] = useState<User | null>(null);
     const [ready, setReady] = useState(false);
     const [theme, setTheme] = useState<'dark' | 'light'>(
         (localStorage.getItem('theme') as 'dark' | 'light') || 'dark',
     );
-    const [view, setView] = useState<'composer' | 'resources'>('composer');
+    const [view, setView] = useState<AppRoute>(routeFromLocation);
 
     // Apply the theme to the document root (drives the CSS variables).
     useEffect(() => {
@@ -23,6 +29,13 @@ export function App() {
     // A 401 anywhere clears the session and returns to the auth screen.
     useEffect(() => {
         setUnauthorizedHandler(() => setUser(null));
+    }, []);
+
+    // Keep the selected screen in the URL so refresh/back/forward don't reset it.
+    useEffect(() => {
+        const onPopState = () => setView(routeFromLocation());
+        window.addEventListener('popstate', onPopState);
+        return () => window.removeEventListener('popstate', onPopState);
     }, []);
 
     // Resume an existing session on load.
@@ -43,7 +56,15 @@ export function App() {
     function logout() {
         clearToken();
         setUser(null);
-        setView('composer');
+        navigate('composer');
+    }
+
+    function navigate(next: AppRoute) {
+        const path = next === 'resources' ? '/resources' : '/';
+        if (window.location.pathname !== path) {
+            window.history.pushState({}, '', path);
+        }
+        setView(next);
     }
 
     return (
@@ -55,7 +76,7 @@ export function App() {
                     onToggleTheme={() =>
                         setTheme((t) => (t === 'dark' ? 'light' : 'dark'))
                     }
-                    onBack={() => setView('composer')}
+                    onBack={() => navigate('composer')}
                     onLogout={logout}
                 />
             ) : user ? (
@@ -65,7 +86,7 @@ export function App() {
                     onToggleTheme={() =>
                         setTheme((t) => (t === 'dark' ? 'light' : 'dark'))
                     }
-                    onManageResources={() => setView('resources')}
+                    onManageResources={() => navigate('resources')}
                     onLogout={logout}
                 />
             ) : (

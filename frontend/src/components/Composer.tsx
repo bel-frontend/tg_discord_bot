@@ -4,6 +4,7 @@ import { useToast } from '../toast';
 import type {
     ChannelOption,
     Draft,
+    Publication,
     PublishResult,
     Target,
     User,
@@ -44,6 +45,7 @@ export function Composer({
     const [markdown, setMarkdown] = useState('');
     const [editorTab, setEditorTab] = useState<'edit' | 'preview'>('edit');
     const [results, setResults] = useState<PublishResult[] | null>(null);
+    const [publications, setPublications] = useState<Publication[]>([]);
     const [publishing, setPublishing] = useState(false);
     const [validationIssues, setValidationIssues] = useState<
         Array<{
@@ -199,6 +201,13 @@ export function Composer({
         return items.filter((i): i is ImageItem => i !== null);
     }
 
+    async function loadPublications(draftId: string) {
+        const { publications } = await api<{ publications: Publication[] }>(
+            `/api/publications?draftId=${encodeURIComponent(draftId)}`,
+        );
+        setPublications(publications);
+    }
+
     async function openDraft(id: string) {
         try {
             const { draft } = await api<{ draft: Draft }>(`/api/drafts/${id}`);
@@ -217,6 +226,7 @@ export function Composer({
             // Restore image thumbnails (fetched from the server, may take a moment).
             const previews = await loadImagePreviews(draft.imageIds || []);
             setImages(previews);
+            await loadPublications(draft.id);
         } catch (err: any) {
             toast(err.message, 'error');
         }
@@ -235,6 +245,8 @@ export function Composer({
             setCharCount(0);
             setSaveStatus('');
         });
+        setPublications([]);
+        setResults(null);
     }
 
     async function deleteDraft(id: string) {
@@ -247,6 +259,20 @@ export function Composer({
         } catch (err: any) {
             toast(err.message, 'error');
         }
+    }
+
+    async function ensureDraftForPublish(): Promise<string> {
+        if (draftIdRef.current) return draftIdRef.current;
+
+        const data = collect();
+        const { draft } = await api<{ draft: Draft }>('/api/drafts', {
+            method: 'POST',
+            body: data,
+        });
+        setDraftId(draft.id);
+        setDrafts((cur) => [draft, ...cur]);
+        setSaveStatus('Saved ✓');
+        return draft.id;
     }
 
     async function publish() {
@@ -266,11 +292,14 @@ export function Composer({
 
         setPublishing(true);
         try {
+            const savedDraftId = await ensureDraftForPublish();
             const { results } = await api<{ results: PublishResult[] }>(
                 '/api/publish',
                 {
                     method: 'POST',
                     body: {
+                        draftId: savedDraftId,
+                        title: title.trim() || 'Untitled',
                         markdown,
                         imageUrls: parseImageUrls(),
                         imageIds,
@@ -279,9 +308,77 @@ export function Composer({
                 },
             );
             setResults(results);
+            await loadPublications(savedDraftId);
             const okCount = results.filter((r) => r.ok).length;
             toast(
                 `Published to ${okCount}/${results.length} channels`,
+                okCount === results.length ? 'success' : 'warn',
+            );
+        } catch (err: any) {
+            toast(err.message, 'error');
+        } finally {
+            setPublishing(false);
+        }
+    }
+
+    async function updatePublished(publication: Publication) {
+        if (validationIssues.length) {
+            return toast(validationIssues[0].message, 'error');
+        }
+        const markdown = editorRef.current?.getMarkdown() ?? '';
+        if (!markdown.trim() && !parseImageUrls().length) {
+            return toast('Write something first', 'warn');
+        }
+
+        setPublishing(true);
+        try {
+            const { results, publication: updated } = await api<{
+                results: PublishResult[];
+                publication: Publication;
+            }>(`/api/publications/${publication.id}/update`, {
+                method: 'POST',
+                body: {
+                    title: title.trim() || 'Untitled',
+                    markdown,
+                    imageUrls: parseImageUrls(),
+                },
+            });
+            setResults(results);
+            setPublications((cur) => [
+                updated,
+                ...cur.filter((p) => p.id !== updated.id),
+            ]);
+            const okCount = results.filter((r) => r.ok).length;
+            toast(
+                `Updated ${okCount}/${results.length} published messages`,
+                okCount === results.length ? 'success' : 'warn',
+            );
+        } catch (err: any) {
+            toast(err.message, 'error');
+        } finally {
+            setPublishing(false);
+        }
+    }
+
+    async function deletePublished(publication: Publication) {
+        if (!confirm('Delete this publication from all channels?')) return;
+        setPublishing(true);
+        try {
+            const { results, deleted } = await api<{
+                results: PublishResult[];
+                deleted: boolean;
+            }>(`/api/publications/${publication.id}/delete`, {
+                method: 'POST',
+            });
+            setResults(results);
+            if (deleted) {
+                setPublications((cur) =>
+                    cur.filter((p) => p.id !== publication.id),
+                );
+            }
+            const okCount = results.filter((r) => r.ok).length;
+            toast(
+                `Deleted ${okCount}/${results.length} published messages`,
                 okCount === results.length ? 'success' : 'warn',
             );
         } catch (err: any) {
@@ -457,6 +554,56 @@ export function Composer({
                         />
                     </label>
 
+                    {publications.length > 0 && (
+                        <div className="published-panel">
+                            <h4>Published</h4>
+                            {publications.map((publication) => {
+                                const okTargets = publication.targets.filter(
+                                    (target) => target.ok,
+                                ).length;
+                                return (
+                                    <div
+                                        className="published-item"
+                                        key={publication.id}
+                                    >
+                                        <div>
+                                            <strong>
+                                                {new Date(
+                                                    publication.updatedAt,
+                                                ).toLocaleString()}
+                                            </strong>
+                                            <span>
+                                                {okTargets}/
+                                                {publication.targets.length}{' '}
+                                                channels
+                                            </span>
+                                        </div>
+                                        <div className="published-actions">
+                                            <button
+                                                className="btn small"
+                                                disabled={publishing}
+                                                onClick={() =>
+                                                    updatePublished(publication)
+                                                }
+                                            >
+                                                Update
+                                            </button>
+                                            <button
+                                                className="btn small danger"
+                                                disabled={publishing}
+                                                onClick={() =>
+                                                    deletePublished(publication)
+                                                }
+                                            >
+                                                Delete
+                                            </button>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+
                     <div className="actions">
                         <button
                             className="btn"
@@ -471,7 +618,9 @@ export function Composer({
                             onClick={publish}
                             disabled={publishing || targets.length === 0}
                         >
-                            Publish
+                            {publications.length
+                                ? 'Republish as new'
+                                : 'Publish'}
                             {targets.length > 0 && (
                                 <span className="count"> ({targets.length})</span>
                             )}

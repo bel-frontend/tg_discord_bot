@@ -748,6 +748,41 @@ tg-spoiler {
     opacity: 0.85;
 }
 
+/* ---------- published state ---------- */
+.published-panel {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 10px;
+    background: var(--bg-elev);
+}
+.published-panel h4 {
+    margin: 0 0 8px;
+}
+.published-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 8px 0;
+    border-top: 1px solid var(--border);
+}
+.published-item:first-of-type {
+    border-top: 0;
+}
+.published-item strong,
+.published-item span {
+    display: block;
+    font-size: 12px;
+}
+.published-item span {
+    color: var(--text-dim);
+}
+.published-actions {
+    display: flex;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
 /* ---------- results ---------- */
 .results {
     border-top: 1px solid var(--border);

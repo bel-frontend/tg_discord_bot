@@ -21,7 +21,13 @@ export interface PublishResult {
     platform: string;
     channelId: string;
     ok: boolean;
+    messageIds?: string[];
     error?: string;
+}
+
+export interface PublishedMessageRef {
+    channelId: string;
+    messageIds: string[];
 }
 
 export interface Platform {
@@ -36,4 +42,11 @@ export interface Platform {
         channelIds: string[],
         content: PublishContent,
     ): Promise<PublishResult[]>;
+    /** Update previously published messages, when the platform can edit them. */
+    update?(
+        refs: PublishedMessageRef[],
+        content: PublishContent,
+    ): Promise<PublishResult[]>;
+    /** Delete previously published messages, when the platform can delete them. */
+    delete?(refs: PublishedMessageRef[]): Promise<PublishResult[]>;
 }
