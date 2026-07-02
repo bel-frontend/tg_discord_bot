@@ -1024,6 +1024,110 @@ tg-spoiler {
     font-size: 12px;
 }
 
+/* ---------- settings ---------- */
+.settings-page {
+    height: calc(100vh - var(--topbar-h));
+    overflow: auto;
+    padding: 24px;
+}
+.settings-intro {
+    max-width: 980px;
+    margin: 0 auto 18px;
+}
+.settings-intro h2 {
+    margin: 0 0 8px;
+}
+.settings-platforms {
+    max-width: 980px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+.settings-platform {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--bg-elev);
+    padding: 16px;
+}
+.settings-platform-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 8px;
+}
+.settings-platform h3 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0;
+}
+.settings-platform h4 {
+    margin: 16px 0 8px;
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-dim);
+}
+.settings-pill {
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 3px 8px;
+    color: var(--text-dim);
+    font-size: 12px;
+    white-space: nowrap;
+}
+.settings-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.5fr) minmax(220px, 0.8fr);
+    gap: 18px;
+}
+.settings-env,
+.settings-steps,
+.settings-notes {
+    margin: 0;
+    padding-left: 20px;
+}
+.settings-env {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding-left: 0;
+    list-style: none;
+}
+.settings-env li {
+    border-left: 2px solid var(--border);
+    padding-left: 10px;
+}
+.settings-env code {
+    font-size: 12px;
+}
+.settings-env span {
+    margin-left: 8px;
+    color: var(--text-dim);
+    font-size: 12px;
+}
+.settings-env p,
+.settings-platform p {
+    margin: 6px 0 0;
+}
+.settings-steps,
+.settings-notes {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+}
+.settings-doc-link {
+    display: inline-flex;
+    margin-top: 14px;
+    color: var(--accent);
+    text-decoration: none;
+}
+.settings-doc-link:hover {
+    text-decoration: underline;
+}
+
 /* ---------- toasts ---------- */
 .toasts {
     position: fixed;
@@ -1097,5 +1201,12 @@ tg-spoiler {
     .resource-row {
         align-items: flex-start;
         flex-direction: column;
+    }
+    .settings-page {
+        height: auto;
+        padding: 16px;
+    }
+    .settings-grid {
+        grid-template-columns: 1fr;
     }
 }

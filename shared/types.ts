@@ -26,6 +26,23 @@ export interface PlatformMeta {
     name: string;
     icon?: string;
     charLimit?: number;
+    setup?: PlatformSetup;
+}
+
+export interface PlatformSetup {
+    summary: string;
+    env: PlatformSetupEnvVar[];
+    channelIdLabel: string;
+    channelIdHelp: string;
+    steps: string[];
+    docsUrl?: string;
+    notes?: string[];
+}
+
+export interface PlatformSetupEnvVar {
+    name: string;
+    required: boolean;
+    description: string;
 }
 
 export interface Draft {

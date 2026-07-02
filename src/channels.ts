@@ -11,6 +11,7 @@ interface ChannelsConfig {
 const ENV_VAR_BY_PLATFORM: Record<string, string | undefined> = {
     telegram: 'TELEGRAM_CHANNEL_USERNAMES',
     discord: 'DISCORD_CHANNEL_IDS',
+    threads: 'THREADS_CHANNEL_IDS',
 };
 
 let cache: ChannelsConfig | null = null;

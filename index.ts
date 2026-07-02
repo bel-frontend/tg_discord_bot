@@ -2,6 +2,7 @@ import { connect } from './src/db';
 import { register } from './src/platforms/registry';
 import { TelegramPlatform } from './src/platforms/telegram';
 import { DiscordPlatform } from './src/platforms/discord';
+import { ThreadsPlatform } from './src/platforms/threads';
 import { startScheduler } from './src/scheduler';
 import { startServer } from './src/server';
 
@@ -14,6 +15,7 @@ await connect();
 //    Platform interface (src/platforms/types.ts) and registering it here.
 register(new TelegramPlatform());
 register(new DiscordPlatform());
+register(new ThreadsPlatform());
 
 // 3. Scheduled publication worker
 startScheduler();

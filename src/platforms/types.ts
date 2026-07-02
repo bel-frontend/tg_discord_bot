@@ -1,6 +1,6 @@
 // The universal adapter contract. Adding a new social network = implement this + register it.
 
-import type { PublishResult } from '../../shared/types';
+import type { PlatformSetup, PublishResult } from '../../shared/types';
 
 export type { PublishResult };
 
@@ -42,6 +42,7 @@ export interface Platform {
     readonly name: string; // display name
     readonly icon?: string; // emoji/label for pickers; UI falls back to 🌐 when absent
     readonly charLimit?: number; // per-message length limit, shown as a UI hint
+    readonly setup?: PlatformSetup; // displayed on the Settings page
     /** Whether the adapter has the config/tokens it needs to run. */
     isConfigured(): boolean;
     /** name -> id options for the channel picker. */

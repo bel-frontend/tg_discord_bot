@@ -19,6 +19,7 @@ interface Props {
 const PLATFORM_PLACEHOLDERS = [
     { id: 'telegram', name: 'Telegram' },
     { id: 'discord', name: 'Discord' },
+    { id: 'threads', name: 'Threads' },
     { id: 'mastodon', name: 'Mastodon' },
     { id: 'bluesky', name: 'Bluesky' },
     { id: 'other', name: 'Other' },

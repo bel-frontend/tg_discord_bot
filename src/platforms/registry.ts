@@ -22,12 +22,16 @@ export function listPlatforms(): Platform[] {
 }
 
 export function listPlatformsMeta(): PlatformMeta[] {
-    return [...platforms.values()].map((platform) => ({
-        id: platform.id,
-        name: platform.name,
-        icon: platform.icon,
-        charLimit: platform.charLimit,
-    }));
+    return [...platforms.values()].map((platform) => {
+        const meta: PlatformMeta = {
+            id: platform.id,
+            name: platform.name,
+            icon: platform.icon,
+            charLimit: platform.charLimit,
+        };
+        if (platform.setup) meta.setup = platform.setup;
+        return meta;
+    });
 }
 
 /** Aggregate the channel options of every configured platform for the picker. */

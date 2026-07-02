@@ -19,6 +19,44 @@ export class DiscordPlatform implements Platform {
     readonly name = 'Discord';
     readonly icon = '🎮';
     readonly charLimit = DISCORD_LIMIT;
+    readonly setup = {
+        summary:
+            'Publishes through a Discord bot installed in your server with message permissions.',
+        env: [
+            {
+                name: 'DISCORD_BOT_TOKEN',
+                required: true,
+                description:
+                    'Bot token from the Discord Developer Portal. Keep it private.',
+            },
+            {
+                name: 'DISCORD_GUILD_ID',
+                required: false,
+                description:
+                    'Server id. When set, Composer can load text channels live from that server.',
+            },
+            {
+                name: 'DISCORD_CHANNEL_IDS',
+                required: false,
+                description:
+                    'Optional picker entries: channel ids or "id|Name" values separated by commas.',
+            },
+        ],
+        channelIdLabel: 'Discord channel id',
+        channelIdHelp:
+            'Enable Developer Mode in Discord, then copy the target text channel id.',
+        steps: [
+            'Create an application in the Discord Developer Portal and add a bot.',
+            'Copy the bot token into DISCORD_BOT_TOKEN in .env.',
+            'Invite the bot to your server with permission to view channels and send messages.',
+            'Copy the server id into DISCORD_GUILD_ID if you want live channel discovery.',
+            'Add channel ids through DISCORD_CHANNEL_IDS or create Discord resources here.',
+        ],
+        docsUrl: 'https://discord.com/developers/docs/intro',
+        notes: [
+            'The bot can publish only to text channels it can see and where it has Send Messages permission.',
+        ],
+    };
     private client: Client | null = null;
     private ready: Promise<void> | null = null;
 

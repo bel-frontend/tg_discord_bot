@@ -74,6 +74,38 @@ export class TelegramPlatform implements Platform {
     readonly name = 'Telegram';
     readonly icon = '✈️';
     readonly charLimit = TELEGRAM_LIMIT;
+    readonly setup = {
+        summary:
+            'Publishes through a Telegram bot that is added to each target channel or chat.',
+        env: [
+            {
+                name: 'TELEGRAM_BOT_TOKEN',
+                required: true,
+                description:
+                    'Bot token from BotFather. Keep it private and restart the app after changing it.',
+            },
+            {
+                name: 'TELEGRAM_CHANNEL_USERNAMES',
+                required: false,
+                description:
+                    'Optional picker entries: @channel, numeric chat id, or "id|Name" values separated by commas.',
+            },
+        ],
+        channelIdLabel: 'Channel username or chat id',
+        channelIdHelp:
+            'Use @public_channel for public channels, or a numeric id such as -1001234567890 for private channels/chats.',
+        steps: [
+            'Open BotFather in Telegram and create a bot with /newbot.',
+            'Copy the bot token into TELEGRAM_BOT_TOKEN in .env.',
+            'Add the bot to the target channel or group and grant permission to post messages.',
+            'Add the target as TELEGRAM_CHANNEL_USERNAMES or create a Telegram resource here.',
+            'Restart the app so the backend picks up the new token and channel list.',
+        ],
+        docsUrl: 'https://core.telegram.org/bots',
+        notes: [
+            'Telegram bots cannot list every channel they belong to, so channels must be added in .env, channels.json, or Resources.',
+        ],
+    };
     private bot: TelegramBot | null = null;
 
     constructor(private token = process.env.TELEGRAM_BOT_TOKEN || '') {}

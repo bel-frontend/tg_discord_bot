@@ -22,6 +22,7 @@ interface Props {
     onToggleTheme: () => void;
     onManageResources: () => void;
     onOpenScheduled: () => void;
+    onOpenSettings: () => void;
     onLogout: () => void;
 }
 
@@ -31,6 +32,7 @@ export function Composer({
     onToggleTheme,
     onManageResources,
     onOpenScheduled,
+    onOpenSettings,
     onLogout,
 }: Props) {
     const toast = useToast();
@@ -208,6 +210,9 @@ export function Composer({
                     </button>
                     <button className="btn ghost" onClick={onOpenScheduled}>
                         Scheduled
+                    </button>
+                    <button className="btn ghost" onClick={onOpenSettings}>
+                        Settings
                     </button>
                     <span className="user-email">{user.email}</span>
                     <button className="btn ghost" onClick={onLogout}>
