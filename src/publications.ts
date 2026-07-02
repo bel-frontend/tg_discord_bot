@@ -129,6 +129,31 @@ function buildRefs(publication: Publication): ExistingPublishTarget[] {
         }));
 }
 
+/**
+ * `updatePublicationResults` replaces the whole stored `targets` array with
+ * whatever this action's results contain. `buildRefs` only attempts targets
+ * that are currently `ok` with a stored message id, so a target that already
+ * failed a previous update (or was never sendable) is silently excluded from
+ * `results` — without this merge, replacing the array would permanently erase
+ * it even though this action never touched it.
+ */
+function mergeUntouchedTargets(
+    existing: PublicationTarget[],
+    results: PublishResult[],
+): PublishResult[] {
+    const touched = new Set(results.map((r) => `${r.platform}:${r.channelId}`));
+    const untouched: PublishResult[] = existing
+        .filter((target) => !touched.has(`${target.platform}:${target.channelId}`))
+        .map((target) => ({
+            platform: target.platform,
+            channelId: target.channelId,
+            ok: target.ok,
+            messageIds: target.messageIds,
+            error: target.error,
+        }));
+    return [...results, ...untouched];
+}
+
 /** Re-send the given publication's content to its already-published messages. */
 export async function updatePublishedTargets(
     userId: string,
@@ -162,7 +187,7 @@ export async function updatePublishedTargets(
         title: String(input.title ?? publication.title ?? 'Untitled'),
         markdown,
         imageUrls,
-        results,
+        results: mergeUntouchedTargets(publication.targets, results),
     });
     return { results, publication: updated! };
 }

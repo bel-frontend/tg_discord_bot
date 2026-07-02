@@ -168,7 +168,19 @@ export async function updateTargets(
             );
             continue;
         }
-        results.push(...(await platform.update(refs, content)));
+        try {
+            results.push(...(await platform.update(refs, content)));
+        } catch (error: any) {
+            results.push(
+                ...refs.map((ref) => ({
+                    platform: platformId,
+                    channelId: ref.channelId,
+                    ok: false,
+                    messageIds: ref.messageIds,
+                    error: error?.message ?? 'Update failed',
+                })),
+            );
+        }
     }
     return results;
 }
@@ -213,7 +225,19 @@ export async function deleteTargets(
             );
             continue;
         }
-        results.push(...(await platform.delete(refs)));
+        try {
+            results.push(...(await platform.delete(refs)));
+        } catch (error: any) {
+            results.push(
+                ...refs.map((ref) => ({
+                    platform: platformId,
+                    channelId: ref.channelId,
+                    ok: false,
+                    messageIds: ref.messageIds,
+                    error: error?.message ?? 'Delete failed',
+                })),
+            );
+        }
     }
     return results;
 }

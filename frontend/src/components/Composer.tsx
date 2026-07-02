@@ -34,6 +34,32 @@ export function Composer({
     const [editorTab, setEditorTab] = useState<
         'edit' | 'preview' | 'published'
     >('edit');
+    const [focusMode, setFocusMode] = useState(
+        localStorage.getItem('composer.focusMode') === 'true',
+    );
+    const [editorFullscreen, setEditorFullscreen] = useState(
+        localStorage.getItem('composer.editorFullscreen') === 'true',
+    );
+
+    useEffect(() => {
+        localStorage.setItem('composer.focusMode', String(focusMode));
+    }, [focusMode]);
+    useEffect(() => {
+        localStorage.setItem(
+            'composer.editorFullscreen',
+            String(editorFullscreen),
+        );
+    }, [editorFullscreen]);
+
+    // Let Escape collapse fullscreen, same as clicking the backdrop.
+    useEffect(() => {
+        if (!editorFullscreen) return;
+        const onKey = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') setEditorFullscreen(false);
+        };
+        window.addEventListener('keydown', onKey);
+        return () => window.removeEventListener('keydown', onKey);
+    }, [editorFullscreen]);
 
     const { channels, loadChannels } = useChannels();
     const {
@@ -125,6 +151,13 @@ export function Composer({
                 </div>
                 <div className="topbar-right">
                     <button
+                        className={`btn ghost ${focusMode ? 'active' : ''}`}
+                        title="Toggle focus mode (hide side panels)"
+                        onClick={() => setFocusMode((f) => !f)}
+                    >
+                        ⛶
+                    </button>
+                    <button
                         className="btn ghost"
                         title="Toggle theme"
                         onClick={onToggleTheme}
@@ -141,14 +174,23 @@ export function Composer({
                 </div>
             </header>
 
-            <main className="layout">
-                <DraftsRail
-                    drafts={drafts}
-                    activeId={draftEditor.draftId}
-                    onNew={newDraft}
-                    onOpen={openDraft}
-                    onDelete={deleteDraft}
-                />
+            <main className={`layout ${focusMode ? 'focus-mode' : ''}`}>
+                {!focusMode && (
+                    <DraftsRail
+                        drafts={drafts}
+                        activeId={draftEditor.draftId}
+                        onNew={newDraft}
+                        onOpen={openDraft}
+                        onDelete={deleteDraft}
+                    />
+                )}
+
+                {editorFullscreen && (
+                    <div
+                        className="fullscreen-backdrop"
+                        onClick={() => setEditorFullscreen(false)}
+                    />
+                )}
 
                 <ComposerEditorPane
                     editorRef={editorRef}
@@ -165,6 +207,10 @@ export function Composer({
                         setEditorTab('preview');
                     }}
                     onPublishedTab={() => setEditorTab('published')}
+                    fullscreen={editorFullscreen}
+                    onToggleFullscreen={() =>
+                        setEditorFullscreen((f) => !f)
+                    }
                     markdown={draftEditor.markdown}
                     onEditorChange={handleEditorChange}
                     validationIssues={validationIssues}
@@ -180,28 +226,30 @@ export function Composer({
                     onDeletePublished={publications.deletePublished}
                 />
 
-                <ComposerSidebar
-                    channels={channels}
-                    targets={draftEditor.targets}
-                    onTargetsChange={(next) => {
-                        draftEditor.setTargets(next);
-                        autosave.scheduleSave();
-                    }}
-                    images={draftEditor.images}
-                    onImagesChange={(next) => {
-                        draftEditor.setImages(next);
-                        autosave.scheduleSave();
-                    }}
-                    imageUrls={draftEditor.imageUrls}
-                    onImageUrlsChange={(value) => {
-                        draftEditor.setImageUrls(value);
-                        autosave.scheduleSave();
-                    }}
-                    publications={publications.publications}
-                    publishing={publications.publishing}
-                    onSaveDraft={() => draftEditor.saveDraft(false)}
-                    onPublish={publish}
-                />
+                {!focusMode && (
+                    <ComposerSidebar
+                        channels={channels}
+                        targets={draftEditor.targets}
+                        onTargetsChange={(next) => {
+                            draftEditor.setTargets(next);
+                            autosave.scheduleSave();
+                        }}
+                        images={draftEditor.images}
+                        onImagesChange={(next) => {
+                            draftEditor.setImages(next);
+                            autosave.scheduleSave();
+                        }}
+                        imageUrls={draftEditor.imageUrls}
+                        onImageUrlsChange={(value) => {
+                            draftEditor.setImageUrls(value);
+                            autosave.scheduleSave();
+                        }}
+                        publications={publications.publications}
+                        publishing={publications.publishing}
+                        onSaveDraft={() => draftEditor.saveDraft(false)}
+                        onPublish={publish}
+                    />
+                )}
             </main>
         </div>
     );

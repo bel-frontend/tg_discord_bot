@@ -149,6 +149,52 @@ describe('updatePublishedTargets', () => {
             expect(outcome.publication.markdown).toBe('new content');
         }
     });
+
+    test('preserves an already-failed target this update did not attempt (regression: it used to be erased)', async () => {
+        const doc = makeDoc({
+            targets: [
+                {
+                    platform: 'telegram',
+                    channelId: 'ok-chan',
+                    messageIds: ['1'],
+                    ok: true,
+                    updatedAt: new Date(),
+                },
+                {
+                    platform: 'discord',
+                    channelId: 'failed-chan',
+                    messageIds: [],
+                    ok: false,
+                    error: 'previous failure',
+                    updatedAt: new Date(),
+                },
+            ],
+        });
+        findOneMock.mockImplementationOnce(async () => doc);
+        findOneAndUpdateMock.mockImplementationOnce(async (_f, update) => ({
+            ...doc,
+            ...update.$set,
+        }));
+        // Only the ok target is in refs (buildRefs excludes the failed one), so
+        // updateTargets only ever sees/returns a result for that one target.
+        updateTargetsMock.mockImplementationOnce(async () => [
+            { platform: 'telegram', channelId: 'ok-chan', ok: true, messageIds: ['1'] },
+        ]);
+
+        const outcome = await updatePublishedTargets('user1', VALID_ID, {
+            markdown: 'new content',
+        });
+
+        expect('error' in outcome).toBe(false);
+        if (!('error' in outcome)) {
+            expect(outcome.publication.targets).toHaveLength(2);
+            const discordTarget = outcome.publication.targets.find(
+                (t) => t.platform === 'discord',
+            );
+            expect(discordTarget?.channelId).toBe('failed-chan');
+            expect(discordTarget?.ok).toBe(false);
+        }
+    });
 });
 
 describe('deletePublishedTargets', () => {

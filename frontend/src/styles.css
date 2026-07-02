@@ -94,6 +94,10 @@ body {
 .btn.ghost:hover {
     background: var(--bg-elev-2);
 }
+.btn.ghost.active {
+    color: var(--accent);
+    background: var(--bg-elev-2);
+}
 .btn.small {
     padding: 4px 9px;
     font-size: 12px;
@@ -237,6 +241,9 @@ select:focus {
     display: grid;
     grid-template-columns: 240px 1fr 320px;
     min-height: 0;
+}
+.layout.focus-mode {
+    grid-template-columns: 1fr;
 }
 
 /* ---------- resources manager ---------- */
@@ -391,6 +398,20 @@ select:focus {
     padding: 16px;
     gap: 12px;
 }
+.editor-pane.fullscreen {
+    position: fixed;
+    inset: 16px;
+    z-index: 100;
+    background: var(--bg-elev);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+}
+.fullscreen-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 99;
+    background: color-mix(in srgb, black 55%, transparent);
+}
 .title-input {
     font-size: 20px;
     font-weight: 600;
@@ -399,6 +420,12 @@ select:focus {
 .editor-holder {
     flex: 1;
     min-height: 0;
+}
+.editor-tabs-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
 }
 .editor-tabs {
     display: inline-flex;
@@ -433,6 +460,9 @@ select:focus {
     min-height: 0;
     display: flex;
     flex-direction: column;
+}
+.editor-tab-pane[hidden] {
+    display: none;
 }
 
 /* Toast UI has its own Markdown Write/Preview tabs. We keep preview as our

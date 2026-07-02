@@ -14,6 +14,8 @@ interface Props {
     onEditTab: () => void;
     onPreviewTab: () => void;
     onPublishedTab: () => void;
+    fullscreen: boolean;
+    onToggleFullscreen: () => void;
     markdown: string;
     onEditorChange: () => void;
     validationIssues: ValidationIssue[];
@@ -36,6 +38,8 @@ export function ComposerEditorPane({
     onEditTab,
     onPreviewTab,
     onPublishedTab,
+    fullscreen,
+    onToggleFullscreen,
     markdown,
     onEditorChange,
     validationIssues,
@@ -49,7 +53,7 @@ export function ComposerEditorPane({
     onDeletePublished,
 }: Props) {
     return (
-        <section className="editor-pane">
+        <section className={`editor-pane ${fullscreen ? 'fullscreen' : ''}`}>
             <input
                 className="title-input"
                 type="text"
@@ -57,34 +61,45 @@ export function ComposerEditorPane({
                 value={title}
                 onChange={(e) => onTitleChange(e.target.value)}
             />
-            <div className="editor-tabs">
+            <div className="editor-tabs-row">
+                <div className="editor-tabs">
+                    <button
+                        type="button"
+                        className={`editor-tab ${
+                            editorTab === 'edit' ? 'active' : ''
+                        }`}
+                        onClick={onEditTab}
+                    >
+                        Edit
+                    </button>
+                    <button
+                        type="button"
+                        className={`editor-tab ${
+                            editorTab === 'preview' ? 'active' : ''
+                        }`}
+                        onClick={onPreviewTab}
+                    >
+                        Preview
+                    </button>
+                    <button
+                        type="button"
+                        className={`editor-tab ${
+                            editorTab === 'published' ? 'active' : ''
+                        }`}
+                        onClick={onPublishedTab}
+                    >
+                        Published
+                        {publications.length > 0 &&
+                            ` (${publications.length})`}
+                    </button>
+                </div>
                 <button
                     type="button"
-                    className={`editor-tab ${
-                        editorTab === 'edit' ? 'active' : ''
-                    }`}
-                    onClick={onEditTab}
+                    className="btn ghost"
+                    title={fullscreen ? 'Collapse' : 'Expand'}
+                    onClick={onToggleFullscreen}
                 >
-                    Edit
-                </button>
-                <button
-                    type="button"
-                    className={`editor-tab ${
-                        editorTab === 'preview' ? 'active' : ''
-                    }`}
-                    onClick={onPreviewTab}
-                >
-                    Preview
-                </button>
-                <button
-                    type="button"
-                    className={`editor-tab ${
-                        editorTab === 'published' ? 'active' : ''
-                    }`}
-                    onClick={onPublishedTab}
-                >
-                    Published
-                    {publications.length > 0 && ` (${publications.length})`}
+                    {fullscreen ? '⤡' : '⤢'}
                 </button>
             </div>
             <div className="editor-tab-body">
