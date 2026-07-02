@@ -1,15 +1,16 @@
 import { ObjectId } from 'mongodb';
-import { drafts, type DraftDoc, type DraftTarget } from './db';
+import { drafts, type DraftDoc } from './db';
+import type { Draft, Target } from '../shared/types';
 
 export interface DraftInput {
     title?: string;
     markdown?: string;
     imageUrls?: string[];
     imageIds?: string[];
-    targets?: DraftTarget[];
+    targets?: Target[];
 }
 
-function serialize(doc: DraftDoc) {
+function serialize(doc: DraftDoc): Draft {
     return {
         id: doc._id!.toString(),
         title: doc.title,
@@ -17,8 +18,8 @@ function serialize(doc: DraftDoc) {
         imageUrls: doc.imageUrls,
         imageIds: doc.imageIds ?? [],
         targets: doc.targets,
-        createdAt: doc.createdAt,
-        updatedAt: doc.updatedAt,
+        createdAt: doc.createdAt.toISOString(),
+        updatedAt: doc.updatedAt.toISOString(),
     };
 }
 
@@ -27,7 +28,7 @@ function sanitize(input: DraftInput): {
     markdown: string;
     imageUrls: string[];
     imageIds: string[];
-    targets: DraftTarget[];
+    targets: Target[];
 } {
     return {
         title: (input.title ?? 'Untitled').toString().slice(0, 200),

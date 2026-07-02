@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api';
 import { useToast } from '../toast';
-import type { ChannelOption, User } from '../types';
+import type { ChannelOption, User } from '../../../shared/types';
 import { platformIcon } from './ChannelPicker';
+import { useChannels } from '../hooks/useChannels';
 
 interface Props {
     user: User;
@@ -28,18 +29,11 @@ export function ResourceManager({
     onLogout,
 }: Props) {
     const toast = useToast();
-    const [channels, setChannels] = useState<ChannelOption[]>([]);
+    const { channels, loadChannels } = useChannels();
     const [platform, setPlatform] = useState('telegram');
     const [name, setName] = useState('');
     const [channelId, setChannelId] = useState('');
     const [busy, setBusy] = useState(false);
-
-    async function loadChannels() {
-        const { channels } = await api<{ channels: ChannelOption[] }>(
-            '/api/channels',
-        );
-        setChannels(channels);
-    }
 
     useEffect(() => {
         loadChannels().catch((err) => toast(err.message, 'error'));

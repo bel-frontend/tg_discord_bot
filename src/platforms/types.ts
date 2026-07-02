@@ -1,5 +1,9 @@
 // The universal adapter contract. Adding a new social network = implement this + register it.
 
+import type { PublishResult } from '../../shared/types';
+
+export type { PublishResult };
+
 export interface Channel {
     id: string; // real platform channel id (used when publishing)
     name: string; // human-readable label (shown in the UI)
@@ -15,14 +19,6 @@ export interface PublishContent {
     markdown: string;
     imageUrls?: string[]; // remote image URLs
     images?: PublishImage[]; // uploaded image bytes to send as attachments
-}
-
-export interface PublishResult {
-    platform: string;
-    channelId: string;
-    ok: boolean;
-    messageIds?: string[];
-    error?: string;
 }
 
 export interface PublishedMessageRef {

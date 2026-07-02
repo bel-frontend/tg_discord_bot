@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { api, setToken } from '../api';
-import type { User } from '../types';
+import type { User } from '../../../shared/types';
 
 interface Props {
     onAuthenticated: (user: User) => void;

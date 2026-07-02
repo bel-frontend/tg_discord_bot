@@ -1,6 +1,12 @@
 import { ObjectId } from 'mongodb';
 import { publications, type PublicationDoc } from './db';
 import type { PublishResult } from './platforms/types';
+import {
+    deleteTargets,
+    updateTargets,
+    type ExistingPublishTarget,
+} from './platforms/registry';
+import type { Publication, PublicationTarget } from '../shared/types';
 
 export interface PublicationInput {
     draftId: string;
@@ -10,16 +16,25 @@ export interface PublicationInput {
     results: PublishResult[];
 }
 
-function serialize(doc: PublicationDoc) {
+function serialize(doc: PublicationDoc): Publication {
     return {
         id: doc._id!.toString(),
         draftId: doc.draftId,
         title: doc.title,
         markdown: doc.markdown,
         imageUrls: doc.imageUrls,
-        targets: doc.targets,
-        createdAt: doc.createdAt,
-        updatedAt: doc.updatedAt,
+        targets: doc.targets.map(
+            (target): PublicationTarget => ({
+                platform: target.platform,
+                channelId: target.channelId,
+                messageIds: target.messageIds,
+                ok: target.ok,
+                error: target.error,
+                updatedAt: target.updatedAt.toISOString(),
+            }),
+        ),
+        createdAt: doc.createdAt.toISOString(),
+        updatedAt: doc.updatedAt.toISOString(),
     };
 }
 
@@ -102,4 +117,77 @@ export async function deletePublicationRecord(userId: string, id: string) {
         userId,
     });
     return result.deletedCount > 0;
+}
+
+function buildRefs(publication: Publication): ExistingPublishTarget[] {
+    return publication.targets
+        .filter((target) => target.ok && target.messageIds.length)
+        .map((target) => ({
+            platform: target.platform,
+            channelId: target.channelId,
+            messageIds: target.messageIds,
+        }));
+}
+
+/** Re-send the given publication's content to its already-published messages. */
+export async function updatePublishedTargets(
+    userId: string,
+    publicationId: string,
+    input: { title?: unknown; markdown?: unknown; imageUrls?: unknown },
+): Promise<
+    | { error: string; status: number }
+    | { results: PublishResult[]; publication: Publication }
+> {
+    const publication = await getPublication(userId, publicationId);
+    if (!publication) return { error: 'Not found', status: 404 };
+
+    const refs = buildRefs(publication);
+    if (!refs.length) {
+        return {
+            error: 'No stored message ids for this publication',
+            status: 400,
+        };
+    }
+
+    const markdown = String(input.markdown ?? publication.markdown ?? '');
+    const imageUrls = Array.isArray(input.imageUrls)
+        ? input.imageUrls.map(String)
+        : [];
+    if (!markdown.trim() && !imageUrls.length) {
+        return { error: 'Content is empty', status: 400 };
+    }
+
+    const results = await updateTargets(refs, { markdown, imageUrls });
+    const updated = await updatePublicationResults(userId, publicationId, {
+        title: String(input.title ?? publication.title ?? 'Untitled'),
+        markdown,
+        imageUrls,
+        results,
+    });
+    return { results, publication: updated! };
+}
+
+/** Delete the given publication's already-published messages and its record. */
+export async function deletePublishedTargets(
+    userId: string,
+    publicationId: string,
+): Promise<
+    | { error: string; status: number }
+    | { results: PublishResult[]; deleted: boolean }
+> {
+    const publication = await getPublication(userId, publicationId);
+    if (!publication) return { error: 'Not found', status: 404 };
+
+    const refs = buildRefs(publication);
+    if (!refs.length) {
+        return {
+            error: 'No stored message ids for this publication',
+            status: 400,
+        };
+    }
+
+    const results = await deleteTargets(refs);
+    const ok = results.every((result) => result.ok);
+    if (ok) await deletePublicationRecord(userId, publicationId);
+    return { results, deleted: ok };
 }

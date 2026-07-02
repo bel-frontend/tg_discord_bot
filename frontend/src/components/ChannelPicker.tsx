@@ -1,4 +1,4 @@
-import type { ChannelOption, Target } from '../types';
+import type { ChannelOption, Target } from '../../../shared/types';
 
 export function platformIcon(id: string): string {
     if (id === 'telegram') return '✈️';

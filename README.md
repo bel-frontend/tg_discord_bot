@@ -107,15 +107,6 @@ your `channels.json` (see the commented volume in `docker-compose.yml`). The web
 
 ---
 
-## Legacy inbound bridge (optional)
-
-The original behavior — forward a message sent *to* the Telegram bot on to preconfigured
-channels — is still available behind a flag. Set `ENABLE_INBOUND_BOTS=true` (plus
-`TELEGRAM_CHANNEL_USERNAMES` / `DISCORD_CHANNEL_IDS`). It runs its own Telegram poller / Discord
-gateway using the same tokens as the editor, so enable it only if that trade-off is understood.
-
----
-
 ## License
 
 MIT

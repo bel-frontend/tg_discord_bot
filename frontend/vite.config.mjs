@@ -15,6 +15,8 @@ export default defineConfig({
     },
     server: {
         port: 5173,
+        // Allow importing ../shared (repo root) from within frontend/.
+        fs: { allow: ['..'] },
         // In dev, proxy API calls to the Bun server so JWT works same-origin.
         // scripts/dev.ts sets API_PROXY_TARGET to the actual backend port.
         proxy: {

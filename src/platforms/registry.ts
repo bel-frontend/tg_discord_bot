@@ -4,6 +4,7 @@ import type {
     PublishContent,
     PublishedMessageRef,
 } from './types';
+import type { ChannelOption } from '../../shared/types';
 import { listChannelResources } from '../channelResources';
 
 const platforms = new Map<string, Platform>();
@@ -18,15 +19,6 @@ export function getPlatform(id: string): Platform | undefined {
 
 export function listPlatforms(): Platform[] {
     return [...platforms.values()];
-}
-
-export interface ChannelOption {
-    platform: string; // platform id
-    platformName: string; // platform display name
-    id: string; // channel id
-    name: string; // channel name
-    resourceId?: string; // db document id (only for DB-managed channels)
-    source?: 'db' | 'config';
 }
 
 /** Aggregate the channel options of every configured platform for the picker. */

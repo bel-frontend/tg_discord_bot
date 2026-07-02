@@ -17,12 +17,4 @@ register(new DiscordPlatform());
 // 3. HTTP API + editor frontend
 startServer();
 
-// 4. Optional legacy inbound bridge (send a message to the Telegram bot -> forward).
-//    Off by default: it opens its own Telegram poller / Discord gateway using the same
-//    tokens as the editor's publishers, so only enable it if you understand that trade-off.
-if (process.env.ENABLE_INBOUND_BOTS === 'true') {
-    console.log('Enabling legacy inbound bot bridge…');
-    await import('./inbound');
-}
-
 console.log('Composer ready.');

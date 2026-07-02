@@ -5,7 +5,7 @@ import {
     useState,
     type ReactNode,
 } from 'react';
-import type { ToastKind } from './types';
+export type ToastKind = 'info' | 'success' | 'warn' | 'error';
 
 interface ToastItem {
     id: number;

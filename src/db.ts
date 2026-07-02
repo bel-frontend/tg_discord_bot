@@ -1,15 +1,11 @@
 import { MongoClient, type Collection, type ObjectId } from 'mongodb';
+import type { Target } from '../shared/types';
 
 export interface UserDoc {
     _id?: ObjectId;
     email: string;
     passwordHash: string;
     createdAt: Date;
-}
-
-export interface DraftTarget {
-    platform: string;
-    channelId: string;
 }
 
 export interface DraftDoc {
@@ -19,7 +15,7 @@ export interface DraftDoc {
     markdown: string;
     imageUrls: string[];
     imageIds: string[]; // ids of uploaded images (see UploadDoc)
-    targets: DraftTarget[];
+    targets: Target[];
     createdAt: Date;
     updatedAt: Date;
 }

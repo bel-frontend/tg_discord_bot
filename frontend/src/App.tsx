@@ -4,7 +4,7 @@ import { ToastProvider } from './toast';
 import { Auth } from './components/Auth';
 import { Composer } from './components/Composer';
 import { ResourceManager } from './components/ResourceManager';
-import type { User } from './types';
+import type { User } from '../../shared/types';
 
 type AppRoute = 'composer' | 'resources';
 

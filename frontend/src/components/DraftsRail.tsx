@@ -1,4 +1,4 @@
-import type { Draft } from '../types';
+import type { Draft } from '../../../shared/types';
 
 interface Props {
     drafts: Draft[];
