@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { PanelRightClose, PanelRightOpen } from 'lucide-react';
 import { api } from '../api';
 import { useToast } from '../toast';
 import type { Draft, Publication, User } from '../../../shared/types';
@@ -142,6 +143,8 @@ export function Composer({
         });
     }
 
+    const SidePanelsIcon = focusMode ? PanelRightOpen : PanelRightClose;
+
     return (
         <div className="app">
             <header className="topbar">
@@ -150,13 +153,6 @@ export function Composer({
                     <span className="brand-name">Composer</span>
                 </div>
                 <div className="topbar-right">
-                    <button
-                        className={`btn ghost ${focusMode ? 'active' : ''}`}
-                        title="Toggle focus mode (hide side panels)"
-                        onClick={() => setFocusMode((f) => !f)}
-                    >
-                        ⛶
-                    </button>
                     <button
                         className="btn ghost"
                         title="Toggle theme"
@@ -175,6 +171,22 @@ export function Composer({
             </header>
 
             <main className={`layout ${focusMode ? 'focus-mode' : ''}`}>
+                <button
+                    type="button"
+                    className={`side-panels-toggle ${
+                        focusMode ? 'active' : ''
+                    }`}
+                    title={
+                        focusMode ? 'Show side panels' : 'Hide side panels'
+                    }
+                    aria-label={
+                        focusMode ? 'Show side panels' : 'Hide side panels'
+                    }
+                    onClick={() => setFocusMode((f) => !f)}
+                >
+                    <SidePanelsIcon size={18} strokeWidth={2.2} />
+                </button>
+
                 {!focusMode && (
                     <DraftsRail
                         drafts={drafts}

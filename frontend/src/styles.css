@@ -239,11 +239,47 @@ select:focus {
 .layout {
     flex: 1;
     display: grid;
-    grid-template-columns: 240px 1fr 320px;
+    grid-template-columns: 240px minmax(0, 1fr) 320px;
     min-height: 0;
+    min-width: 0;
+    overflow: hidden;
+    position: relative;
 }
 .layout.focus-mode {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
+}
+.side-panels-toggle {
+    position: absolute;
+    top: 50%;
+    right: 320px;
+    z-index: 30;
+    width: 36px;
+    height: 44px;
+    display: inline-grid;
+    place-items: center;
+    padding: 0;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--bg-elev);
+    color: var(--text-dim);
+    box-shadow: var(--shadow);
+    cursor: pointer;
+    transform: translate(50%, -50%);
+    transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+.side-panels-toggle:hover,
+.side-panels-toggle:focus-visible,
+.side-panels-toggle.active {
+    color: var(--accent);
+    border-color: var(--accent);
+    outline: none;
+}
+.side-panels-toggle svg {
+    display: block;
+}
+.layout.focus-mode .side-panels-toggle {
+    right: 16px;
+    transform: translateY(-50%);
 }
 
 /* ---------- resources manager ---------- */
@@ -317,6 +353,7 @@ select:focus {
     display: flex;
     flex-direction: column;
     min-height: 0;
+    min-width: 0;
 }
 .rail-head {
     display: flex;
@@ -395,6 +432,7 @@ select:focus {
     display: flex;
     flex-direction: column;
     min-height: 0;
+    min-width: 0;
     padding: 16px;
     gap: 12px;
 }
@@ -454,15 +492,36 @@ select:focus {
     min-height: 0;
     display: flex;
     flex-direction: column;
+    gap: 12px;
+}
+.editor-tab-body.with-update-panel {
+    flex-direction: row;
 }
 .editor-tab-pane {
     flex: 1;
     min-height: 0;
+    min-width: 0;
     display: flex;
     flex-direction: column;
 }
 .editor-tab-pane[hidden] {
     display: none;
+}
+.update-panel {
+    flex: 0 1 380px;
+    min-width: 280px;
+    min-height: 0;
+    display: flex;
+}
+.icon-btn {
+    width: 38px;
+    height: 38px;
+    padding: 0;
+    display: inline-grid;
+    place-items: center;
+}
+.icon-btn svg {
+    display: block;
 }
 
 /* Toast UI has its own Markdown Write/Preview tabs. We keep preview as our
@@ -639,6 +698,7 @@ tg-spoiler {
     display: flex;
     flex-direction: column;
     gap: 16px;
+    min-width: 0;
 }
 .side-title {
     margin: 0;
@@ -772,6 +832,7 @@ tg-spoiler {
 }
 .actions .btn {
     flex: 1;
+    min-width: 0;
 }
 .count {
     font-weight: 500;
@@ -782,6 +843,7 @@ tg-spoiler {
 .published-tab {
     flex: 1;
     min-height: 0;
+    min-width: 0;
     overflow: auto;
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
@@ -816,13 +878,17 @@ tg-spoiler {
     justify-content: space-between;
     gap: 10px;
     margin-bottom: 10px;
+    min-width: 0;
 }
 .pub-card-head strong {
     display: block;
     font-size: 14px;
+    overflow-wrap: anywhere;
 }
 .pub-card-actions {
     display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
     gap: 6px;
     flex-shrink: 0;
 }
@@ -839,6 +905,7 @@ tg-spoiler {
     border-radius: var(--radius-sm);
     background: var(--bg-elev-2);
     font-size: 13px;
+    min-width: 0;
 }
 .pub-target-badge {
     width: 18px;
@@ -858,6 +925,9 @@ tg-spoiler {
 }
 .pub-target-name {
     flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 .pub-target-link {
     color: var(--accent);
@@ -906,7 +976,22 @@ tg-spoiler {
 }
 
 /* ---------- responsive ---------- */
+@media (max-width: 980px) {
+    .editor-tab-body.with-update-panel {
+        flex-direction: column;
+    }
+    .update-panel {
+        flex: 0 0 auto;
+        min-width: 0;
+        max-height: 38%;
+    }
+}
+
 @media (max-width: 900px) {
+    .side-panels-toggle {
+        right: 16px;
+        transform: translateY(-50%);
+    }
     .layout {
         grid-template-columns: 1fr;
         grid-auto-rows: min-content;

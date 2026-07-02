@@ -52,8 +52,8 @@ export function ComposerSidebar({
 
             {publications.length > 0 && (
                 <p className="muted">
-                    Creates a separate new post — use "Update" in the
-                    Published tab to edit what's already published.
+                    Creates a separate new post — use the Update tab to edit
+                    what's already published.
                 </p>
             )}
             <div className="actions">

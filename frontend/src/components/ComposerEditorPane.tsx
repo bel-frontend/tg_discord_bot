@@ -1,4 +1,5 @@
 import type { RefObject } from 'react';
+import { Maximize2, Minimize2 } from 'lucide-react';
 import type { ChannelOption, Publication } from '../../../shared/types';
 import { MarkdownEditor, type MarkdownEditorHandle } from './MarkdownEditor';
 import { PreviewPanel } from './PreviewPanel';
@@ -52,6 +53,8 @@ export function ComposerEditorPane({
     onUpdatePublished,
     onDeletePublished,
 }: Props) {
+    const FullscreenIcon = fullscreen ? Minimize2 : Maximize2;
+
     return (
         <section className={`editor-pane ${fullscreen ? 'fullscreen' : ''}`}>
             <input
@@ -88,22 +91,30 @@ export function ComposerEditorPane({
                         }`}
                         onClick={onPublishedTab}
                     >
-                        Published
+                        Update
                         {publications.length > 0 &&
                             ` (${publications.length})`}
                     </button>
                 </div>
                 <button
                     type="button"
-                    className="btn ghost"
+                    className="btn ghost icon-btn"
                     title={fullscreen ? 'Collapse' : 'Expand'}
+                    aria-label={fullscreen ? 'Collapse editor' : 'Expand editor'}
                     onClick={onToggleFullscreen}
                 >
-                    {fullscreen ? '⤡' : '⤢'}
+                    <FullscreenIcon size={18} strokeWidth={2.2} />
                 </button>
             </div>
-            <div className="editor-tab-body">
-                <div className="editor-tab-pane" hidden={editorTab !== 'edit'}>
+            <div
+                className={`editor-tab-body ${
+                    editorTab === 'published' ? 'with-update-panel' : ''
+                }`}
+            >
+                <div
+                    className="editor-tab-pane"
+                    hidden={editorTab === 'preview'}
+                >
                     <MarkdownEditor
                         ref={editorRef}
                         theme={theme}
@@ -114,14 +125,16 @@ export function ComposerEditorPane({
                     <PreviewPanel markdown={markdown} />
                 )}
                 {editorTab === 'published' && (
-                    <PublishedTab
-                        publications={publications}
-                        channels={channels}
-                        publishing={publishing}
-                        highlightedPublicationId={highlightedPublicationId}
-                        onUpdate={onUpdatePublished}
-                        onDelete={onDeletePublished}
-                    />
+                    <div className="update-panel">
+                        <PublishedTab
+                            publications={publications}
+                            channels={channels}
+                            publishing={publishing}
+                            highlightedPublicationId={highlightedPublicationId}
+                            onUpdate={onUpdatePublished}
+                            onDelete={onDeletePublished}
+                        />
+                    </div>
                 )}
             </div>
             {validationIssues.length > 0 && (
