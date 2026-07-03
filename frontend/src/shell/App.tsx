@@ -8,7 +8,6 @@ import { ComposerPage } from '../routes/composer/page';
 import { ResourcesPage } from '../routes/resources/page';
 import { ScheduledPage } from '../routes/scheduled/page';
 import { SettingsPage } from '../routes/settings/page';
-import { MembersPage } from '../routes/members/page';
 import { AppLayout } from '../layouts/AppLayout';
 import { MeProvider } from '../meContext';
 import type { Me, User } from '../../../shared/types';
@@ -154,7 +153,6 @@ export function App() {
             );
         }
         if (view === 'settings') return <SettingsPage />;
-        if (view === 'members') return <MembersPage />;
         const search = new URLSearchParams(locationSearch);
         return (
             <ComposerPage
@@ -182,9 +180,6 @@ export function App() {
         setLocationSearch(window.location.search);
     }
 
-    const canManageMembers =
-        me?.role === 'owner' || me?.permissions.canManageMembers === true;
-
     return (
         <ToastProvider>
             <MeProvider me={me}>
@@ -211,9 +206,6 @@ export function App() {
                             navItem('resources', 'Resources'),
                             navItem('scheduled', 'Scheduled'),
                             navItem('settings', 'Settings'),
-                            ...(canManageMembers
-                                ? [navItem('members', 'Members')]
-                                : []),
                         ]}
                         onToggleTheme={toggleTheme}
                         onLogout={logout}

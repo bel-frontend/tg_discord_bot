@@ -1,16 +1,10 @@
-export type AppRoute =
-    | 'composer'
-    | 'resources'
-    | 'scheduled'
-    | 'settings'
-    | 'members';
+export type AppRoute = 'composer' | 'resources' | 'scheduled' | 'settings';
 
 export const APP_ROUTES: Record<AppRoute, string> = {
     composer: '/',
     resources: '/resources',
     scheduled: '/scheduled',
     settings: '/settings',
-    members: '/members',
 };
 
 export function routeFromPath(pathname: string): AppRoute {

@@ -6,6 +6,7 @@ import type {
 import { useToast } from '../toast';
 import { useScheduledPublications } from '../hooks/useScheduledPublications';
 import { PageLayout } from '../layouts/PageLayout';
+import { useMe } from '../meContext';
 
 interface Props {
     onOpenDraft: (draftId: string, publicationId?: string) => void;
@@ -21,11 +22,12 @@ function formatDate(value: string): string {
 
 interface ScheduledItemProps {
     item: ScheduledPublication;
+    canDelete: boolean;
     onCancel: (id: string) => void;
     onOpenDraft: (draftId: string, publicationId?: string) => void;
 }
 
-function ScheduledItem({ item, onCancel, onOpenDraft }: ScheduledItemProps) {
+function ScheduledItem({ item, canDelete, onCancel, onOpenDraft }: ScheduledItemProps) {
     return (
         <article
             className={`scheduled-row ${item.status}`}
@@ -47,7 +49,7 @@ function ScheduledItem({ item, onCancel, onOpenDraft }: ScheduledItemProps) {
                 {item.error && <p className="scheduled-error">{item.error}</p>}
             </div>
             <div className="scheduled-actions">
-                {item.status === 'scheduled' && (
+                {item.status === 'scheduled' && canDelete && (
                     <button
                         className="btn danger"
                         onClick={(event) => {
@@ -65,11 +67,12 @@ function ScheduledItem({ item, onCancel, onOpenDraft }: ScheduledItemProps) {
 
 interface ArchiveItemProps {
     publication: Publication;
+    canDelete: boolean;
     onOpenDraft: (draftId: string, publicationId?: string) => void;
     onDelete: (publication: Publication) => void;
 }
 
-function ArchiveItem({ publication, onOpenDraft, onDelete }: ArchiveItemProps) {
+function ArchiveItem({ publication, canDelete, onOpenDraft, onDelete }: ArchiveItemProps) {
     const okCount = publication.targets.filter((target) => target.ok).length;
     return (
         <article
@@ -92,15 +95,17 @@ function ArchiveItem({ publication, onOpenDraft, onDelete }: ArchiveItemProps) {
                 </div>
             </div>
             <div className="scheduled-actions">
-                <button
-                    className="btn danger"
-                    onClick={(event) => {
-                        event.stopPropagation();
-                        onDelete(publication);
-                    }}
-                >
-                    Delete
-                </button>
+                {canDelete && (
+                    <button
+                        className="btn danger"
+                        onClick={(event) => {
+                            event.stopPropagation();
+                            onDelete(publication);
+                        }}
+                    >
+                        Delete
+                    </button>
+                )}
             </div>
         </article>
     );
@@ -108,6 +113,8 @@ function ArchiveItem({ publication, onOpenDraft, onDelete }: ArchiveItemProps) {
 
 export function ScheduledQueue({ onOpenDraft }: Props) {
     const toast = useToast();
+    const me = useMe();
+    const canDelete = me?.role === 'owner' || me?.permissions.canDelete === true;
     const [activeTab, setActiveTab] = useState<'upcoming' | 'archive'>(
         'upcoming',
     );
@@ -198,6 +205,7 @@ export function ScheduledQueue({ onOpenDraft }: Props) {
                             <ScheduledItem
                                 key={item.id}
                                 item={item}
+                                canDelete={canDelete}
                                 onCancel={cancel}
                                 onOpenDraft={onOpenDraft}
                             />
@@ -209,6 +217,7 @@ export function ScheduledQueue({ onOpenDraft }: Props) {
                             <ArchiveItem
                                 key={publication.id}
                                 publication={publication}
+                                canDelete={canDelete}
                                 onOpenDraft={onOpenDraft}
                                 onDelete={deleteArchived}
                             />

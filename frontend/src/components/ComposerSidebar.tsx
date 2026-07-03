@@ -7,6 +7,7 @@ import type {
 } from '../../../shared/types';
 import { ChannelPicker } from './ChannelPicker';
 import { ImageUploader, type ImageItem } from './ImageUploader';
+import { useMe } from '../meContext';
 
 function defaultScheduledAt(): string {
     const date = new Date(Date.now() + 20 * 60 * 1000);
@@ -47,6 +48,8 @@ export function ComposerSidebar({
     onPublish,
     onSchedule,
 }: Props) {
+    const me = useMe();
+    const canPublish = me?.role === 'owner' || me?.permissions.canPublish === true;
     const [scheduleOpen, setScheduleOpen] = useState(false);
     const [scheduledAt, setScheduledAt] = useState(defaultScheduledAt);
 
@@ -93,23 +96,33 @@ export function ComposerSidebar({
                 <button className="btn" onClick={onSaveDraft}>
                     Save draft
                 </button>
-                <button
-                    className={`btn primary ${publishing ? 'loading' : ''}`}
-                    onClick={onPublish}
-                    disabled={publishing || targets.length === 0}
-                >
-                    {publications.length ? 'Publish as new post' : 'Publish'}
-                    {targets.length > 0 && (
-                        <span className="count"> ({targets.length})</span>
-                    )}
-                </button>
-                <button
-                    className={`btn ${scheduling ? 'loading' : ''}`}
-                    onClick={openSchedule}
-                    disabled={scheduling || targets.length === 0}
-                >
-                    Schedule publish
-                </button>
+                {canPublish ? (
+                    <>
+                        <button
+                            className={`btn primary ${publishing ? 'loading' : ''}`}
+                            onClick={onPublish}
+                            disabled={publishing || targets.length === 0}
+                        >
+                            {publications.length
+                                ? 'Publish as new post'
+                                : 'Publish'}
+                            {targets.length > 0 && (
+                                <span className="count"> ({targets.length})</span>
+                            )}
+                        </button>
+                        <button
+                            className={`btn ${scheduling ? 'loading' : ''}`}
+                            onClick={openSchedule}
+                            disabled={scheduling || targets.length === 0}
+                        >
+                            Schedule publish
+                        </button>
+                    </>
+                ) : (
+                    <p className="muted">
+                        You don't have permission to publish in this workspace.
+                    </p>
+                )}
             </div>
 
             {scheduleOpen && (

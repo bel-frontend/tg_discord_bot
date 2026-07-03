@@ -5,3 +5,6 @@ public
 .env
 *.log
 temp
+.DS_Store
+package-lock.json
+frontend/package-lock.json

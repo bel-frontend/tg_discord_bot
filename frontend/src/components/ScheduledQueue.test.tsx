@@ -1,6 +1,26 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { ScheduledQueue } from './ScheduledQueue';
+import { MeProvider } from '../meContext';
+import type { Me } from '../../../shared/types';
+
+const ownerMe: Me = {
+    user: { id: 'owner-1', email: 'owner@example.com' },
+    accountId: 'owner-1',
+    role: 'owner',
+    permissions: {
+        channelAccess: 'all',
+        canPublish: true,
+        canDelete: true,
+        canManageChannels: true,
+        canManageMembers: true,
+    },
+    emailVerified: true,
+};
+
+function renderWithOwner(ui: React.ReactElement) {
+    return render(<MeProvider me={ownerMe}>{ui}</MeProvider>);
+}
 
 const loadScheduledPublications = vi.fn(async () => undefined);
 const cancelScheduledPublication = vi.fn(async () => undefined);
@@ -46,7 +66,7 @@ describe('ScheduledQueue', () => {
     it('opens archive rows with both draft id and publication id', async () => {
         const onOpenDraft = vi.fn();
 
-        render(<ScheduledQueue onOpenDraft={onOpenDraft} />);
+        renderWithOwner(<ScheduledQueue onOpenDraft={onOpenDraft} />);
 
         fireEvent.click(screen.getByRole('button', { name: /archive/i }));
         fireEvent.click(screen.getByText('Published post'));
@@ -64,7 +84,7 @@ describe('ScheduledQueue', () => {
         vi.spyOn(window, 'confirm').mockReturnValueOnce(true);
         deleteArchivePublication.mockClear();
 
-        render(<ScheduledQueue onOpenDraft={onOpenDraft} />);
+        renderWithOwner(<ScheduledQueue onOpenDraft={onOpenDraft} />);
 
         fireEvent.click(screen.getByRole('button', { name: /archive/i }));
         fireEvent.click(screen.getAllByRole('button', { name: /delete/i })[1]);

@@ -12,6 +12,8 @@ import {
 import { useToast } from '../toast';
 import { usePlatforms } from '../hooks/usePlatforms';
 import { PageLayout } from '../layouts/PageLayout';
+import { useMe } from '../meContext';
+import { MembersPanel } from './MembersPanel';
 
 const LINK_PATTERN = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g;
 
@@ -119,6 +121,11 @@ function ConfigFieldRow({
 
 export function SettingsPage() {
     const toast = useToast();
+    const me = useMe();
+    const canManageChannels =
+        me?.role === 'owner' || me?.permissions.canManageChannels === true;
+    const canManageMembers =
+        me?.role === 'owner' || me?.permissions.canManageMembers === true;
     const { platforms, loadPlatforms } = usePlatforms();
     const [configs, setConfigs] = useState<PlatformConfigStatus[]>([]);
     const [drafts, setDrafts] = useState<Record<string, Record<string, string>>>(
@@ -266,7 +273,7 @@ export function SettingsPage() {
                     </p>
                 </section>
 
-                {platforms.length === 0 ? (
+                {platforms.length === 0 && !canManageMembers ? (
                     <p className="muted">No platforms are registered.</p>
                 ) : (
                     <>
@@ -286,9 +293,22 @@ export function SettingsPage() {
                                     {platform.name}
                                 </button>
                             ))}
+                            {canManageMembers && (
+                                <button
+                                    type="button"
+                                    className={`settings-tab ${
+                                        activeTab === 'members' ? 'active' : ''
+                                    }`}
+                                    onClick={() => setActiveTab('members')}
+                                >
+                                    <span>👥</span> Members
+                                </button>
+                            )}
                         </div>
 
-                        {activePlatform && (
+                        {activeTab === 'members' && <MembersPanel />}
+
+                        {activeTab !== 'members' && activePlatform && (
                             <section
                                 className="settings-platform-panel"
                                 key={activePlatform.id}
@@ -326,6 +346,14 @@ export function SettingsPage() {
                                             {activePlatform.setup.summary}
                                         </p>
 
+                                        {!canManageChannels && (
+                                            <p className="muted">
+                                                You don't have permission to
+                                                edit platform settings in this
+                                                workspace.
+                                            </p>
+                                        )}
+
                                         {activePlatform.setup.configFields
                                             ?.length ? (
                                             <form
@@ -335,6 +363,10 @@ export function SettingsPage() {
                                                     save(activePlatform.id);
                                                 }}
                                             >
+                                                <fieldset
+                                                    disabled={!canManageChannels}
+                                                    className="settings-form-fieldset"
+                                                >
                                                 <div className="settings-form-fields">
                                                     {activePlatform.setup.configFields.map(
                                                         (field) => {
@@ -438,6 +470,7 @@ export function SettingsPage() {
                                                         </button>
                                                     )}
                                                 </div>
+                                                </fieldset>
                                             </form>
                                         ) : (
                                             <p className="muted">

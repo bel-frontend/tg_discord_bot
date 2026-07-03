@@ -5,6 +5,7 @@ import type {
 } from '../../../shared/types';
 import { findChannelName } from '../lib/channels';
 import { platformIcon } from './ChannelPicker';
+import { useMe } from '../meContext';
 
 interface Props {
     publications: Publication[];
@@ -37,6 +38,9 @@ export function PublishedTab({
     onUpdate,
     onDelete,
 }: Props) {
+    const me = useMe();
+    const canPublish = me?.role === 'owner' || me?.permissions.canPublish === true;
+    const canDelete = me?.role === 'owner' || me?.permissions.canDelete === true;
     return (
         <div className="published-tab">
             {publications.length === 0 ? (
@@ -79,20 +83,24 @@ export function PublishedTab({
                                         {status.label}
                                     </span>
                                     <div className="pub-card-actions">
-                                        <button
-                                            className="btn small"
-                                            disabled={publishing}
-                                            onClick={() => onUpdate(publication)}
-                                        >
-                                            Update
-                                        </button>
-                                        <button
-                                            className="btn small danger"
-                                            disabled={publishing}
-                                            onClick={() => onDelete(publication)}
-                                        >
-                                            Delete
-                                        </button>
+                                        {canPublish && (
+                                            <button
+                                                className="btn small"
+                                                disabled={publishing}
+                                                onClick={() => onUpdate(publication)}
+                                            >
+                                                Update
+                                            </button>
+                                        )}
+                                        {canDelete && (
+                                            <button
+                                                className="btn small danger"
+                                                disabled={publishing}
+                                                onClick={() => onDelete(publication)}
+                                            >
+                                                Delete
+                                            </button>
+                                        )}
                                     </div>
                                 </div>
                                 <div className="pub-targets">

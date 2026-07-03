@@ -1,5 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
-import type { MemberPermissions, MemberSummary } from '../../../shared/types';
+import { useEffect, useState } from 'react';
+import type {
+    ChannelOption,
+    MemberPermissions,
+    MemberSummary,
+    PlatformMeta,
+} from '../../../shared/types';
 import {
     fetchMembers,
     inviteMember,
@@ -10,7 +15,8 @@ import {
 import { useToast } from '../toast';
 import { useMe } from '../meContext';
 import { useChannels } from '../hooks/useChannels';
-import { PageLayout } from '../layouts/PageLayout';
+import { usePlatforms } from '../hooks/usePlatforms';
+import { platformIcon } from './ChannelPicker';
 
 function emptyPermissions(): MemberPermissions {
     return {
@@ -47,140 +53,222 @@ function statusTone(status: MemberSummary['status']): 'ok' | 'partial' | 'fail' 
 interface PermissionsFormProps {
     permissions: MemberPermissions;
     onChange: (next: MemberPermissions) => void;
-    channelOptions: { id: string; name: string; platform: string }[];
+    channels: ChannelOption[];
+    platforms: PlatformMeta[];
 }
 
-function PermissionsForm({
-    permissions,
-    onChange,
-    channelOptions,
-}: PermissionsFormProps) {
-    const allChannels = permissions.channelAccess === 'all';
-    const selected = new Set(
-        allChannels ? [] : (permissions.channelAccess as string[]),
-    );
+interface ChannelAccessPickerProps {
+    channelAccess: 'all' | string[];
+    onChange: (next: 'all' | string[]) => void;
+    channels: ChannelOption[];
+    platforms: PlatformMeta[];
+}
 
-    function toggleChannel(id: string) {
-        const current = allChannels ? [] : (permissions.channelAccess as string[]);
-        const next = current.includes(id)
-            ? current.filter((c) => c !== id)
-            : [...current, id];
-        onChange({ ...permissions, channelAccess: next });
+function ChannelAccessPicker({
+    channelAccess,
+    onChange,
+    channels,
+    platforms,
+}: ChannelAccessPickerProps) {
+    const allChannels = channelAccess === 'all';
+    const selectedIds = new Set(allChannels ? [] : channelAccess);
+
+    const groups = new Map<string, { name: string; items: ChannelOption[] }>();
+    for (const ch of channels) {
+        if (!ch.resourceId) continue;
+        const group = groups.get(ch.platform) ?? {
+            name: ch.platformName,
+            items: [],
+        };
+        group.items.push(ch);
+        groups.set(ch.platform, group);
+    }
+
+    function toggleChannel(resourceId: string) {
+        const current = allChannels ? [] : channelAccess;
+        onChange(
+            current.includes(resourceId)
+                ? current.filter((id) => id !== resourceId)
+                : [...current, resourceId],
+        );
+    }
+
+    function toggleGroup(items: ChannelOption[]) {
+        const ids = items.map((ch) => ch.resourceId as string);
+        const current = allChannels ? [] : channelAccess;
+        const allOn = ids.every((id) => current.includes(id));
+        onChange(
+            allOn
+                ? current.filter((id) => !ids.includes(id))
+                : [...new Set([...current, ...ids])],
+        );
     }
 
     return (
-        <div className="settings-form-fields">
-            <label>
-                <span>Channel access</span>
-                <select
-                    value={allChannels ? 'all' : 'specific'}
-                    onChange={(e) =>
-                        onChange({
-                            ...permissions,
-                            channelAccess:
-                                e.target.value === 'all' ? 'all' : [],
-                        })
-                    }
-                >
-                    <option value="all">All channels</option>
-                    <option value="specific">Specific channels</option>
-                </select>
-            </label>
+        <div className="channel-access">
+            <div className="permission-list">
+                <label className="permission-row">
+                    <span className="permission-row-text">
+                        <span className="permission-row-title">
+                            All channels
+                        </span>
+                        <span className="permission-row-desc">
+                            Access to every channel, including ones added
+                            later.
+                        </span>
+                    </span>
+                    <input
+                        type="checkbox"
+                        className="switch"
+                        checked={allChannels}
+                        onChange={(e) =>
+                            onChange(e.target.checked ? 'all' : [])
+                        }
+                    />
+                </label>
+            </div>
 
             {!allChannels && (
                 <div className="channels">
-                    <div className="chan-items">
-                        {channelOptions.length === 0 ? (
-                            <p className="muted">No resources configured yet.</p>
-                        ) : (
-                            channelOptions.map((ch) => (
-                                <label
-                                    key={ch.id}
-                                    className={`chip ${
-                                        selected.has(ch.id) ? 'selected' : ''
-                                    }`}
-                                >
-                                    <input
-                                        type="checkbox"
-                                        checked={selected.has(ch.id)}
-                                        onChange={() => toggleChannel(ch.id)}
-                                    />
-                                    <span>{ch.name}</span>
-                                </label>
-                            ))
-                        )}
-                    </div>
+                    {groups.size === 0 ? (
+                        <p className="muted">No resources configured yet.</p>
+                    ) : (
+                        [...groups.entries()].map(([platform, group]) => (
+                            <div className="chan-group" key={platform}>
+                                <div className="chan-group-head">
+                                    <span className="chan-plat">
+                                        {platformIcon(platform, platforms)}{' '}
+                                        {group.name}
+                                    </span>
+                                    <button
+                                        type="button"
+                                        className="chan-all btn small"
+                                        onClick={() => toggleGroup(group.items)}
+                                    >
+                                        All
+                                    </button>
+                                </div>
+                                <div className="chan-items">
+                                    {group.items.map((ch) => {
+                                        const checked = selectedIds.has(
+                                            ch.resourceId as string,
+                                        );
+                                        return (
+                                            <label
+                                                key={ch.resourceId}
+                                                className={`chip ${
+                                                    checked ? 'selected' : ''
+                                                }`}
+                                            >
+                                                <input
+                                                    type="checkbox"
+                                                    checked={checked}
+                                                    onChange={() =>
+                                                        toggleChannel(
+                                                            ch.resourceId as string,
+                                                        )
+                                                    }
+                                                />
+                                                <span>{ch.name}</span>
+                                            </label>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        ))
+                    )}
                 </div>
             )}
-
-            <label>
-                <span className="permission-checkbox">
-                    <input
-                        type="checkbox"
-                        checked={permissions.canPublish}
-                        onChange={(e) =>
-                            onChange({
-                                ...permissions,
-                                canPublish: e.target.checked,
-                            })
-                        }
-                    />
-                    Can publish / schedule
-                </span>
-            </label>
-            <label>
-                <span className="permission-checkbox">
-                    <input
-                        type="checkbox"
-                        checked={permissions.canDelete}
-                        onChange={(e) =>
-                            onChange({
-                                ...permissions,
-                                canDelete: e.target.checked,
-                            })
-                        }
-                    />
-                    Can delete publications / cancel scheduled
-                </span>
-            </label>
-            <label>
-                <span className="permission-checkbox">
-                    <input
-                        type="checkbox"
-                        checked={permissions.canManageChannels}
-                        onChange={(e) =>
-                            onChange({
-                                ...permissions,
-                                canManageChannels: e.target.checked,
-                            })
-                        }
-                    />
-                    Can manage channels &amp; platform settings
-                </span>
-            </label>
-            <label>
-                <span className="permission-checkbox">
-                    <input
-                        type="checkbox"
-                        checked={permissions.canManageMembers}
-                        onChange={(e) =>
-                            onChange({
-                                ...permissions,
-                                canManageMembers: e.target.checked,
-                            })
-                        }
-                    />
-                    Can manage members
-                </span>
-            </label>
         </div>
     );
 }
 
-export function MembersPage() {
+interface PermissionToggleDef {
+    key: 'canPublish' | 'canDelete' | 'canManageChannels' | 'canManageMembers';
+    title: string;
+    description: string;
+}
+
+const PERMISSION_TOGGLES: PermissionToggleDef[] = [
+    {
+        key: 'canPublish',
+        title: 'Publish & schedule',
+        description: 'Post to allowed channels and queue scheduled posts.',
+    },
+    {
+        key: 'canDelete',
+        title: 'Delete publications',
+        description: 'Delete published posts and cancel scheduled ones.',
+    },
+    {
+        key: 'canManageChannels',
+        title: 'Manage channels & platforms',
+        description: 'Add or remove channels and edit bot credentials.',
+    },
+    {
+        key: 'canManageMembers',
+        title: 'Manage members',
+        description: 'Invite, edit, and revoke other teammates.',
+    },
+];
+
+function PermissionsForm({
+    permissions,
+    onChange,
+    channels,
+    platforms,
+}: PermissionsFormProps) {
+    return (
+        <div className="permissions-form">
+            <div className="field">
+                <span className="field-label">Channel access</span>
+                <ChannelAccessPicker
+                    channelAccess={permissions.channelAccess}
+                    onChange={(channelAccess) =>
+                        onChange({ ...permissions, channelAccess })
+                    }
+                    channels={channels}
+                    platforms={platforms}
+                />
+            </div>
+
+            <div className="field">
+                <span className="field-label">Permissions</span>
+                <div className="permission-list">
+                    {PERMISSION_TOGGLES.map((toggle) => (
+                        <label className="permission-row" key={toggle.key}>
+                            <span className="permission-row-text">
+                                <span className="permission-row-title">
+                                    {toggle.title}
+                                </span>
+                                <span className="permission-row-desc">
+                                    {toggle.description}
+                                </span>
+                            </span>
+                            <input
+                                type="checkbox"
+                                className="switch"
+                                checked={permissions[toggle.key]}
+                                onChange={(e) =>
+                                    onChange({
+                                        ...permissions,
+                                        [toggle.key]: e.target.checked,
+                                    })
+                                }
+                            />
+                        </label>
+                    ))}
+                </div>
+            </div>
+        </div>
+    );
+}
+
+export function MembersPanel() {
     const toast = useToast();
     const me = useMe();
     const { channels, loadChannels } = useChannels();
+    const { platforms, loadPlatforms } = usePlatforms();
     const [members, setMembers] = useState<MemberSummary[]>([]);
     const [loading, setLoading] = useState(true);
     const [email, setEmail] = useState('');
@@ -196,26 +284,14 @@ export function MembersPage() {
     const canManageMembers =
         me?.role === 'owner' || me?.permissions.canManageMembers === true;
 
-    const channelOptions = useMemo(
-        () =>
-            channels
-                .filter((ch) => ch.resourceId)
-                .map((ch) => ({
-                    id: ch.resourceId as string,
-                    name: ch.name,
-                    platform: ch.platform,
-                })),
-        [channels],
-    );
-
     useEffect(() => {
         if (!canManageMembers) return;
         setLoading(true);
-        Promise.all([fetchMembers(), loadChannels()])
+        Promise.all([fetchMembers(), loadChannels(), loadPlatforms()])
             .then(([list]) => setMembers(list))
             .catch((err) => toast(err.message, 'error'))
             .finally(() => setLoading(false));
-    }, [canManageMembers, loadChannels, toast]);
+    }, [canManageMembers, loadChannels, loadPlatforms, toast]);
 
     async function submitInvite(e: React.FormEvent) {
         e.preventDefault();
@@ -295,19 +371,17 @@ export function MembersPage() {
 
     if (!canManageMembers) {
         return (
-            <PageLayout className="resource-page">
-                <section className="resource-panel">
-                    <h2>Members</h2>
-                    <p className="muted">
-                        You don't have permission to manage members.
-                    </p>
-                </section>
-            </PageLayout>
+            <section className="resource-panel">
+                <h2>Members</h2>
+                <p className="muted">
+                    You don't have permission to manage members.
+                </p>
+            </section>
         );
     }
 
     return (
-        <PageLayout className="resource-page">
+        <>
             <section className="resource-panel">
                 <h2>Invite a teammate</h2>
                 <p className="muted">
@@ -330,7 +404,8 @@ export function MembersPage() {
                     <PermissionsForm
                         permissions={permissions}
                         onChange={setPermissions}
-                        channelOptions={channelOptions}
+                        channels={channels}
+                        platforms={platforms}
                     />
                     <div className="settings-form-actions">
                         <button className="btn primary" disabled={inviting}>
@@ -362,7 +437,8 @@ export function MembersPage() {
                                                     emptyPermissions()
                                                 }
                                                 onChange={setEditingPermissions}
-                                                channelOptions={channelOptions}
+                                                channels={channels}
+                                                platforms={platforms}
                                             />
                                         </div>
                                         <div className="member-edit-actions">
@@ -447,6 +523,6 @@ export function MembersPage() {
                     </div>
                 )}
             </section>
-        </PageLayout>
+        </>
     );
 }

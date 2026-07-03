@@ -6,6 +6,7 @@ import { platformIcon } from './ChannelPicker';
 import { useChannels } from '../hooks/useChannels';
 import { usePlatforms } from '../hooks/usePlatforms';
 import { PageLayout } from '../layouts/PageLayout';
+import { useMe } from '../meContext';
 
 // Fallback platform names for ids without a registered adapter yet — lets users
 // pre-provision channel resources before the platform module exists.
@@ -20,6 +21,9 @@ const PLATFORM_PLACEHOLDERS = [
 
 export function ResourceManager() {
     const toast = useToast();
+    const me = useMe();
+    const canManageChannels =
+        me?.role === 'owner' || me?.permissions.canManageChannels === true;
     const { channels, loadChannels } = useChannels();
     const { platforms, loadPlatforms } = usePlatforms();
     const [platform, setPlatform] = useState('telegram');
@@ -83,44 +87,51 @@ export function ResourceManager() {
                         tokens) are entered separately on the Settings page.
                     </p>
 
-                    <form className="resource-form" onSubmit={submit}>
-                        <label>
-                            Resource
-                            <select
-                                value={platform}
-                                onChange={(e) => setPlatform(e.target.value)}
-                            >
-                                {platformOptions.map((p) => (
-                                    <option key={p.id} value={p.id}>
-                                        {p.name}
-                                    </option>
-                                ))}
-                            </select>
-                        </label>
-                        <label>
-                            Channel name
-                            <input
-                                type="text"
-                                placeholder="Announcements"
-                                value={name}
-                                onChange={(e) => setName(e.target.value)}
-                                required
-                            />
-                        </label>
-                        <label>
-                            Channel ID / username
-                            <input
-                                type="text"
-                                placeholder="@channel or 1374368491771002970"
-                                value={channelId}
-                                onChange={(e) => setChannelId(e.target.value)}
-                                required
-                            />
-                        </label>
-                        <button className="btn primary" disabled={busy}>
-                            Add resource
-                        </button>
-                    </form>
+                    {canManageChannels ? (
+                        <form className="resource-form" onSubmit={submit}>
+                            <label>
+                                Resource
+                                <select
+                                    value={platform}
+                                    onChange={(e) => setPlatform(e.target.value)}
+                                >
+                                    {platformOptions.map((p) => (
+                                        <option key={p.id} value={p.id}>
+                                            {p.name}
+                                        </option>
+                                    ))}
+                                </select>
+                            </label>
+                            <label>
+                                Channel name
+                                <input
+                                    type="text"
+                                    placeholder="Announcements"
+                                    value={name}
+                                    onChange={(e) => setName(e.target.value)}
+                                    required
+                                />
+                            </label>
+                            <label>
+                                Channel ID / username
+                                <input
+                                    type="text"
+                                    placeholder="@channel or 1374368491771002970"
+                                    value={channelId}
+                                    onChange={(e) => setChannelId(e.target.value)}
+                                    required
+                                />
+                            </label>
+                            <button className="btn primary" disabled={busy}>
+                                Add resource
+                            </button>
+                        </form>
+                    ) : (
+                        <p className="muted">
+                            You don't have permission to manage channels in this
+                            workspace.
+                        </p>
+                    )}
 
                     <div className="resource-list">
                         {channels.map((channel) => (
@@ -142,7 +153,7 @@ export function ResourceManager() {
                                             ' · server default'}
                                     </div>
                                 </div>
-                                {channel.resourceId ? (
+                                {channel.resourceId && canManageChannels ? (
                                     <button
                                         className="btn danger"
                                         onClick={() => remove(channel)}

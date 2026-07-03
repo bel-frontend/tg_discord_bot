@@ -13,12 +13,21 @@ function fromAddress(): string {
     return process.env.EMAIL_FROM || 'Composer <onboarding@resend.dev>';
 }
 
-/** Sends via Resend; logs and swallows failures so callers never fail their own operation on email trouble. */
-async function send(to: string, subject: string, html: string): Promise<void> {
+/**
+ * Sends via Resend; logs and swallows failures so callers never fail their own
+ * operation on email trouble. `link` is logged when RESEND_API_KEY is unset so
+ * the invite/verify flow stays testable in local dev without a real provider.
+ */
+async function send(
+    to: string,
+    subject: string,
+    html: string,
+    link: string,
+): Promise<void> {
     const resend = getClient();
     if (!resend) {
         console.warn(
-            `RESEND_API_KEY is not set — skipping email "${subject}" to ${to}`,
+            `RESEND_API_KEY is not set — skipping email "${subject}" to ${to}. Link: ${link}`,
         );
         return;
     }
@@ -45,6 +54,7 @@ export async function sendInviteEmail(
         `<p>${params.inviterEmail} invited you to join their Composer workspace.</p>` +
             `<p><a href="${params.inviteUrl}">Accept the invite</a></p>` +
             `<p>This link expires in 7 days.</p>`,
+        params.inviteUrl,
     );
 }
 
@@ -58,5 +68,6 @@ export async function sendVerificationEmail(
         `<p>Confirm your email address to finish setting up your Composer account.</p>` +
             `<p><a href="${params.verifyUrl}">Confirm email</a></p>` +
             `<p>This link expires in 24 hours.</p>`,
+        params.verifyUrl,
     );
 }

@@ -840,6 +840,164 @@ tg-spoiler {
     font-size: 13px;
     color: var(--text-dim);
 }
+.field-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-dim);
+}
+
+/* ---------- permissions form (invite / member editor) ---------- */
+.permissions-form {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+/* Channel-access picker: plain checklist grouped by platform, not a <select> —
+   scoped under .channel-access rather than reusing .chip's pill look, since
+   here it's a settings list rather than a compact tag/filter picker.
+   Note: .chip/.chan-items are <label>s inside .settings-form, whose
+   ".settings-form label" rule outranks a single class — two-class selectors
+   here reliably win instead of silently losing flex-direction/gap to it. */
+.channel-access {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+.channel-access .channels {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+.channel-access .chan-items {
+    display: flex;
+    flex-direction: column;
+    flex-wrap: nowrap;
+    gap: 2px;
+}
+.channel-access .chip {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 8px 10px;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    border: 1px solid transparent;
+    cursor: pointer;
+    font-size: 13px;
+    transition: background 0.15s;
+}
+.channel-access .chip:hover {
+    background: var(--bg-elev-2);
+}
+.channel-access .chip.selected {
+    background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+.channel-access .chip input {
+    accent-color: var(--accent);
+}
+.permission-list {
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+    background: var(--bg-elev);
+}
+/* Specificity note: this is a <label> (and these are nested <span>s) inside
+   .settings-form, whose ".settings-form label"/"label span" rules outrank a
+   single class selector — prefix with .permission-list so ours wins instead
+   of silently losing flex-direction/gap/color to the generic form styles. */
+.permission-list .permission-row {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 12px 14px;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+.permission-list .permission-row:hover {
+    background: var(--bg-elev-2);
+}
+.permission-list .permission-row + .permission-row {
+    border-top: 1px solid var(--border);
+}
+.permission-list .permission-row-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+.permission-list .permission-row-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+}
+.permission-list .permission-row-desc {
+    font-size: 12px;
+    color: var(--text-dim);
+}
+
+/* Toggle switch — a checkbox styled as an on/off pill, standard pattern for
+   boolean permission settings (clearer at a glance than a bare checkbox). */
+.switch {
+    appearance: none;
+    -webkit-appearance: none;
+    position: relative;
+    flex-shrink: 0;
+    width: 40px;
+    height: 24px;
+    margin: 0;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    background: var(--bg-elev-2);
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+}
+.switch::before {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--text-dim);
+    transition: transform 0.15s, background 0.15s;
+}
+.switch:checked {
+    background: var(--accent);
+    border-color: var(--accent);
+}
+.switch:checked::before {
+    transform: translateX(16px);
+    background: #fff;
+}
+.switch:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
+.member-edit {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    width: 100%;
+}
+.member-edit-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+}
+.member-row-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
 
 /* ---------- image uploader ---------- */
 .dropzone {
@@ -1207,6 +1365,20 @@ tg-spoiler {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
     gap: 12px;
+}
+/* Reset the browser's default <fieldset> border/padding/min-width — it's
+   used here only to disable the form's inputs as a group, not to draw a box. */
+.settings-form-fieldset {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    margin: 0;
+    padding: 0;
+    border: none;
+    min-width: 0;
+}
+.settings-form-fieldset:disabled {
+    opacity: 0.6;
 }
 .settings-form label {
     display: flex;
