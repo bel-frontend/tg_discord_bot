@@ -1,5 +1,3 @@
-version: "3.8"
-
 services:
   tg_discord_bot:
     build: .
@@ -7,22 +5,16 @@ services:
     restart: unless-stopped
     env_file:
       - .env
+    environment:
+      PORT: "3000"
+      MONGODB_URI: ""
+      MONGODB_HOST: 10.8.0.34
+      MONGODB_PORT: "27028"
+      MONGODB_USER: admin
+      MONGODB_DB: composer
+      MONGODB_AUTH_SOURCE: admin
+      MONGODB_REPLICA_SET: rs8
     ports:
-      - "${PORT:-3000}:3000"
-    depends_on:
-      - mongo
+      - "3007:3000"
     # volumes:
     #   - ./channels.json:/app/channels.json:ro   # mount the channel mapping
-
-  mongo:
-    image: mongo:7
-    container_name: tg_discord_mongo
-    restart: unless-stopped
-    volumes:
-      - mongo_data:/data/db
-    # Expose only if you need to connect from the host:
-    # ports:
-    #   - "27017:27017"
-
-volumes:
-  mongo_data:

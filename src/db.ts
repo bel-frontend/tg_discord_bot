@@ -98,17 +98,50 @@ let platformConfigsColl: Collection<PlatformConfigDoc> | null = null;
 let publicationsColl: Collection<PublicationDoc> | null = null;
 let scheduledPublicationsColl: Collection<ScheduledPublicationDoc> | null = null;
 
+export function resolveMongoConfig(
+    env: Record<string, string | undefined> = process.env,
+): {
+    uri: string;
+    dbName: string;
+} {
+    const explicitUri = env.MONGODB_URI?.trim();
+    const explicitDbName = env.MONGODB_DB?.trim();
+    if (explicitUri) {
+        const uriDbName = new URL(explicitUri).pathname.replace(/^\//, '');
+        return {
+            uri: explicitUri,
+            dbName: explicitDbName || uriDbName || 'tg_discord_bot',
+        };
+    }
+
+    const password = env.MONGODB_PASSWORD;
+    if (!password) throw new Error('Missing MONGODB_PASSWORD');
+
+    const user = env.MONGODB_USER || 'admin';
+    const host = env.MONGODB_HOST || '10.8.0.34';
+    const port = env.MONGODB_PORT || '27028';
+    const dbName = explicitDbName || 'composer';
+    const authSource = env.MONGODB_AUTH_SOURCE || 'admin';
+    const replicaSet = env.MONGODB_REPLICA_SET || 'rs8';
+    const query = new URLSearchParams({ authSource, replicaSet });
+
+    return {
+        uri: `mongodb://${encodeURIComponent(user)}:${encodeURIComponent(
+            password,
+        )}@${host}:${port}/${dbName}?${query.toString()}`,
+        dbName,
+    };
+}
+
 export async function connect(): Promise<void> {
     if (client) return;
 
-    const uri = process.env.MONGODB_URI;
-    if (!uri) throw new Error('Missing MONGODB_URI');
+    const { uri, dbName } = resolveMongoConfig();
 
     // promoteBuffers so stored binary (uploaded images) reads back as Buffer, not Binary.
     client = new MongoClient(uri, { promoteBuffers: true });
     await client.connect();
 
-    const dbName = process.env.MONGODB_DB || 'tg_discord_bot';
     const db = client.db(dbName);
     usersColl = db.collection<UserDoc>('users');
     draftsColl = db.collection<DraftDoc>('drafts');
