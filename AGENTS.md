@@ -41,7 +41,7 @@ root `package.json`.
 
 - Do not commit `.env`, tokens, passwords, private keys, or real channel IDs
   unless the user explicitly asks for it.
-- Use `.env.example` and `channels.example.json` for configuration examples.
+- Use `.env.example` for configuration examples.
 - Do not overwrite unrelated work in the working tree. If a file is already
   modified, inspect it before editing and preserve changes unrelated to the
   task.
@@ -159,7 +159,7 @@ shared types, and explicit registry APIs.
 ## Configuration And Data
 
 - `.env.example` is the source of truth for documenting environment variables.
-- `channels.example.json` is the example shape for channel resources.
+- Channel resources are stored in MongoDB and managed through the Resources UI.
 - `public/` is the frontend build output. Do not edit it by hand unless the
   task is specifically about static build artifacts.
 - MongoDB stores users, drafts, uploads, publications, and channel resources.

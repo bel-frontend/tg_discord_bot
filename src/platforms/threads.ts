@@ -5,7 +5,6 @@ import type {
     PublishContent,
     PublishResult,
 } from './types';
-import { getConfiguredChannels } from '../channels';
 import { getPlatformConfigValues } from '../platformConfigs';
 import {
     markdownToThreadsPreviewHtml,
@@ -122,8 +121,6 @@ export class ThreadsPlatform implements Platform {
     }
 
     listChannels(): Promise<Channel[]> {
-        const configured = getConfiguredChannels(this.id);
-        if (configured.length) return Promise.resolve(configured);
         if (!this.userId) return Promise.resolve([]);
         return Promise.resolve([{ id: this.userId, name: 'Threads profile' }]);
     }

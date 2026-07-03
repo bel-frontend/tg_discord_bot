@@ -54,16 +54,16 @@ PORT=3000
 JWT_SECRET=please-change-this-to-a-long-random-string
 
 # MongoDB. The app builds this URI:
-# mongodb://admin:${MONGODB_PASSWORD}@10.8.0.34:27028/composer?authSource=admin&replicaSet=rs8
+# mongodb://${MONGODB_USER}:${MONGODB_PASSWORD}@${MONGODB_HOST}:${MONGODB_PORT}/${MONGODB_DB}?authSource=${MONGODB_AUTH_SOURCE}&replicaSet=${MONGODB_REPLICA_SET}
 MONGODB_PASSWORD=your-mongodb-password
-MONGODB_HOST=10.8.0.34
-MONGODB_PORT=27028
-MONGODB_USER=admin
-MONGODB_DB=composer
+MONGODB_HOST=db.example.internal
+MONGODB_PORT=27017
+MONGODB_USER=your-mongodb-user
+MONGODB_DB=your-database-name
 MONGODB_AUTH_SOURCE=admin
-MONGODB_REPLICA_SET=rs8
+MONGODB_REPLICA_SET=your-replica-set
 # Optional: override the generated URI completely.
-# MONGODB_URI=mongodb://admin:password@10.8.0.34:27028/composer?authSource=admin&replicaSet=rs8
+# MONGODB_URI=mongodb://user:password@db.example.internal:27017/app?authSource=admin&replicaSet=rs0
 
 DISCORD_BOT_TOKEN=your-discord-bot-token
 TELEGRAM_BOT_TOKEN=your-telegram-bot-token
@@ -73,22 +73,16 @@ THREADS_ACCESS_TOKEN=your-long-lived-threads-user-access-token
 THREADS_USER_ID=your-threads-user-id
 # Optional: force the HTTPS callback URL registered in Meta, useful behind a tunnel/proxy.
 # THREADS_OAUTH_REDIRECT_URI=https://your-domain.example/api/threads/oauth/callback
-
-# Channels shown in the picker (comma-separated; entry = "id" or "id|Friendly name")
-TELEGRAM_CHANNEL_USERNAMES="@my_channel|News (TG), 553518183|Team chat"
-DISCORD_CHANNEL_IDS="1374368491771002970|announcements"
-DISCORD_GUILD_ID=123456789012345678        # optional: also pulls the server's channels live
-THREADS_CHANNEL_IDS="12345678901234567|Threads profile"
 ```
 
-The picker's channels come from these env lists. Each entry is a bare id/username or
-`id|Friendly name` (the name is shown; the id is used to publish). Telegram bots cannot
-enumerate their own channels, so Telegram is always listed here; Discord additionally pulls the
-`DISCORD_GUILD_ID` server's text channels live (with real `#names`) and merges them in.
-Threads publishes to the configured Threads profile id.
+Do not commit `.env`, real tokens, passwords, or production resource IDs. Keep real values in
+server-side environment variables or in the app's authenticated Settings/Resources pages.
 
-You can also add channels from an optional `channels.json` (copy `channels.example.json`); env
-entries take precedence.
+Add the channels, groups, servers, or profiles you want to publish to on the authenticated
+Resources page. They are stored in MongoDB per user. Telegram bots cannot enumerate the channels
+they are in, so Telegram channels must be added there manually. Discord can additionally pull a
+configured server's text channels live with real `#names`; set the Discord guild id in Settings
+if you want that.
 
 ### Threads OAuth callbacks
 
@@ -148,9 +142,8 @@ Open:
 http://localhost:3007
 ```
 
-Inside Docker, the app still listens on port `3000`; compose maps it as `3007:3000` and overrides
-the Mongo connection parts to use database `composer` on `10.8.0.34:27028`. Put only the secret
-password in `.env`:
+Inside Docker, the app still listens on port `3000`; compose maps it as `3007:3000` and sets the
+non-secret Mongo connection parts. Put only the secret password in `.env`:
 
 ```env
 MONGODB_PASSWORD=your-real-password
@@ -159,12 +152,10 @@ MONGODB_PASSWORD=your-real-password
 The app builds:
 
 ```text
-mongodb://admin:${MONGODB_PASSWORD}@10.8.0.34:27028/composer?authSource=admin&replicaSet=rs8
+mongodb://${MONGODB_USER}:${MONGODB_PASSWORD}@${MONGODB_HOST}:${MONGODB_PORT}/${MONGODB_DB}?authSource=${MONGODB_AUTH_SOURCE}&replicaSet=${MONGODB_REPLICA_SET}
 ```
 
 Data persistence is handled by that external MongoDB deployment.
-
-If you use `channels.json`, mount it by uncommenting the volume in `docker-compose.yml`.
 
 > **Note:** on Bun 1.2.8 the MongoDB driver is pinned to `mongodb@6` with a `bson@6.7.0` override
 > (`package.json`) to avoid an unimplemented `node:v8` API in newer `bson`.

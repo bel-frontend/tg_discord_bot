@@ -8,7 +8,6 @@ import type {
     PublishResult,
     ValidationIssue,
 } from './types';
-import { getConfiguredChannels } from '../channels';
 import { getPlatformConfigValues } from '../platformConfigs';
 import { markdownToTelegramHtml } from './telegram/markdown';
 import { splitTextIntoChunks, TELEGRAM_LIMIT } from '../chunk';
@@ -153,8 +152,9 @@ export class TelegramPlatform implements Platform {
     }
 
     async listChannels(): Promise<Channel[]> {
-        // Telegram bots cannot enumerate the channels they're in — use the config.
-        return getConfiguredChannels(this.id);
+        // Telegram bots cannot enumerate the channels they're in.
+        // Add Telegram channels on the Resources page so they are stored in MongoDB.
+        return [];
     }
 
     async publish(

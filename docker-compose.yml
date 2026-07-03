@@ -16,5 +16,3 @@ services:
       MONGODB_REPLICA_SET: rs8
     ports:
       - "3007:3000"
-    # volumes:
-    #   - ./channels.json:/app/channels.json:ro   # mount the channel mapping

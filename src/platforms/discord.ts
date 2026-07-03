@@ -8,7 +8,6 @@ import type {
     PublishedMessageRef,
     PublishResult,
 } from './types';
-import { getConfiguredChannels } from '../channels';
 import { getPlatformConfigValues } from '../platformConfigs';
 import {
     markdownToDiscord,
@@ -133,8 +132,7 @@ export class DiscordPlatform implements Platform {
     }
 
     async listChannels(): Promise<Channel[]> {
-        const configured = getConfiguredChannels(this.id);
-        if (!this.guildId) return configured;
+        if (!this.guildId) return [];
 
         try {
             const client = await this.getClient();
@@ -146,15 +144,10 @@ export class DiscordPlatform implements Platform {
                     live.push({ id: channel.id, name: `#${channel.name}` });
                 }
             }
-            // Merge: live channels first, then any configured ones not already present.
-            const seen = new Set(live.map((c) => c.id));
-            for (const c of configured) {
-                if (!seen.has(c.id)) live.push(c);
-            }
             return live;
         } catch (error) {
             console.error('Failed to fetch Discord channels live:', error);
-            return configured;
+            return [];
         }
     }
 
