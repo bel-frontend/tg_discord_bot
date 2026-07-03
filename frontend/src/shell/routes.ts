@@ -1,10 +1,16 @@
-export type AppRoute = 'composer' | 'resources' | 'scheduled' | 'settings';
+export type AppRoute =
+    | 'composer'
+    | 'resources'
+    | 'scheduled'
+    | 'settings'
+    | 'members';
 
 export const APP_ROUTES: Record<AppRoute, string> = {
     composer: '/',
     resources: '/resources',
     scheduled: '/scheduled',
     settings: '/settings',
+    members: '/members',
 };
 
 export function routeFromPath(pathname: string): AppRoute {
@@ -16,6 +22,16 @@ export function routeFromPath(pathname: string): AppRoute {
 
 export function editIdFromPath(pathname: string): string | undefined {
     const match = pathname.match(/^\/edit\/([^/?#]+)\/?$/);
+    return match ? decodeURIComponent(match[1]) : undefined;
+}
+
+export function inviteTokenFromPath(pathname: string): string | undefined {
+    const match = pathname.match(/^\/invite\/([^/?#]+)\/?$/);
+    return match ? decodeURIComponent(match[1]) : undefined;
+}
+
+export function verifyEmailTokenFromPath(pathname: string): string | undefined {
+    const match = pathname.match(/^\/verify-email\/([^/?#]+)\/?$/);
     return match ? decodeURIComponent(match[1]) : undefined;
 }
 

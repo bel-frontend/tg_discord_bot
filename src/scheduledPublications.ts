@@ -41,31 +41,39 @@ function parseScheduledAt(value: unknown): Date {
     return date;
 }
 
+/** Lists the whole account's shared scheduled-publication queue. */
 export async function listScheduledPublications(
-    userId: string,
+    accountId: string,
 ): Promise<ScheduledPublication[]> {
     const docs = await scheduledPublications()
-        .find({ userId })
+        .find({ accountId })
         .sort({ scheduledAt: 1, createdAt: 1 })
         .toArray();
     return docs.map(serialize);
 }
 
+/**
+ * `authorId` is the member scheduling it (drafts/uploads stay private, so firing
+ * the schedule later must read the draft as that member); `accountId` is the
+ * workspace it publishes under (shared platform credentials + publication history).
+ */
 export async function createScheduledPublication(
-    userId: string,
+    authorId: string,
+    accountId: string,
     input: ScheduledPublicationInput,
 ): Promise<ScheduledPublication> {
     const draftId = String(input.draftId ?? '');
     if (!ObjectId.isValid(draftId)) throw new Error('Draft is required');
 
-    const draft = await getDraft(userId, draftId);
+    const draft = await getDraft(authorId, draftId);
     if (!draft) throw new Error('Draft not found');
     if (!draft.targets.length) throw new Error('No channels selected');
 
     const scheduledAt = parseScheduledAt(input.scheduledAt);
     const now = new Date();
     const doc: ScheduledPublicationDoc = {
-        userId,
+        userId: authorId,
+        accountId,
         draftId,
         title: draft.title || 'Untitled',
         scheduledAt,
@@ -79,14 +87,14 @@ export async function createScheduledPublication(
 }
 
 export async function cancelScheduledPublication(
-    userId: string,
+    accountId: string,
     id: string,
 ): Promise<ScheduledPublication | null> {
     if (!ObjectId.isValid(id)) return null;
     const doc = await scheduledPublications().findOneAndUpdate(
         {
             _id: new ObjectId(id),
-            userId,
+            accountId,
             status: 'scheduled',
         },
         {
@@ -100,12 +108,16 @@ export async function cancelScheduledPublication(
     return doc ? serialize(doc) : null;
 }
 
+/** Draft-linked cleanup — scoped to the draft's actual author, not the whole account. */
 export async function deleteScheduledPublicationsForDraft(
-    userId: string,
+    authorId: string,
     draftId: string,
 ): Promise<number> {
     if (!ObjectId.isValid(draftId)) return 0;
-    const result = await scheduledPublications().deleteMany({ userId, draftId });
+    const result = await scheduledPublications().deleteMany({
+        userId: authorId,
+        draftId,
+    });
     return result.deletedCount;
 }
 
@@ -138,7 +150,7 @@ export async function publishScheduledPublication(
         if (!draft) throw new Error('Draft not found');
 
         const images = await resolveImages(doc.userId, draft.imageIds);
-        const { results, publication } = await executePublish(doc.userId, {
+        const { results, publication } = await executePublish(doc.accountId, {
             draftId: draft.id,
             title: draft.title || 'Untitled',
             markdown: draft.markdown,

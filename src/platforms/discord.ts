@@ -89,7 +89,7 @@ export class DiscordPlatform implements Platform {
         token: string;
         guildId: string;
     }> {
-        const values = await getPlatformConfigValues(context?.userId, this.id);
+        const values = await getPlatformConfigValues(context?.accountId, this.id);
         return {
             token: values.DISCORD_BOT_TOKEN || this.token,
             guildId: values.DISCORD_GUILD_ID || this.guildId,

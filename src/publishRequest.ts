@@ -61,7 +61,7 @@ async function parseMultipartPublish(
 
 async function parseJsonPublish(
     req: Request,
-    userId: string,
+    authorId: string,
 ): Promise<ParsedPublishRequest> {
     const body = await req.json().catch(() => ({}));
     const markdown = String(body.markdown ?? '');
@@ -76,20 +76,24 @@ async function parseJsonPublish(
     const imageIds: string[] = Array.isArray(body.imageIds)
         ? body.imageIds.map(String)
         : [];
-    const images = await resolveImages(userId, imageIds);
+    const images = await resolveImages(authorId, imageIds);
 
     return { markdown, draftId, title, targets, imageUrls, images };
 }
 
-/** Parse either a multipart/form-data or JSON /api/publish request body. */
+/**
+ * Parse either a multipart/form-data or JSON /api/publish request body.
+ * `authorId` is the acting member, used only to resolve their own private
+ * image uploads referenced by id — unrelated to which account is publishing.
+ */
 export async function parsePublishRequest(
     req: Request,
-    userId: string,
+    authorId: string,
 ): Promise<ParsedPublishRequest> {
     const contentType = req.headers.get('content-type') || '';
     const parsed = contentType.includes('multipart/form-data')
         ? await parseMultipartPublish(req)
-        : await parseJsonPublish(req, userId);
+        : await parseJsonPublish(req, authorId);
 
     if (!Array.isArray(parsed.targets)) parsed.targets = [];
     return parsed;
@@ -102,7 +106,7 @@ export interface PublishOutcome {
 
 /** Validate + fan the parsed request out to the target platforms, recording a publication. */
 export async function executePublish(
-    userId: string,
+    accountId: string,
     parsed: ParsedPublishRequest,
 ): Promise<PublishOutcome> {
     if (!parsed.targets.length) {
@@ -123,10 +127,10 @@ export async function executePublish(
             imageUrls: parsed.imageUrls,
             images: parsed.images,
         },
-        userId,
+        accountId,
     );
     const publication = parsed.draftId
-        ? await createPublication(userId, {
+        ? await createPublication(accountId, {
               draftId: parsed.draftId,
               title: parsed.title || 'Untitled',
               markdown: parsed.markdown,

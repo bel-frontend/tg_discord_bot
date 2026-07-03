@@ -1,15 +1,48 @@
 import { MongoClient, type Collection, type ObjectId } from 'mongodb';
 import type {
+    AccountMemberStatus,
+    MemberPermissions,
     PublishResult,
     ScheduledPublicationStatus,
     Target,
 } from '../shared/types';
 
+export type { MemberPermissions } from '../shared/types';
+export { FULL_ACCESS_PERMISSIONS } from '../shared/types';
+
 export interface UserDoc {
     _id?: ObjectId;
     email: string;
     passwordHash: string;
+    emailVerified: boolean;
+    emailVerifiedAt?: Date;
     createdAt: Date;
+}
+
+export interface AccountMemberDoc {
+    _id?: ObjectId;
+    accountId: string; // owner's userId — the workspace this membership grants access to
+    userId?: string; // member's own userId, set once the invite is accepted
+    email: string; // normalized invite email
+    permissions: MemberPermissions;
+    status: AccountMemberStatus;
+    inviteTokenHash?: string;
+    inviteExpiresAt?: Date;
+    invitedBy: string;
+    invitedAt: Date;
+    acceptedAt?: Date;
+    createdAt: Date;
+    updatedAt: Date;
+}
+
+export interface EmailVerificationDoc {
+    _id?: ObjectId;
+    userId: string;
+    email: string;
+    tokenHash: string;
+    expiresAt: Date;
+    createdAt: Date;
+    consumedAt?: Date;
 }
 
 export interface DraftDoc {
@@ -39,14 +72,14 @@ export interface ChannelResourceDoc {
     platform: string;
     channelId: string;
     name: string;
-    createdBy: string;
+    createdBy: string; // account id (workspace-shared resource, not per-member)
     createdAt: Date;
     updatedAt: Date;
 }
 
 export interface PlatformConfigDoc {
     _id?: ObjectId;
-    userId: string;
+    userId: string; // account id — bot/platform credentials are shared across the account
     platform: string;
     values: Record<string, string>;
     createdAt: Date;
@@ -65,7 +98,7 @@ export interface PublicationTargetDoc {
 
 export interface PublicationDoc {
     _id?: ObjectId;
-    userId: string;
+    userId: string; // account id — publication history is shared across the account
     draftId: string;
     title: string;
     markdown: string;
@@ -77,7 +110,8 @@ export interface PublicationDoc {
 
 export interface ScheduledPublicationDoc {
     _id?: ObjectId;
-    userId: string;
+    userId: string; // author — the draft/images this schedules are private to this member
+    accountId: string; // workspace to publish under (platform configs, publication history)
     draftId: string;
     title: string;
     scheduledAt: Date;
@@ -97,6 +131,8 @@ let channelResourcesColl: Collection<ChannelResourceDoc> | null = null;
 let platformConfigsColl: Collection<PlatformConfigDoc> | null = null;
 let publicationsColl: Collection<PublicationDoc> | null = null;
 let scheduledPublicationsColl: Collection<ScheduledPublicationDoc> | null = null;
+let accountMembersColl: Collection<AccountMemberDoc> | null = null;
+let emailVerificationsColl: Collection<EmailVerificationDoc> | null = null;
 
 export function resolveMongoConfig(
     env: Record<string, string | undefined> = process.env,
@@ -152,6 +188,9 @@ export async function connect(): Promise<void> {
     publicationsColl = db.collection<PublicationDoc>('publications');
     scheduledPublicationsColl =
         db.collection<ScheduledPublicationDoc>('scheduledPublications');
+    accountMembersColl = db.collection<AccountMemberDoc>('accountMembers');
+    emailVerificationsColl =
+        db.collection<EmailVerificationDoc>('emailVerifications');
 
     await usersColl.createIndex({ email: 1 }, { unique: true });
     await draftsColl.createIndex({ userId: 1, updatedAt: -1 });
@@ -178,6 +217,33 @@ export async function connect(): Promise<void> {
         userId: 1,
         scheduledAt: 1,
     });
+    await scheduledPublicationsColl.createIndex({ accountId: 1, scheduledAt: 1 });
+
+    await accountMembersColl.createIndex(
+        { accountId: 1, email: 1 },
+        { unique: true },
+    );
+    await accountMembersColl.createIndex(
+        { userId: 1 },
+        { unique: true, sparse: true },
+    );
+    await accountMembersColl.createIndex(
+        { inviteTokenHash: 1 },
+        { unique: true, sparse: true },
+    );
+    await emailVerificationsColl.createIndex({ tokenHash: 1 }, { unique: true });
+    await emailVerificationsColl.createIndex({ userId: 1 });
+
+    // One-time idempotent backfills — this project has no migration system, so
+    // schema additions are applied on every connect() and are no-ops once done.
+    await usersColl.updateMany(
+        { emailVerified: { $exists: false } },
+        { $set: { emailVerified: true } },
+    );
+    await scheduledPublicationsColl.updateMany(
+        { accountId: { $exists: false } },
+        [{ $set: { accountId: '$userId' } }],
+    );
 
     console.log(`Connected to MongoDB (db: ${dbName}).`);
 }
@@ -223,4 +289,18 @@ export function scheduledPublications(): Collection<ScheduledPublicationDoc> {
         throw new Error('DB not connected — call connect() first');
     }
     return scheduledPublicationsColl;
+}
+
+export function accountMembers(): Collection<AccountMemberDoc> {
+    if (!accountMembersColl) {
+        throw new Error('DB not connected — call connect() first');
+    }
+    return accountMembersColl;
+}
+
+export function emailVerifications(): Collection<EmailVerificationDoc> {
+    if (!emailVerificationsColl) {
+        throw new Error('DB not connected — call connect() first');
+    }
+    return emailVerificationsColl;
 }

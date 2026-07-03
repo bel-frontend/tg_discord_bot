@@ -17,8 +17,31 @@ const platformConfigsCollection = {
     findOne: mock(async () => null),
     find: mock(() => ({ toArray: async () => [] })),
 };
+const emptyCollection = () => ({
+    findOne: mock(async () => null),
+    find: mock(() => ({ toArray: async () => [] })),
+    insertOne: mock(async () => ({ insertedId: 'id' })),
+    findOneAndUpdate: mock(async () => null),
+    updateOne: mock(async () => ({ matchedCount: 0, modifiedCount: 0 })),
+    deleteOne: mock(async () => ({ deletedCount: 0 })),
+    deleteMany: mock(async () => ({ deletedCount: 0 })),
+});
 
 mock.module('./db', () => ({
+    FULL_ACCESS_PERMISSIONS: {
+        canPublish: true,
+        canManageResources: true,
+        canManagePlatforms: true,
+        canManageMembers: true,
+        channelAccess: 'all',
+    },
+    users: emptyCollection,
+    accountMembers: emptyCollection,
+    emailVerifications: emptyCollection,
+    channelResources: emptyCollection,
+    drafts: emptyCollection,
+    uploads: emptyCollection,
+    publications: emptyCollection,
     scheduledPublications: () => scheduledCollection,
     platformConfigs: () => platformConfigsCollection,
 }));
@@ -55,18 +78,31 @@ const createPublicationMock = mock(async () => ({
 }));
 
 mock.module('./drafts', () => ({
+    createDraft: mock(async () => null),
+    deleteDraft: mock(async () => false),
     getDraft: getDraftMock,
+    listDrafts: mock(async () => []),
+    updateDraft: mock(async () => null),
 }));
 mock.module('./uploads', () => ({
+    getUpload: mock(async () => null),
     resolveImages: resolveImagesMock,
+    saveUpload: mock(async () => null),
 }));
 mock.module('./platforms/registry', () => ({
     publishToTargets: publishToTargetsMock,
     getPlatform: mock(() => undefined),
+    listAllChannels: mock(async () => []),
     listPlatforms: mock(() => []),
+    listPlatformsMeta: mock(() => []),
 }));
 mock.module('./publications', () => ({
     createPublication: createPublicationMock,
+    deletePublishedTargets: mock(async () => ({ status: 404 })),
+    deletePublicationsForDraft: mock(async () => 0),
+    getPublication: mock(async () => null),
+    listPublications: mock(async () => []),
+    updatePublishedTargets: mock(async () => ({ status: 404 })),
 }));
 
 const {
@@ -80,7 +116,7 @@ describe('createScheduledPublication', () => {
         insertOneMock.mockClear();
         const scheduledAt = new Date(Date.now() + 20 * 60 * 1000);
 
-        const result = await createScheduledPublication('user1', {
+        const result = await createScheduledPublication('user1', 'account1', {
             draftId: currentDraft.id,
             scheduledAt: scheduledAt.toISOString(),
         });
@@ -118,6 +154,7 @@ describe('publishScheduledPublication', () => {
         const doc = {
             _id: new ObjectId(),
             userId: 'user1',
+            accountId: 'account1',
             draftId: currentDraft.id,
             title: 'Old title',
             scheduledAt: new Date(),
@@ -141,9 +178,9 @@ describe('publishScheduledPublication', () => {
                     },
                 ],
             },
-            'user1',
+            'account1',
         );
-        expect(createPublicationMock).toHaveBeenCalledWith('user1', {
+        expect(createPublicationMock).toHaveBeenCalledWith('account1', {
             draftId: currentDraft.id,
             title: currentDraft.title,
             markdown: currentDraft.markdown,

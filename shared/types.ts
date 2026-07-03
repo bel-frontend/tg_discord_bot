@@ -7,6 +7,42 @@ export interface User {
     email: string;
 }
 
+export type MemberPermissions = {
+    // channelResource ids this member may target when publishing/scheduling.
+    channelAccess: 'all' | string[];
+    canPublish: boolean;
+    canDelete: boolean;
+    canManageChannels: boolean;
+    canManageMembers: boolean;
+};
+
+export const FULL_ACCESS_PERMISSIONS: MemberPermissions = {
+    channelAccess: 'all',
+    canPublish: true,
+    canDelete: true,
+    canManageChannels: true,
+    canManageMembers: true,
+};
+
+export type AccountMemberStatus = 'invited' | 'active' | 'revoked';
+
+export interface MemberSummary {
+    id: string;
+    email: string;
+    status: AccountMemberStatus;
+    permissions: MemberPermissions;
+    invitedAt: string;
+    acceptedAt?: string;
+}
+
+export interface Me {
+    user: User;
+    accountId: string;
+    role: 'owner' | 'member';
+    permissions: MemberPermissions;
+    emailVerified: boolean;
+}
+
 export interface Target {
     platform: string;
     channelId: string;

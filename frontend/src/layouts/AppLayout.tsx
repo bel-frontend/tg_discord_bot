@@ -1,5 +1,7 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import type { User } from '../../../shared/types';
+import { resendVerificationEmail } from '../api';
+import { useToast } from '../toast';
 
 export interface AppLayoutNavItem {
     label: string;
@@ -15,6 +17,7 @@ interface Props {
     children: ReactNode;
     onToggleTheme: () => void;
     onLogout: () => void;
+    emailVerified?: boolean;
 }
 
 export function AppLayout({
@@ -25,7 +28,24 @@ export function AppLayout({
     children,
     onToggleTheme,
     onLogout,
+    emailVerified,
 }: Props) {
+    const toast = useToast();
+    const [resending, setResending] = useState(false);
+    const [dismissed, setDismissed] = useState(false);
+
+    async function resendVerification() {
+        setResending(true);
+        try {
+            await resendVerificationEmail();
+            toast('Verification email sent', 'success');
+        } catch (err: any) {
+            toast(err.message, 'error');
+        } finally {
+            setResending(false);
+        }
+    }
+
     return (
         <div className="app">
             <header className="topbar">
@@ -59,6 +79,29 @@ export function AppLayout({
                     </button>
                 </div>
             </header>
+
+            {emailVerified === false && !dismissed && (
+                <div className="verify-banner">
+                    <span>
+                        Verify your email to unlock inviting teammates.
+                    </span>
+                    <div className="verify-banner-actions">
+                        <button
+                            className="btn small"
+                            disabled={resending}
+                            onClick={resendVerification}
+                        >
+                            Resend verification email
+                        </button>
+                        <button
+                            className="btn ghost small"
+                            onClick={() => setDismissed(true)}
+                        >
+                            Dismiss
+                        </button>
+                    </div>
+                </div>
+            )}
 
             {children}
         </div>

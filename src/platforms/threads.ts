@@ -113,7 +113,7 @@ export class ThreadsPlatform implements Platform {
         accessToken: string;
         userId: string;
     }> {
-        const values = await getPlatformConfigValues(context?.userId, this.id);
+        const values = await getPlatformConfigValues(context?.accountId, this.id);
         return {
             accessToken: values.THREADS_ACCESS_TOKEN || this.accessToken,
             userId: values.THREADS_USER_ID || this.userId,

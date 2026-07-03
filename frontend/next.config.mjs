@@ -24,6 +24,14 @@ if (isDev) {
                 source: '/edit/:path*',
                 destination: '/',
             },
+            {
+                source: '/invite/:path*',
+                destination: '/',
+            },
+            {
+                source: '/verify-email/:path*',
+                destination: '/',
+            },
         ];
 
         if (process.env.API_PROXY_TARGET || process.env.BACKEND_URL) {

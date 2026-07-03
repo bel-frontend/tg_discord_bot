@@ -32,21 +32,21 @@ function serializeConfig(
 }
 
 export async function getPlatformConfigValues(
-    userId: string | undefined,
+    accountId: string | undefined,
     platformId: string,
 ): Promise<Record<string, string>> {
-    if (!userId) return {};
+    if (!accountId) return {};
     const doc = await platformConfigs().findOne({
-        userId,
+        userId: accountId,
         platform: normalizePlatform(platformId),
     });
     return doc?.values ?? {};
 }
 
 export async function listPlatformConfigs(
-    userId: string,
+    accountId: string,
 ): Promise<PlatformConfigStatus[]> {
-    const docs = await platformConfigs().find({ userId }).toArray();
+    const docs = await platformConfigs().find({ userId: accountId }).toArray();
     const byPlatform = new Map(docs.map((doc) => [doc.platform, doc]));
     return listPlatforms().map((platform) => {
         const doc = byPlatform.get(platform.id);
@@ -55,7 +55,7 @@ export async function listPlatformConfigs(
 }
 
 export async function upsertPlatformConfig(
-    userId: string,
+    accountId: string,
     platformId: string,
     input: unknown,
 ): Promise<PlatformConfigStatus> {
@@ -66,7 +66,7 @@ export async function upsertPlatformConfig(
         throw new Error('Invalid platform settings');
     }
 
-    const current = await getPlatformConfigValues(userId, platform);
+    const current = await getPlatformConfigValues(accountId, platform);
     const next = { ...current };
     const body = input as Record<string, unknown>;
     // Explicit removal request (the "Remove" button), distinct from leaving a field
@@ -98,14 +98,14 @@ export async function upsertPlatformConfig(
 
     const now = new Date();
     const result = await platformConfigs().findOneAndUpdate(
-        { userId, platform },
+        { userId: accountId, platform },
         {
             $set: {
                 values: next,
                 updatedAt: now,
             },
             $setOnInsert: {
-                userId,
+                userId: accountId,
                 platform,
                 createdAt: now,
             },

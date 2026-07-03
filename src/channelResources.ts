@@ -48,24 +48,24 @@ function serialize(doc: ChannelResourceDoc): ChannelResource {
 }
 
 export async function listChannelResources(
-    userId: string,
+    accountId: string,
 ): Promise<ChannelResource[]> {
     const docs = await channelResources()
-        .find({ createdBy: userId })
+        .find({ createdBy: accountId })
         .sort({ platform: 1, name: 1 })
         .toArray();
     return docs.map(serialize);
 }
 
 export async function createChannelResource(
-    userId: string,
+    accountId: string,
     input: ChannelResourceInput,
 ): Promise<ChannelResource> {
     const now = new Date();
     const sanitized = sanitize(input);
     const doc: ChannelResourceDoc = {
         ...sanitized,
-        createdBy: userId,
+        createdBy: accountId,
         createdAt: now,
         updatedAt: now,
     };
@@ -73,7 +73,7 @@ export async function createChannelResource(
     try {
         const existing = await channelResources().findOneAndUpdate(
             {
-                createdBy: userId,
+                createdBy: accountId,
                 platform: sanitized.platform,
                 channelId: sanitized.channelId,
             },
@@ -85,7 +85,7 @@ export async function createChannelResource(
                 $setOnInsert: {
                     platform: sanitized.platform,
                     channelId: sanitized.channelId,
-                    createdBy: userId,
+                    createdBy: accountId,
                     createdAt: now,
                 },
             },
@@ -108,7 +108,7 @@ export async function createChannelResource(
 }
 
 export async function updateChannelResource(
-    userId: string,
+    accountId: string,
     id: string,
     input: ChannelResourceInput,
 ): Promise<ChannelResource | null> {
@@ -116,7 +116,7 @@ export async function updateChannelResource(
 
     try {
         const doc = await channelResources().findOneAndUpdate(
-            { _id: new ObjectId(id), createdBy: userId },
+            { _id: new ObjectId(id), createdBy: accountId },
             { $set: { ...sanitize(input), updatedAt: new Date() } },
             { returnDocument: 'after' },
         );
@@ -130,13 +130,13 @@ export async function updateChannelResource(
 }
 
 export async function deleteChannelResource(
-    userId: string,
+    accountId: string,
     id: string,
 ): Promise<boolean> {
     if (!ObjectId.isValid(id)) return false;
     const result = await channelResources().deleteOne({
         _id: new ObjectId(id),
-        createdBy: userId,
+        createdBy: accountId,
     });
     return result.deletedCount > 0;
 }

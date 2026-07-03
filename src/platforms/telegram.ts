@@ -137,7 +137,7 @@ export class TelegramPlatform implements Platform {
     }
 
     private async resolveToken(context?: PlatformContext): Promise<string> {
-        const values = await getPlatformConfigValues(context?.userId, this.id);
+        const values = await getPlatformConfigValues(context?.accountId, this.id);
         return values.TELEGRAM_BOT_TOKEN || this.token;
     }
 

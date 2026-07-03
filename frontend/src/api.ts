@@ -3,6 +3,9 @@ import type {
     PlatformMeta,
     PlatformConfigStatus,
     ScheduledPublication,
+    Me,
+    MemberPermissions,
+    MemberSummary,
 } from '../../shared/types';
 
 let onUnauthorized: (() => void) | null = null;
@@ -212,4 +215,83 @@ export async function fetchImageObjectUrl(id: string): Promise<string> {
     const res = await fetch(`/api/uploads/${id}`, { headers: authHeaders() });
     if (!res.ok) throw new Error('Failed to load image');
     return URL.createObjectURL(await res.blob());
+}
+
+export async function fetchMe(): Promise<Me> {
+    return api<Me>('/api/me');
+}
+
+export async function resendVerificationEmail(): Promise<{ ok: true }> {
+    return api('/api/auth/resend-verification', { method: 'POST' });
+}
+
+export async function verifyEmail(
+    token: string,
+): Promise<{ ok: true; email: string }> {
+    return api(`/api/auth/verify-email/${encodeURIComponent(token)}`, {
+        method: 'POST',
+    });
+}
+
+export async function fetchInvite(token: string): Promise<{
+    invite: {
+        email: string;
+        accountOwnerEmail: string;
+        requiresPassword: boolean;
+    };
+}> {
+    return api(`/api/invites/${encodeURIComponent(token)}`);
+}
+
+export async function acceptInvite(
+    token: string,
+    password: string,
+): Promise<{ token: string; user: { id: string; email: string } }> {
+    return api(`/api/invites/${encodeURIComponent(token)}/accept`, {
+        method: 'POST',
+        body: { password },
+    });
+}
+
+export async function fetchMembers(): Promise<MemberSummary[]> {
+    const { members } = await api<{ members: MemberSummary[] }>(
+        '/api/members',
+    );
+    return members;
+}
+
+export async function inviteMember(
+    email: string,
+    permissions: MemberPermissions,
+): Promise<MemberSummary> {
+    const { member } = await api<{ member: MemberSummary }>(
+        '/api/members/invite',
+        { method: 'POST', body: { email, permissions } },
+    );
+    return member;
+}
+
+export async function updateMember(
+    id: string,
+    permissions: MemberPermissions,
+): Promise<MemberSummary> {
+    const { member } = await api<{ member: MemberSummary }>(
+        `/api/members/${encodeURIComponent(id)}`,
+        { method: 'PUT', body: { permissions } },
+    );
+    return member;
+}
+
+export async function revokeMember(id: string): Promise<{ ok: true }> {
+    return api(`/api/members/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+    });
+}
+
+export async function resendMemberInvite(id: string): Promise<MemberSummary> {
+    const { member } = await api<{ member: MemberSummary }>(
+        `/api/members/${encodeURIComponent(id)}/resend`,
+        { method: 'POST' },
+    );
+    return member;
 }

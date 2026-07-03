@@ -52,8 +52,8 @@ function resultsToTargets(results: PublishResult[]) {
     }));
 }
 
-export async function listPublications(userId: string, draftId?: string) {
-    const filter = draftId ? { userId, draftId } : { userId };
+export async function listPublications(accountId: string, draftId?: string) {
+    const filter = draftId ? { userId: accountId, draftId } : { userId: accountId };
     const docs = await publications()
         .find(filter)
         .sort({ updatedAt: -1 })
@@ -61,22 +61,22 @@ export async function listPublications(userId: string, draftId?: string) {
     return docs.map(serialize);
 }
 
-export async function getPublication(userId: string, id: string) {
+export async function getPublication(accountId: string, id: string) {
     if (!ObjectId.isValid(id)) return null;
     const doc = await publications().findOne({
         _id: new ObjectId(id),
-        userId,
+        userId: accountId,
     });
     return doc ? serialize(doc) : null;
 }
 
 export async function createPublication(
-    userId: string,
+    accountId: string,
     input: PublicationInput,
 ) {
     const now = new Date();
     const doc: PublicationDoc = {
-        userId,
+        userId: accountId,
         draftId: input.draftId,
         title: input.title,
         markdown: input.markdown,
@@ -91,13 +91,13 @@ export async function createPublication(
 }
 
 export async function updatePublicationResults(
-    userId: string,
+    accountId: string,
     id: string,
     input: Omit<PublicationInput, 'draftId'>,
 ) {
     if (!ObjectId.isValid(id)) return null;
     const result = await publications().findOneAndUpdate(
-        { _id: new ObjectId(id), userId },
+        { _id: new ObjectId(id), userId: accountId },
         {
             $set: {
                 title: input.title,
@@ -112,21 +112,21 @@ export async function updatePublicationResults(
     return result ? serialize(result) : null;
 }
 
-export async function deletePublicationRecord(userId: string, id: string) {
+export async function deletePublicationRecord(accountId: string, id: string) {
     if (!ObjectId.isValid(id)) return false;
     const result = await publications().deleteOne({
         _id: new ObjectId(id),
-        userId,
+        userId: accountId,
     });
     return result.deletedCount > 0;
 }
 
 export async function deletePublicationsForDraft(
-    userId: string,
+    accountId: string,
     draftId: string,
 ): Promise<number> {
     if (!ObjectId.isValid(draftId)) return 0;
-    const result = await publications().deleteMany({ userId, draftId });
+    const result = await publications().deleteMany({ userId: accountId, draftId });
     return result.deletedCount;
 }
 
@@ -167,14 +167,14 @@ function mergeUntouchedTargets(
 
 /** Re-send the given publication's content to its already-published messages. */
 export async function updatePublishedTargets(
-    userId: string,
+    accountId: string,
     publicationId: string,
     input: { title?: unknown; markdown?: unknown; imageUrls?: unknown },
 ): Promise<
     | { error: string; status: number }
     | { results: PublishResult[]; publication: Publication }
 > {
-    const publication = await getPublication(userId, publicationId);
+    const publication = await getPublication(accountId, publicationId);
     if (!publication) return { error: 'Not found', status: 404 };
 
     const refs = buildRefs(publication);
@@ -193,8 +193,8 @@ export async function updatePublishedTargets(
         return { error: 'Content is empty', status: 400 };
     }
 
-    const results = await updateTargets(refs, { markdown, imageUrls }, userId);
-    const updated = await updatePublicationResults(userId, publicationId, {
+    const results = await updateTargets(refs, { markdown, imageUrls }, accountId);
+    const updated = await updatePublicationResults(accountId, publicationId, {
         title: String(input.title ?? publication.title ?? 'Untitled'),
         markdown,
         imageUrls,
@@ -205,13 +205,13 @@ export async function updatePublishedTargets(
 
 /** Delete the given publication's already-published messages and its record. */
 export async function deletePublishedTargets(
-    userId: string,
+    accountId: string,
     publicationId: string,
 ): Promise<
     | { error: string; status: number }
     | { results: PublishResult[]; deleted: boolean }
 > {
-    const publication = await getPublication(userId, publicationId);
+    const publication = await getPublication(accountId, publicationId);
     if (!publication) return { error: 'Not found', status: 404 };
 
     const refs = buildRefs(publication);
@@ -222,8 +222,8 @@ export async function deletePublishedTargets(
         };
     }
 
-    const results = await deleteTargets(refs, userId);
+    const results = await deleteTargets(refs, accountId);
     const ok = results.every((result) => result.ok);
-    if (ok) await deletePublicationRecord(userId, publicationId);
+    if (ok) await deletePublicationRecord(accountId, publicationId);
     return { results, deleted: ok };
 }

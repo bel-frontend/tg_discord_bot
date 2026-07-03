@@ -35,10 +35,10 @@ export function listPlatformsMeta(): PlatformMeta[] {
 }
 
 /** Aggregate the channel options of every configured platform for the picker. */
-export async function listAllChannels(userId: string): Promise<ChannelOption[]> {
+export async function listAllChannels(accountId: string): Promise<ChannelOption[]> {
     const options: ChannelOption[] = [];
 
-    const managed = await listChannelResources(userId);
+    const managed = await listChannelResources(accountId);
     const seen = new Set<string>();
 
     for (const channel of managed) {
@@ -57,7 +57,7 @@ export async function listAllChannels(userId: string): Promise<ChannelOption[]> 
 
     for (const platform of platforms.values()) {
         try {
-            const channels = await platform.listChannels({ userId });
+            const channels = await platform.listChannels({ accountId });
             for (const channel of channels) {
                 const key = `${platform.id}:${channel.id}`;
                 if (seen.has(key)) continue;
@@ -109,7 +109,7 @@ export interface PublishTarget {
 export async function publishToTargets(
     targets: PublishTarget[],
     content: PublishContent,
-    userId?: string,
+    accountId?: string,
 ): Promise<PublishResult[]> {
     // Group channel ids by platform so each adapter is called once.
     const byPlatform = new Map<string, string[]>();
@@ -137,7 +137,7 @@ export async function publishToTargets(
             results.push(
                 ...withLinks(
                     platform,
-                    await platform.publish(channelIds, content, { userId }),
+                    await platform.publish(channelIds, content, { accountId }),
                 ),
             );
         } catch (error: any) {
@@ -161,7 +161,7 @@ export interface ExistingPublishTarget extends PublishTarget {
 export async function updateTargets(
     targets: ExistingPublishTarget[],
     content: PublishContent,
-    userId?: string,
+    accountId?: string,
 ): Promise<PublishResult[]> {
     const byPlatform = new Map<string, PublishedMessageRef[]>();
     for (const target of targets) {
@@ -204,7 +204,7 @@ export async function updateTargets(
             results.push(
                 ...withLinks(
                     platform,
-                    await platform.update(refs, content, { userId }),
+                    await platform.update(refs, content, { accountId }),
                 ),
             );
         } catch (error: any) {
@@ -224,7 +224,7 @@ export async function updateTargets(
 
 export async function deleteTargets(
     targets: ExistingPublishTarget[],
-    userId?: string,
+    accountId?: string,
 ): Promise<PublishResult[]> {
     const byPlatform = new Map<string, PublishedMessageRef[]>();
     for (const target of targets) {
@@ -264,7 +264,7 @@ export async function deleteTargets(
             continue;
         }
         try {
-            results.push(...(await platform.delete(refs, { userId })));
+            results.push(...(await platform.delete(refs, { accountId })));
         } catch (error: any) {
             results.push(
                 ...refs.map((ref) => ({

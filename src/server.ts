@@ -1,5 +1,19 @@
 import { join, normalize } from 'path';
 import { AuthError, loginUser, registerUser, requireAuth } from './auth';
+import { verifyEmailToken, resendVerification } from './emailVerification';
+import {
+    acceptInvite,
+    createInvite,
+    getInvitePreview,
+    listMembers,
+    resendInvite,
+    revokeMember,
+    sanitizePermissionsInput,
+    updateMemberPermissions,
+} from './invites';
+import { assertChannelAccess, assertPermission } from './permissions';
+import { users } from './db';
+import { ObjectId } from 'mongodb';
 import {
     listAllChannels,
     listPlatforms,
@@ -15,6 +29,7 @@ import {
 import {
     createChannelResource,
     deleteChannelResource,
+    listChannelResources,
     updateChannelResource,
 } from './channelResources';
 import {
@@ -66,6 +81,10 @@ function html(body: string, status = 200): Response {
     });
 }
 
+function empty(status = 200): Response {
+    return new Response(null, { status });
+}
+
 function escapeHtml(value: string): string {
     return value
         .replace(/&/g, '&amp;')
@@ -102,7 +121,15 @@ async function serveStatic(pathname: string): Promise<Response> {
     });
 }
 
-async function handleApi(req: Request, url: URL): Promise<Response> {
+/** Maps "platform:channelId" -> channelResource id, for assertChannelAccess. */
+async function buildResourceIdMap(accountId: string): Promise<Map<string, string>> {
+    const resources = await listChannelResources(accountId);
+    return new Map(
+        resources.map((r) => [`${r.platform}:${r.channelId}`, r.resourceId]),
+    );
+}
+
+export async function handleApi(req: Request, url: URL): Promise<Response> {
     const path = url.pathname;
     const method = req.method;
 
@@ -116,6 +143,38 @@ async function handleApi(req: Request, url: URL): Promise<Response> {
         const body = await req.json().catch(() => ({}));
         const result = await loginUser(body.email, body.password);
         return json(result);
+    }
+
+    const verifyEmailMatch = path.match(/^\/api\/auth\/verify-email\/([^/]+)$/);
+    if (verifyEmailMatch && method === 'POST') {
+        try {
+            const result = await verifyEmailToken(verifyEmailMatch[1]);
+            return json({ ok: true, email: result.email });
+        } catch (err: any) {
+            return json({ error: err?.message || 'Verification failed' }, 400);
+        }
+    }
+
+    const invitePreviewMatch = path.match(/^\/api\/invites\/([^/]+)$/);
+    if (invitePreviewMatch && method === 'GET') {
+        const preview = await getInvitePreview(invitePreviewMatch[1]);
+        return json({ invite: preview });
+    }
+
+    const inviteAcceptMatch = path.match(/^\/api\/invites\/([^/]+)\/accept$/);
+    if (inviteAcceptMatch && method === 'POST') {
+        const body = await req.json().catch(() => ({}));
+        const result = await acceptInvite(inviteAcceptMatch[1], body.password);
+        return json(result);
+    }
+
+    if (
+        method === 'HEAD' &&
+        (path === '/api/threads/oauth/callback' ||
+            path === '/api/threads/deauthorize' ||
+            path === '/api/threads/data-deletion')
+    ) {
+        return empty();
     }
 
     if (path === '/api/threads/oauth/callback' && method === 'GET') {
@@ -154,14 +213,105 @@ async function handleApi(req: Request, url: URL): Promise<Response> {
     }
 
     // --- Everything below requires authentication ---
-    const user = await requireAuth(req);
+    const actor = await requireAuth(req);
 
     if (path === '/api/me' && method === 'GET') {
-        return json({ user });
+        const selfDoc = ObjectId.isValid(actor.userId)
+            ? await users().findOne({ _id: new ObjectId(actor.userId) })
+            : null;
+        return json({
+            user: { id: actor.userId, email: actor.email },
+            accountId: actor.accountId,
+            role: actor.role,
+            permissions: actor.permissions,
+            emailVerified: selfDoc?.emailVerified ?? false,
+        });
+    }
+
+    if (path === '/api/auth/resend-verification' && method === 'POST') {
+        try {
+            await resendVerification(actor.userId);
+            return json({ ok: true });
+        } catch (err: any) {
+            return json({ error: err?.message || 'Failed to resend' }, 400);
+        }
+    }
+
+    // --- Members / invites ---
+    if (path === '/api/members' && method === 'GET') {
+        try {
+            return json({ members: await listMembers(actor) });
+        } catch (err: any) {
+            if (err instanceof AuthError) return json({ error: err.message }, err.status);
+            throw err;
+        }
+    }
+
+    if (path === '/api/members/invite' && method === 'POST') {
+        const body = await req.json().catch(() => ({}));
+        try {
+            const member = await createInvite(
+                actor,
+                String(body.email ?? ''),
+                sanitizePermissionsInput(body.permissions),
+            );
+            return json({ member }, 201);
+        } catch (err: any) {
+            if (err instanceof AuthError) return json({ error: err.message }, err.status);
+            return json({ error: err?.message || 'Failed to invite' }, 400);
+        }
+    }
+
+    const memberResendMatch = path.match(/^\/api\/members\/([^/]+)\/resend$/);
+    if (memberResendMatch && method === 'POST') {
+        try {
+            return json({ member: await resendInvite(actor, memberResendMatch[1]) });
+        } catch (err: any) {
+            if (err instanceof AuthError) return json({ error: err.message }, err.status);
+            throw err;
+        }
+    }
+
+    const memberMatch = path.match(/^\/api\/members\/([^/]+)$/);
+    if (memberMatch) {
+        if (method === 'PUT') {
+            const body = await req.json().catch(() => ({}));
+            try {
+                const member = await updateMemberPermissions(
+                    actor,
+                    memberMatch[1],
+                    sanitizePermissionsInput(body.permissions ?? body),
+                );
+                return json({ member });
+            } catch (err: any) {
+                if (err instanceof AuthError) return json({ error: err.message }, err.status);
+                throw err;
+            }
+        }
+        if (method === 'DELETE') {
+            try {
+                const ok = await revokeMember(actor, memberMatch[1]);
+                return ok ? json({ ok: true }) : json({ error: 'Not found' }, 404);
+            } catch (err: any) {
+                if (err instanceof AuthError) return json({ error: err.message }, err.status);
+                throw err;
+            }
+        }
     }
 
     if (path === '/api/channels' && method === 'GET') {
-        return json({ channels: await listAllChannels(user.id) });
+        const channels = await listAllChannels(actor.accountId);
+        const access = actor.permissions.channelAccess;
+        const visible =
+            actor.role === 'owner' || access === 'all'
+                ? channels
+                : channels.filter(
+                      (c) =>
+                          c.source === 'db' &&
+                          c.resourceId &&
+                          access.includes(c.resourceId),
+                  );
+        return json({ channels: visible });
     }
 
     if (path === '/api/platforms' && method === 'GET') {
@@ -169,13 +319,15 @@ async function handleApi(req: Request, url: URL): Promise<Response> {
     }
 
     if (path === '/api/platform-configs' && method === 'GET') {
-        return json({ configs: await listPlatformConfigs(user.id) });
+        return json({ configs: await listPlatformConfigs(actor.accountId) });
     }
 
     if (path === '/api/threads/oauth/start' && method === 'POST') {
         try {
-            return json(await createThreadsOAuthStart(user.id, url.origin));
+            assertPermission(actor, 'canManageChannels');
+            return json(await createThreadsOAuthStart(actor.accountId, url.origin));
         } catch (err: any) {
+            if (err instanceof AuthError) return json({ error: err.message }, err.status);
             return json(
                 { error: err?.message || 'Failed to start Threads OAuth' },
                 400,
@@ -189,13 +341,15 @@ async function handleApi(req: Request, url: URL): Promise<Response> {
     if (platformConfigMatch && method === 'PUT') {
         const body = await req.json().catch(() => ({}));
         try {
+            assertPermission(actor, 'canManageChannels');
             const config = await upsertPlatformConfig(
-                user.id,
+                actor.accountId,
                 platformConfigMatch[1],
                 body,
             );
             return json({ config });
         } catch (err: any) {
+            if (err instanceof AuthError) return json({ error: err.message }, err.status);
             return json(
                 { error: err?.message || 'Failed to save platform settings' },
                 400,
@@ -228,9 +382,11 @@ async function handleApi(req: Request, url: URL): Promise<Response> {
     if (path === '/api/channels' && method === 'POST') {
         const body = await req.json().catch(() => ({}));
         try {
-            const channel = await createChannelResource(user.id, body);
+            assertPermission(actor, 'canManageChannels');
+            const channel = await createChannelResource(actor.accountId, body);
             return json({ channel }, 201);
         } catch (err: any) {
+            if (err instanceof AuthError) return json({ error: err.message }, err.status);
             return json({ error: err?.message || 'Failed to save channel' }, 400);
         }
     }
@@ -241,11 +397,13 @@ async function handleApi(req: Request, url: URL): Promise<Response> {
         if (method === 'PUT') {
             const body = await req.json().catch(() => ({}));
             try {
-                const channel = await updateChannelResource(user.id, id, body);
+                assertPermission(actor, 'canManageChannels');
+                const channel = await updateChannelResource(actor.accountId, id, body);
                 return channel
                     ? json({ channel })
                     : json({ error: 'Not found' }, 404);
             } catch (err: any) {
+                if (err instanceof AuthError) return json({ error: err.message }, err.status);
                 return json(
                     { error: err?.message || 'Failed to update channel' },
                     400,
@@ -253,21 +411,27 @@ async function handleApi(req: Request, url: URL): Promise<Response> {
             }
         }
         if (method === 'DELETE') {
-            const ok = await deleteChannelResource(user.id, id);
-            return ok ? json({ ok: true }) : json({ error: 'Not found' }, 404);
+            try {
+                assertPermission(actor, 'canManageChannels');
+                const ok = await deleteChannelResource(actor.accountId, id);
+                return ok ? json({ ok: true }) : json({ error: 'Not found' }, 404);
+            } catch (err: any) {
+                if (err instanceof AuthError) return json({ error: err.message }, err.status);
+                throw err;
+            }
         }
     }
 
     if (path === '/api/publications' && method === 'GET') {
         const draftId = url.searchParams.get('draftId') || undefined;
         return json({
-            publications: await listPublications(user.id, draftId),
+            publications: await listPublications(actor.accountId, draftId),
         });
     }
 
     const publicationByIdMatch = path.match(/^\/api\/publications\/([^/]+)$/);
     if (publicationByIdMatch && method === 'GET') {
-        const publication = await getPublication(user.id, publicationByIdMatch[1]);
+        const publication = await getPublication(actor.accountId, publicationByIdMatch[1]);
         return publication
             ? json({ publication })
             : json({ error: 'Not found' }, 404);
@@ -275,19 +439,28 @@ async function handleApi(req: Request, url: URL): Promise<Response> {
 
     if (path === '/api/scheduled-publications' && method === 'GET') {
         return json({
-            scheduledPublications: await listScheduledPublications(user.id),
+            scheduledPublications: await listScheduledPublications(actor.accountId),
         });
     }
 
     if (path === '/api/scheduled-publications' && method === 'POST') {
         const body = await req.json().catch(() => ({}));
         try {
+            assertPermission(actor, 'canPublish');
+            const draftId = String(body.draftId ?? '');
+            const draft = await getDraft(actor.userId, draftId);
+            if (draft?.targets.length) {
+                const resourceMap = await buildResourceIdMap(actor.accountId);
+                assertChannelAccess(actor, draft.targets, resourceMap);
+            }
             const scheduledPublication = await createScheduledPublication(
-                user.id,
+                actor.userId,
+                actor.accountId,
                 body,
             );
             return json({ scheduledPublication }, 201);
         } catch (err: any) {
+            if (err instanceof AuthError) return json({ error: err.message }, err.status);
             return json({ error: err?.message || 'Failed to schedule' }, 400);
         }
     }
@@ -296,13 +469,19 @@ async function handleApi(req: Request, url: URL): Promise<Response> {
         /^\/api\/scheduled-publications\/([^/]+)$/,
     );
     if (scheduledMatch && method === 'DELETE') {
-        const scheduledPublication = await cancelScheduledPublication(
-            user.id,
-            scheduledMatch[1],
-        );
-        return scheduledPublication
-            ? json({ scheduledPublication })
-            : json({ error: 'Not found' }, 404);
+        try {
+            assertPermission(actor, 'canDelete');
+            const scheduledPublication = await cancelScheduledPublication(
+                actor.accountId,
+                scheduledMatch[1],
+            );
+            return scheduledPublication
+                ? json({ scheduledPublication })
+                : json({ error: 'Not found' }, 404);
+        } catch (err: any) {
+            if (err instanceof AuthError) return json({ error: err.message }, err.status);
+            throw err;
+        }
     }
 
     const publicationMatch = path.match(/^\/api\/publications\/([^/]+)\/(update|delete)$/);
@@ -310,16 +489,26 @@ async function handleApi(req: Request, url: URL): Promise<Response> {
         const [, publicationId, action] = publicationMatch;
 
         if (action === 'delete' && method === 'POST') {
-            const outcome = await deletePublishedTargets(user.id, publicationId);
+            try {
+                assertPermission(actor, 'canDelete');
+            } catch (err: any) {
+                return json({ error: err.message }, err.status);
+            }
+            const outcome = await deletePublishedTargets(actor.accountId, publicationId);
             return 'error' in outcome
                 ? json({ error: outcome.error }, outcome.status)
                 : json(outcome);
         }
 
         if (action === 'update' && method === 'POST') {
+            try {
+                assertPermission(actor, 'canPublish');
+            } catch (err: any) {
+                return json({ error: err.message }, err.status);
+            }
             const body = await req.json().catch(() => ({}));
             const outcome = await updatePublishedTargets(
-                user.id,
+                actor.accountId,
                 publicationId,
                 body,
             );
@@ -331,9 +520,13 @@ async function handleApi(req: Request, url: URL): Promise<Response> {
 
     if (path === '/api/publish' && method === 'POST') {
         try {
-            const parsed = await parsePublishRequest(req, user.id);
-            return json(await executePublish(user.id, parsed));
+            const parsed = await parsePublishRequest(req, actor.userId);
+            assertPermission(actor, 'canPublish');
+            const resourceMap = await buildResourceIdMap(actor.accountId);
+            assertChannelAccess(actor, parsed.targets, resourceMap);
+            return json(await executePublish(actor.accountId, parsed));
         } catch (err: any) {
+            if (err instanceof AuthError) return json({ error: err.message }, err.status);
             return json({ error: err?.message || 'Publish failed' }, 400);
         }
     }
@@ -348,7 +541,7 @@ async function handleApi(req: Request, url: URL): Promise<Response> {
         const bytes = Buffer.from(await file.arrayBuffer());
         try {
             const saved = await saveUpload(
-                user.id,
+                actor.userId,
                 file.name,
                 file.type || 'application/octet-stream',
                 bytes,
@@ -362,7 +555,7 @@ async function handleApi(req: Request, url: URL): Promise<Response> {
 
     const uploadMatch = path.match(/^\/api\/uploads\/([^/]+)$/);
     if (uploadMatch && method === 'GET') {
-        const doc = await getUpload(user.id, uploadMatch[1]);
+        const doc = await getUpload(actor.userId, uploadMatch[1]);
         if (!doc) return json({ error: 'Not found' }, 404);
         const data = Buffer.isBuffer(doc.data)
             ? doc.data
@@ -375,33 +568,33 @@ async function handleApi(req: Request, url: URL): Promise<Response> {
         });
     }
 
-    // --- Drafts CRUD ---
+    // --- Drafts CRUD (private per member — not shared with the account) ---
     if (path === '/api/drafts' && method === 'GET') {
-        return json({ drafts: await listDrafts(user.id) });
+        return json({ drafts: await listDrafts(actor.userId) });
     }
     if (path === '/api/drafts' && method === 'POST') {
         const body = await req.json().catch(() => ({}));
-        return json({ draft: await createDraft(user.id, body) }, 201);
+        return json({ draft: await createDraft(actor.userId, body) }, 201);
     }
 
     const draftMatch = path.match(/^\/api\/drafts\/([^/]+)$/);
     if (draftMatch) {
         const id = draftMatch[1];
         if (method === 'GET') {
-            const draft = await getDraft(user.id, id);
+            const draft = await getDraft(actor.userId, id);
             return draft ? json({ draft }) : json({ error: 'Not found' }, 404);
         }
         if (method === 'PUT') {
             const body = await req.json().catch(() => ({}));
-            const draft = await updateDraft(user.id, id, body);
+            const draft = await updateDraft(actor.userId, id, body);
             return draft ? json({ draft }) : json({ error: 'Not found' }, 404);
         }
         if (method === 'DELETE') {
-            const ok = await deleteDraft(user.id, id);
+            const ok = await deleteDraft(actor.userId, id);
             if (!ok) return json({ error: 'Not found' }, 404);
             const [scheduledDeleted, publicationsDeleted] = await Promise.all([
-                deleteScheduledPublicationsForDraft(user.id, id),
-                deletePublicationsForDraft(user.id, id),
+                deleteScheduledPublicationsForDraft(actor.userId, id),
+                deletePublicationsForDraft(actor.accountId, id),
             ]);
             return json({
                 ok: true,

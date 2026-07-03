@@ -1,19 +1,25 @@
 import { useEffect, useState } from 'react';
-import { api, clearToken, getToken, setUnauthorizedHandler } from '../api';
+import { clearToken, fetchMe, getToken, setUnauthorizedHandler } from '../api';
 import { ToastProvider } from '../toast';
 import { Auth } from '../components/Auth';
+import { InviteAcceptPage } from '../components/InviteAcceptPage';
+import { VerifyEmailPage } from '../components/VerifyEmailPage';
 import { ComposerPage } from '../routes/composer/page';
 import { ResourcesPage } from '../routes/resources/page';
 import { ScheduledPage } from '../routes/scheduled/page';
 import { SettingsPage } from '../routes/settings/page';
+import { MembersPage } from '../routes/members/page';
 import { AppLayout } from '../layouts/AppLayout';
-import type { User } from '../../../shared/types';
+import { MeProvider } from '../meContext';
+import type { Me, User } from '../../../shared/types';
 import {
     editIdForPublishedOrDraft,
     editIdFromPath,
+    inviteTokenFromPath,
     pathForEdit,
     pathForRoute,
     routeFromPath,
+    verifyEmailTokenFromPath,
     type AppRoute,
 } from './routes';
 import {
@@ -25,6 +31,7 @@ import {
 
 export function App() {
     const [user, setUser] = useState<User | null>(null);
+    const [me, setMe] = useState<Me | null>(null);
     const [ready, setReady] = useState(false);
     const [theme, setTheme] = useState<AppTheme>(readInitialTheme);
     const [view, setView] = useState<AppRoute>(() =>
@@ -36,6 +43,8 @@ export function App() {
     const [locationSearch, setLocationSearch] = useState(
         window.location.search,
     );
+    const inviteToken = inviteTokenFromPath(locationPathname);
+    const verifyEmailToken = verifyEmailTokenFromPath(locationPathname);
 
     // Apply the theme to the document root (drives the CSS variables).
     useEffect(() => {
@@ -63,8 +72,9 @@ export function App() {
         (async () => {
             if (getToken()) {
                 try {
-                    const { user } = await api<{ user: User }>('/api/me');
-                    setUser(user);
+                    const me = await fetchMe();
+                    setUser(me.user);
+                    setMe(me);
                 } catch {
                     clearToken();
                 }
@@ -73,9 +83,23 @@ export function App() {
         })();
     }, []);
 
+    async function refreshMe() {
+        try {
+            setMe(await fetchMe());
+        } catch {
+            // Ignore — a stale banner/permission state is harmless until the next refresh.
+        }
+    }
+
+    function handleAuthenticated(nextUser: User) {
+        setUser(nextUser);
+        refreshMe();
+    }
+
     function logout() {
         clearToken();
         setUser(null);
+        setMe(null);
         navigate('composer');
     }
 
@@ -130,6 +154,7 @@ export function App() {
             );
         }
         if (view === 'settings') return <SettingsPage />;
+        if (view === 'members') return <MembersPage />;
         const search = new URLSearchParams(locationSearch);
         return (
             <ComposerPage
@@ -150,27 +175,56 @@ export function App() {
         };
     }
 
+    function goToComposerRoute() {
+        window.history.pushState({}, '', pathForRoute('composer'));
+        setView('composer');
+        setLocationPathname(window.location.pathname);
+        setLocationSearch(window.location.search);
+    }
+
+    const canManageMembers =
+        me?.role === 'owner' || me?.permissions.canManageMembers === true;
+
     return (
         <ToastProvider>
-            {!ready ? null : user ? (
-                <AppLayout
-                    title="Composer"
-                    user={user}
-                    theme={theme}
-                    navItems={[
-                        navItem('composer', 'Composer'),
-                        navItem('resources', 'Resources'),
-                        navItem('scheduled', 'Scheduled'),
-                        navItem('settings', 'Settings'),
-                    ]}
-                    onToggleTheme={toggleTheme}
-                    onLogout={logout}
-                >
-                    {renderPage()}
-                </AppLayout>
-            ) : (
-                <Auth onAuthenticated={setUser} />
-            )}
+            <MeProvider me={me}>
+                {!ready ? null : inviteToken ? (
+                    <InviteAcceptPage
+                        token={inviteToken}
+                        onAccepted={(acceptedUser) => {
+                            handleAuthenticated(acceptedUser);
+                            goToComposerRoute();
+                        }}
+                    />
+                ) : verifyEmailToken ? (
+                    <VerifyEmailPage
+                        token={verifyEmailToken}
+                        onGoToApp={goToComposerRoute}
+                    />
+                ) : user ? (
+                    <AppLayout
+                        title="Composer"
+                        user={user}
+                        theme={theme}
+                        navItems={[
+                            navItem('composer', 'Composer'),
+                            navItem('resources', 'Resources'),
+                            navItem('scheduled', 'Scheduled'),
+                            navItem('settings', 'Settings'),
+                            ...(canManageMembers
+                                ? [navItem('members', 'Members')]
+                                : []),
+                        ]}
+                        onToggleTheme={toggleTheme}
+                        onLogout={logout}
+                        emailVerified={me?.emailVerified}
+                    >
+                        {renderPage()}
+                    </AppLayout>
+                ) : (
+                    <Auth onAuthenticated={handleAuthenticated} />
+                )}
+            </MeProvider>
         </ToastProvider>
     );
 }

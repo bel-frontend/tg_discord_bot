@@ -17,7 +17,11 @@ using [Toast UI Editor](https://ui.toast.com/tui-editor).
 - **Markdown composer** (Toast UI Editor: WYSIWYG + Markdown, live preview, light/dark theme).
 - **Pick channels by name** (mapped internally to real channel IDs), grouped by platform.
 - **Publish** to Telegram, Discord, and Threads in one click, with a per-channel success/error report.
-- **Accounts**: register / login (passwords hashed with `Bun.password`, sessions via JWT).
+- **Accounts**: register / login (passwords hashed with `Bun.password`, sessions via JWT), with
+  email verification.
+- **Workspaces**: an account owner can invite teammates by email, each with their own permissions
+  (which channels they may publish to, and whether they may publish/delete/manage channels/manage
+  other members).
 - **Drafts**: create, autosave, reopen, and delete per-user posts (stored in MongoDB).
 - **Universal adapters**: add a platform by implementing one interface and registering it.
 - Canonical content is Markdown; each adapter converts it to the platform format and chunks it
@@ -64,10 +68,20 @@ MONGODB_AUTH_SOURCE=admin
 MONGODB_REPLICA_SET=your-replica-set
 # Optional: override the generated URI completely.
 # MONGODB_URI=mongodb://user:password@db.example.internal:27017/app?authSource=admin&replicaSet=rs0
+
+# Email (Resend) — invite emails and registration email verification.
+# https://resend.com/api-keys
+RESEND_API_KEY=re_your_resend_api_key
+EMAIL_FROM=Composer <onboarding@resend.dev>
+# Public origin used to build invite/verification links.
+PUBLIC_BASE_URL=http://localhost:3000
 ```
 
 Do not commit `.env`, real tokens, passwords, or production resource IDs. Keep real values in
 server-side environment variables or in the app's authenticated Settings/Resources pages.
+
+Without `RESEND_API_KEY` set, invite and verification emails are skipped (logged to the console
+instead of sent) — useful for local development.
 
 Configure Telegram, Discord, and Threads credentials in the authenticated Settings page. These
 settings are stored in MongoDB per user, not in `.env`.
@@ -77,6 +91,25 @@ Resources page. They are stored in MongoDB per user. Telegram bots cannot enumer
 they are in, so Telegram channels must be added there manually. Discord can additionally pull a
 configured server's text channels live with real `#names`; set the Discord guild id in Settings
 if you want that.
+
+### Workspaces & members
+
+Every account is its own workspace. From the authenticated Members page, the owner (or a member
+granted `canManageMembers`) can invite a teammate by email. The invite email links to a page where
+the invitee sets a password (or signs in, if they already have a Composer account) and joins the
+workspace with the permissions the inviter chose:
+
+- **Channel access** — either every channel, or a specific subset of the Resources the owner has
+  added.
+- **canPublish** — publish/schedule posts to their allowed channels.
+- **canDelete** — delete publications and cancel scheduled posts.
+- **canManageChannels** — add/edit/remove channel Resources and platform (bot token) settings.
+- **canManageMembers** — invite, edit, and revoke other members.
+
+A member can never grant permissions broader than their own when inviting someone else. Inviting
+requires the account owner's email to be verified first (see email verification above) so the
+invite flow can't be used to spam arbitrary addresses. A person is either the owner of their own
+workspace or a member of exactly one other workspace — not both.
 
 ### Threads OAuth callbacks
 

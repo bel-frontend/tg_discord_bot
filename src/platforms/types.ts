@@ -27,7 +27,7 @@ export interface PublishedMessageRef {
 }
 
 export interface PlatformContext {
-    userId?: string;
+    accountId?: string; // workspace whose platform credentials to use
 }
 
 export interface ValidationIssue {

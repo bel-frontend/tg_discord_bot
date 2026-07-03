@@ -19,8 +19,35 @@ const platformConfigsCollection = {
     }),
 };
 
+const emptyCollection = () => ({
+    findOne: mock(async () => null),
+    find: mock(() => ({
+        toArray: async () => [],
+    })),
+    insertOne: mock(async () => ({ insertedId: 'id' })),
+    findOneAndUpdate: mock(async () => null),
+    updateOne: mock(async () => ({ matchedCount: 0, modifiedCount: 0 })),
+    deleteOne: mock(async () => ({ deletedCount: 0 })),
+    deleteMany: mock(async () => ({ deletedCount: 0 })),
+});
+
 mock.module('./db', () => ({
+    FULL_ACCESS_PERMISSIONS: {
+        canPublish: true,
+        canManageResources: true,
+        canManagePlatforms: true,
+        canManageMembers: true,
+        channelAccess: 'all',
+    },
+    users: emptyCollection,
+    accountMembers: emptyCollection,
+    emailVerifications: emptyCollection,
+    channelResources: emptyCollection,
+    drafts: emptyCollection,
+    uploads: emptyCollection,
     platformConfigs: () => platformConfigsCollection,
+    publications: emptyCollection,
+    scheduledPublications: emptyCollection,
 }));
 
 mock.module('./platforms/registry', () => ({

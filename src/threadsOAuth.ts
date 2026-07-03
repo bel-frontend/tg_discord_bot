@@ -52,10 +52,10 @@ function readError(json: ThreadsTokenResponse | ThreadsMeResponse): string {
     return json.error?.message || errorMessage || 'Threads OAuth failed';
 }
 
-async function createState(userId: string): Promise<string> {
+async function createState(accountId: string): Promise<string> {
     return new SignJWT({ type: STATE_TYPE })
         .setProtectedHeader({ alg: 'HS256' })
-        .setSubject(userId)
+        .setSubject(accountId)
         .setIssuedAt()
         .setExpirationTime(STATE_EXPIRY)
         .sign(STATE_SECRET);
@@ -87,10 +87,10 @@ async function fetchJson<T>(
 }
 
 export async function createThreadsOAuthStart(
-    userId: string,
+    accountId: string,
     origin: string,
 ): Promise<{ authUrl: string; redirectUri: string }> {
-    const values = await getPlatformConfigValues(userId, THREADS_PLATFORM_ID);
+    const values = await getPlatformConfigValues(accountId, THREADS_PLATFORM_ID);
     const appId = values.THREADS_APP_ID || '';
     const appSecret = values.THREADS_APP_SECRET || '';
     if (!appId || !appSecret) {
@@ -103,14 +103,14 @@ export async function createThreadsOAuthStart(
     authUrl.searchParams.set('redirect_uri', redirectUri);
     authUrl.searchParams.set('scope', 'threads_basic,threads_content_publish');
     authUrl.searchParams.set('response_type', 'code');
-    authUrl.searchParams.set('state', await createState(userId));
+    authUrl.searchParams.set('state', await createState(accountId));
 
     return { authUrl: authUrl.toString(), redirectUri };
 }
 
 export async function completeThreadsOAuth(
     url: URL,
-): Promise<{ userId: string; threadsUserId: string; username?: string }> {
+): Promise<{ accountId: string; threadsUserId: string; username?: string }> {
     const error = url.searchParams.get('error');
     if (error) {
         throw new Error(url.searchParams.get('error_description') || error);
@@ -120,8 +120,8 @@ export async function completeThreadsOAuth(
     const state = url.searchParams.get('state') || '';
     if (!code || !state) throw new Error('Missing Threads OAuth code or state');
 
-    const userId = await verifyState(state);
-    const values = await getPlatformConfigValues(userId, THREADS_PLATFORM_ID);
+    const accountId = await verifyState(state);
+    const values = await getPlatformConfigValues(accountId, THREADS_PLATFORM_ID);
     const appId = values.THREADS_APP_ID || '';
     const appSecret = values.THREADS_APP_SECRET || '';
     if (!appId || !appSecret) {
@@ -169,7 +169,7 @@ export async function completeThreadsOAuth(
     );
     if (!profile.id) throw new Error('Threads profile id was not returned');
 
-    await upsertPlatformConfig(userId, THREADS_PLATFORM_ID, {
+    await upsertPlatformConfig(accountId, THREADS_PLATFORM_ID, {
         ...values,
         THREADS_APP_ID: appId,
         THREADS_APP_SECRET: appSecret,
@@ -178,7 +178,7 @@ export async function completeThreadsOAuth(
     });
 
     return {
-        userId,
+        accountId,
         threadsUserId: profile.id,
         username: profile.username,
     };

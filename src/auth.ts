@@ -1,6 +1,13 @@
 import { SignJWT, jwtVerify } from 'jose';
 import { ObjectId } from 'mongodb';
-import { users, type UserDoc } from './db';
+import {
+    accountMembers,
+    users,
+    FULL_ACCESS_PERMISSIONS,
+    type MemberPermissions,
+    type UserDoc,
+} from './db';
+import { createEmailVerification } from './emailVerification';
 
 const JWT_SECRET = new TextEncoder().encode(
     process.env.JWT_SECRET || 'change-me-in-production',
@@ -11,6 +18,15 @@ const JWT_EXPIRY = '7d';
 export interface AuthUser {
     id: string;
     email: string;
+}
+
+/** The resolved identity + workspace a request is acting under. */
+export interface ActorContext {
+    userId: string;
+    email: string;
+    accountId: string;
+    role: 'owner' | 'member';
+    permissions: MemberPermissions;
 }
 
 export class AuthError extends Error {
@@ -26,7 +42,8 @@ function normalizeEmail(email: string): string {
     return email.trim().toLowerCase();
 }
 
-async function signToken(user: AuthUser): Promise<string> {
+/** Issue a session JWT for an already-authenticated user (used by login/register/invite-accept). */
+export async function issueSessionToken(user: AuthUser): Promise<string> {
     return new SignJWT({ email: user.email })
         .setProtectedHeader({ alg: JWT_ALG })
         .setSubject(user.id)
@@ -56,11 +73,19 @@ export async function registerUser(
     const doc: UserDoc = {
         email: normalized,
         passwordHash,
+        emailVerified: false,
         createdAt: new Date(),
     };
     const result = await users().insertOne(doc);
     const user: AuthUser = { id: result.insertedId.toString(), email: normalized };
-    return { token: await signToken(user), user };
+
+    try {
+        await createEmailVerification(user.id, normalized);
+    } catch (error) {
+        console.error('Failed to send verification email:', error);
+    }
+
+    return { token: await issueSessionToken(user), user };
 }
 
 export async function loginUser(
@@ -75,11 +100,10 @@ export async function loginUser(
     if (!valid) throw new AuthError('Invalid email or password', 401);
 
     const user: AuthUser = { id: doc._id!.toString(), email: doc.email };
-    return { token: await signToken(user), user };
+    return { token: await issueSessionToken(user), user };
 }
 
-/** Verify the Bearer token on a request and return the user, or throw AuthError(401). */
-export async function requireAuth(req: Request): Promise<AuthUser> {
+async function verifyToken(req: Request): Promise<AuthUser> {
     const header = req.headers.get('authorization') || '';
     const token = header.startsWith('Bearer ') ? header.slice(7) : '';
     if (!token) throw new AuthError('Authentication required', 401);
@@ -97,4 +121,38 @@ export async function requireAuth(req: Request): Promise<AuthUser> {
         if (error instanceof AuthError) throw error;
         throw new AuthError('Invalid or expired token', 401);
     }
+}
+
+/**
+ * Verify the Bearer token and resolve the workspace the caller acts under: the
+ * account owner themselves, or — if their userId has an active membership on
+ * someone else's account — that account with their granted permissions.
+ * A user is either an owner of their own account or a member of exactly one
+ * other account, never both (see plan's v1 single-membership simplification).
+ */
+export async function requireAuth(req: Request): Promise<ActorContext> {
+    const user = await verifyToken(req);
+
+    const membership = await accountMembers().findOne({
+        userId: user.id,
+        status: 'active',
+    });
+
+    if (membership) {
+        return {
+            userId: user.id,
+            email: user.email,
+            accountId: membership.accountId,
+            role: 'member',
+            permissions: membership.permissions,
+        };
+    }
+
+    return {
+        userId: user.id,
+        email: user.email,
+        accountId: user.id,
+        role: 'owner',
+        permissions: FULL_ACCESS_PERMISSIONS,
+    };
 }
