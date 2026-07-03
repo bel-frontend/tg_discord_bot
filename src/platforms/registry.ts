@@ -81,14 +81,19 @@ export async function listAllChannels(userId: string): Promise<ChannelOption[]> 
     return options;
 }
 
-/** Attach a message link to each successful result, if the adapter can build one. */
+/**
+ * Attach a message link to each successful result, if the adapter can build one.
+ * `buildMessageLink` is stateless/synchronous, so it can only use server-wide (.env)
+ * config — it never overrides a link the adapter already resolved per-user inside
+ * publish()/update() itself.
+ */
 function withLinks(
     platform: Platform,
     results: PublishResult[],
 ): PublishResult[] {
     if (!platform.buildMessageLink) return results;
     return results.map((result) => {
-        if (!result.ok || !result.messageIds?.length) return result;
+        if (!result.ok || !result.messageIds?.length || result.link) return result;
         const link =
             platform.buildMessageLink!(result.channelId, result.messageIds[0]) ??
             undefined;

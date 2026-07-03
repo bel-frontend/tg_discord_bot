@@ -69,8 +69,17 @@ export async function upsertPlatformConfig(
     const current = await getPlatformConfigValues(userId, platform);
     const next = { ...current };
     const body = input as Record<string, unknown>;
+    // Explicit removal request (the "Remove" button), distinct from leaving a field
+    // blank on save — a blank secret field on save means "keep the existing value".
+    const clearFields = new Set(
+        Array.isArray(body.clearFields) ? body.clearFields.map(String) : [],
+    );
 
     for (const field of fields) {
+        if (clearFields.has(field.name)) {
+            delete next[field.name];
+            continue;
+        }
         if (!(field.name in body)) continue;
         const value = String(body[field.name] ?? '').trim();
         if (field.secret && !value && current[field.name]) continue;
@@ -79,7 +88,10 @@ export async function upsertPlatformConfig(
     }
 
     for (const field of fields) {
-        if (field.required && !next[field.name]) {
+        // A field the user just cleared is allowed to be empty even if required —
+        // required only guards against saving a broken/incomplete config, not against
+        // intentionally disconnecting a credential.
+        if (field.required && !next[field.name] && !clearFields.has(field.name)) {
             throw new Error(`${field.label} is required`);
         }
     }

@@ -24,26 +24,6 @@ export class DiscordPlatform implements Platform {
     readonly setup = {
         summary:
             'Publishes through a Discord bot installed in your server with message permissions.',
-        env: [
-            {
-                name: 'DISCORD_BOT_TOKEN',
-                required: true,
-                description:
-                    'Bot token from the Discord Developer Portal. Keep it private.',
-            },
-            {
-                name: 'DISCORD_GUILD_ID',
-                required: false,
-                description:
-                    'Server id. When set, Composer can load text channels live from that server.',
-            },
-            {
-                name: 'DISCORD_CHANNEL_IDS',
-                required: false,
-                description:
-                    'Optional picker entries: channel ids or "id|Name" values separated by commas.',
-            },
-        ],
         configFields: [
             {
                 name: 'DISCORD_BOT_TOKEN',
@@ -59,19 +39,16 @@ export class DiscordPlatform implements Platform {
                 label: 'Server id',
                 required: false,
                 description:
-                    'Optional server id for message links and live channel discovery.',
+                    "Optional server (guild) id, used to build a link back to your post after publishing.",
                 placeholder: '123456789012345678',
             },
         ],
-        channelIdLabel: 'Discord channel id',
-        channelIdHelp:
-            'Enable Developer Mode in Discord, then copy the target text channel id.',
         steps: [
-            'Create an application in the [Discord Developer Portal](https://discord.com/developers/applications) and add a bot.',
-            'Paste the bot token into this Settings form. DISCORD_BOT_TOKEN in .env is only a server-wide fallback.',
+            'Create an application in the [Discord Developer Portal](https://discord.com/developers/applications) and add a bot to it.',
+            'Copy the bot token and paste it into the "Bot token" field above, then click Save.',
             'Invite the bot to your server with permission to view channels and send messages.',
-            'Save the server id here or set DISCORD_GUILD_ID if you want a server-wide fallback.',
-            'Add channel ids through DISCORD_CHANNEL_IDS or create Discord resources here.',
+            '(Optional) Copy your server id and paste it into "Server id" above, so successful posts get a link back to the message.',
+            'Enable Developer Mode in Discord, right-click the target channel to copy its id, then go to Resources and add it as a Discord resource.',
         ],
         docsUrl: 'https://discord.com/developers/docs/intro',
         notes: [
@@ -94,9 +71,19 @@ export class DiscordPlatform implements Platform {
         return markdownToDiscordPreviewHtml(markdown);
     }
 
+    /** Fallback for callers with no per-user context; only sees the server-wide (.env) guild id. */
     buildMessageLink(channelId: string, messageId: string): string | null {
-        if (!this.guildId) return null;
-        return `https://discord.com/channels/${this.guildId}/${channelId}/${messageId}`;
+        return this.linkFor(this.guildId, channelId, messageId) ?? null;
+    }
+
+    private linkFor(
+        guildId: string,
+        channelId: string,
+        messageId: string,
+    ): string | undefined {
+        return guildId
+            ? `https://discord.com/channels/${guildId}/${channelId}/${messageId}`
+            : undefined;
     }
 
     private async resolveConfig(context?: PlatformContext): Promise<{
@@ -176,7 +163,7 @@ export class DiscordPlatform implements Platform {
         content: PublishContent,
         context?: PlatformContext,
     ): Promise<PublishResult[]> {
-        const { token } = await this.resolveConfig(context);
+        const { token, guildId } = await this.resolveConfig(context);
         if (!token) throw new Error('Discord bot token is not configured');
         const client = await this.getClient(token);
         const text = markdownToDiscord(content.markdown);
@@ -221,6 +208,7 @@ export class DiscordPlatform implements Platform {
                     channelId: id,
                     ok: true,
                     messageIds,
+                    link: this.linkFor(guildId, id, messageIds[0]),
                 });
             } catch (error: any) {
                 const skippable =
@@ -250,7 +238,7 @@ export class DiscordPlatform implements Platform {
         content: PublishContent,
         context?: PlatformContext,
     ): Promise<PublishResult[]> {
-        const { token } = await this.resolveConfig(context);
+        const { token, guildId } = await this.resolveConfig(context);
         if (!token) throw new Error('Discord bot token is not configured');
         const client = await this.getClient(token);
         const text = markdownToDiscord(content.markdown);
@@ -292,6 +280,7 @@ export class DiscordPlatform implements Platform {
                     channelId: ref.channelId,
                     ok: true,
                     messageIds: ref.messageIds,
+                    link: this.linkFor(guildId, ref.channelId, messageId),
                 });
             } catch (error: any) {
                 results.push({

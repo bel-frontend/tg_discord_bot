@@ -81,4 +81,34 @@ describe('platform config storage', () => {
         expect(listed.values).toEqual({ PROFILE_ID: 'profile-2' });
         expect(listed.configuredSecrets).toEqual(['TOKEN']);
     });
+
+    test('clearFields removes a saved secret even though it is required', async () => {
+        stored = null;
+        await upsertPlatformConfig('user1', 'unit', {
+            TOKEN: 'secret',
+            PROFILE_ID: 'profile-1',
+        });
+
+        const cleared = await upsertPlatformConfig('user1', 'unit', {
+            clearFields: ['TOKEN'],
+        });
+
+        expect(stored.values).toEqual({ PROFILE_ID: 'profile-1' });
+        expect(cleared.configuredSecrets).toEqual([]);
+    });
+
+    test('clearFields takes precedence even when a replacement value is submitted alongside it', async () => {
+        stored = null;
+        await upsertPlatformConfig('user1', 'unit', {
+            TOKEN: 'secret',
+            PROFILE_ID: 'profile-1',
+        });
+
+        await upsertPlatformConfig('user1', 'unit', {
+            TOKEN: 'should-be-ignored',
+            clearFields: ['TOKEN'],
+        });
+
+        expect(stored.values).toEqual({ PROFILE_ID: 'profile-1' });
+    });
 });

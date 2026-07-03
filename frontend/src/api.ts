@@ -98,6 +98,21 @@ export async function savePlatformConfig(
     return config;
 }
 
+/** Remove a single saved credential field (e.g. a token) without touching the others. */
+export async function clearPlatformConfigField(
+    platform: string,
+    fieldName: string,
+): Promise<PlatformConfigStatus> {
+    const { config } = await api<{ config: PlatformConfigStatus }>(
+        `/api/platform-configs/${platform}`,
+        {
+            method: 'PUT',
+            body: { clearFields: [fieldName] },
+        },
+    );
+    return config;
+}
+
 export async function fetchScheduledPublications(): Promise<
     ScheduledPublication[]
 > {

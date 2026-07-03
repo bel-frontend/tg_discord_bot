@@ -46,26 +46,6 @@ export class ThreadsPlatform implements Platform {
     readonly setup = {
         summary:
             'Publishes to a Threads profile through the official Threads Graph API.',
-        env: [
-            {
-                name: 'THREADS_ACCESS_TOKEN',
-                required: true,
-                description:
-                    'Long-lived Threads Graph API user access token with publishing permission.',
-            },
-            {
-                name: 'THREADS_USER_ID',
-                required: true,
-                description:
-                    'Threads user id used in /{threads-user-id}/threads and /threads_publish.',
-            },
-            {
-                name: 'THREADS_CHANNEL_IDS',
-                required: false,
-                description:
-                    'Optional picker entries. Use the Threads user id, optionally with "|Name".',
-            },
-        ],
         configFields: [
             {
                 name: 'THREADS_ACCESS_TOKEN',
@@ -85,15 +65,12 @@ export class ThreadsPlatform implements Platform {
                 placeholder: '12345678901234567',
             },
         ],
-        channelIdLabel: 'Threads user id',
-        channelIdHelp:
-            'For a single profile this is usually the same value as THREADS_USER_ID.',
         steps: [
             'Create or open a [Meta developer app](https://developers.facebook.com/apps/) and add the Threads API product.',
             'Configure OAuth and request the Threads publishing permission for the account that will post.',
-            'Generate a long-lived user access token and copy the Threads user id.',
-            'Paste THREADS_ACCESS_TOKEN and THREADS_USER_ID into this Settings form. .env is only a server-wide fallback.',
-            'Add THREADS_CHANNEL_IDS or create a Threads resource on this page using the same user id.',
+            'Generate a long-lived access token and copy your Threads user id.',
+            'Paste both into the "Access token" and "Threads user id" fields above, then click Save.',
+            'Go to Resources and add your Threads profile as a resource, using that same user id.',
         ],
         docsUrl: 'https://developers.facebook.com/docs/threads',
         notes: [

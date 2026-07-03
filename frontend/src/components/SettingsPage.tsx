@@ -1,6 +1,14 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import type { PlatformConfigStatus, User } from '../../../shared/types';
-import { fetchPlatformConfigs, savePlatformConfig } from '../api';
+import type {
+    PlatformConfigField,
+    PlatformConfigStatus,
+    User,
+} from '../../../shared/types';
+import {
+    clearPlatformConfigField,
+    fetchPlatformConfigs,
+    savePlatformConfig,
+} from '../api';
 import { useToast } from '../toast';
 import { usePlatforms } from '../hooks/usePlatforms';
 
@@ -28,6 +36,86 @@ function linkify(text: string): ReactNode[] {
     return parts;
 }
 
+interface ConfigFieldRowProps {
+    field: PlatformConfigField;
+    value: string;
+    saved: boolean;
+    editing: boolean;
+    clearing: boolean;
+    onChange: (value: string) => void;
+    onStartEdit: () => void;
+    onCancelEdit: () => void;
+    onRemove: () => void;
+}
+
+/**
+ * A saved secret can't be shown or edited in place (the server never sends it back), so it
+ * gets a "Configured" status row with Change/Remove instead of an empty input pretending to
+ * hold a value. Non-secret fields always show their real value in a plain, always-editable input.
+ */
+function ConfigFieldRow({
+    field,
+    value,
+    saved,
+    editing,
+    clearing,
+    onChange,
+    onStartEdit,
+    onCancelEdit,
+    onRemove,
+}: ConfigFieldRowProps) {
+    const showInput = !field.secret || !saved || editing;
+    return (
+        <label>
+            <span>
+                {field.label}
+                {field.required && ' *'}
+            </span>
+            {showInput ? (
+                <>
+                    <input
+                        type={field.secret ? 'password' : 'text'}
+                        autoFocus={editing}
+                        required={field.required && (!field.secret || !saved)}
+                        placeholder={field.placeholder}
+                        value={value}
+                        onChange={(event) => onChange(event.target.value)}
+                    />
+                    {field.secret && saved && editing && (
+                        <button
+                            type="button"
+                            className="settings-field-cancel"
+                            onClick={onCancelEdit}
+                        >
+                            Cancel
+                        </button>
+                    )}
+                </>
+            ) : (
+                <div className="settings-field-configured">
+                    <span className="settings-field-configured-status">
+                        ✓ Configured
+                    </span>
+                    <div className="settings-field-configured-actions">
+                        <button type="button" onClick={onStartEdit}>
+                            Change
+                        </button>
+                        <button
+                            type="button"
+                            className="settings-field-action-danger"
+                            disabled={clearing}
+                            onClick={onRemove}
+                        >
+                            Remove
+                        </button>
+                    </div>
+                </div>
+            )}
+            <small>{field.description}</small>
+        </label>
+    );
+}
+
 interface Props {
     user: User;
     theme: 'dark' | 'light';
@@ -52,6 +140,10 @@ export function SettingsPage({
         {},
     );
     const [saving, setSaving] = useState<string | null>(null);
+    const [clearing, setClearing] = useState<string | null>(null);
+    const [editingFields, setEditingFields] = useState<Set<string>>(
+        new Set(),
+    );
     const [activeTab, setActiveTab] = useState('');
     const [instructionsOpen, setInstructionsOpen] = useState(false);
 
@@ -92,6 +184,21 @@ export function SettingsPage({
         }));
     }
 
+    function startEditingField(platform: string, fieldName: string) {
+        setEditingFields((current) =>
+            new Set(current).add(`${platform}:${fieldName}`),
+        );
+    }
+
+    function cancelEditingField(platform: string, fieldName: string) {
+        setEditingFields((current) => {
+            const next = new Set(current);
+            next.delete(`${platform}:${fieldName}`);
+            return next;
+        });
+        updateDraft(platform, fieldName, '');
+    }
+
     async function save(platform: string) {
         setSaving(platform);
         try {
@@ -107,11 +214,47 @@ export function SettingsPage({
                 ...current,
                 [platform]: config.values,
             }));
+            // Every field of this platform is back to its persisted state, so
+            // collapse any "Change" input back to the configured/saved view.
+            setEditingFields((current) => {
+                const prefix = `${platform}:`;
+                const next = new Set(
+                    [...current].filter((key) => !key.startsWith(prefix)),
+                );
+                return next;
+            });
             toast('Platform settings saved', 'success');
         } catch (err: any) {
             toast(err.message, 'error');
         } finally {
             setSaving(null);
+        }
+    }
+
+    async function clearField(platform: string, fieldName: string, fieldLabel: string) {
+        if (!confirm(`Remove the saved "${fieldLabel}"?`)) return;
+        const key = `${platform}:${fieldName}`;
+        setClearing(key);
+        try {
+            const config = await clearPlatformConfigField(platform, fieldName);
+            setConfigs((current) => [
+                ...current.filter((item) => item.platform !== platform),
+                config,
+            ]);
+            setDrafts((current) => ({
+                ...current,
+                [platform]: { ...(current[platform] ?? {}), [fieldName]: '' },
+            }));
+            setEditingFields((current) => {
+                const next = new Set(current);
+                next.delete(key);
+                return next;
+            });
+            toast(`${fieldLabel} removed`, 'success');
+        } catch (err: any) {
+            toast(err.message, 'error');
+        } finally {
+            setClearing(null);
         }
     }
 
@@ -147,9 +290,9 @@ export function SettingsPage({
                 <section className="settings-intro">
                     <h2>Platform setup</h2>
                     <p className="muted">
-                        Save each user's platform credentials here. Publish
-                        targets still live in Resources, environment variables,
-                        or channels.json.
+                        Save your platform credentials here, then add the
+                        channels, groups, servers, or profiles you want to
+                        publish to on the Resources page.
                     </p>
                 </section>
 
@@ -241,68 +384,59 @@ export function SettingsPage({
                                                                           field.name
                                                                       ],
                                                                   );
+                                                            const fieldKey = `${activePlatform.id}:${field.name}`;
                                                             return (
-                                                                <label
+                                                                <ConfigFieldRow
                                                                     key={
                                                                         field.name
                                                                     }
-                                                                >
-                                                                    <span>
-                                                                        {
-                                                                            field.label
-                                                                        }
-                                                                        {field.required &&
-                                                                            ' *'}
-                                                                        {saved && (
-                                                                            <span className="settings-field-saved">
-                                                                                Saved
-                                                                            </span>
-                                                                        )}
-                                                                    </span>
-                                                                    <input
-                                                                        type={
-                                                                            field.secret
-                                                                                ? 'password'
-                                                                                : 'text'
-                                                                        }
-                                                                        required={
-                                                                            field.required &&
-                                                                            (!field.secret ||
-                                                                                !saved)
-                                                                        }
-                                                                        placeholder={
-                                                                            saved
-                                                                                ? 'Saved; leave blank to keep'
-                                                                                : field.placeholder
-                                                                        }
-                                                                        value={
-                                                                            drafts[
-                                                                                activePlatform
-                                                                                    .id
-                                                                            ]?.[
-                                                                                field
-                                                                                    .name
-                                                                            ] ??
-                                                                            ''
-                                                                        }
-                                                                        onChange={(
-                                                                            event,
-                                                                        ) =>
-                                                                            updateDraft(
-                                                                                activePlatform.id,
-                                                                                field.name,
-                                                                                event
-                                                                                    .target
-                                                                                    .value,
-                                                                            )
-                                                                        }
-                                                                    />
-                                                                    <small>
-                                                                        {
-                                                                            field.description
-                                                                        }
-                                                                    </small>
-                                                                </label>
+                                                                    field={field}
+                                                                    value={
+                                                                        drafts[
+                                                                            activePlatform
+                                                                                .id
+                                                                        ]?.[
+                                                                            field
+                                                                                .name
+                                                                        ] ?? ''
+                                                                    }
+                                                                    saved={saved}
+                                                                    editing={editingFields.has(
+                                                                        fieldKey,
+                                                                    )}
+                                                                    clearing={
+                                                                        clearing ===
+                                                                        fieldKey
+                                                                    }
+                                                                    onChange={(
+                                                                        value,
+                                                                    ) =>
+                                                                        updateDraft(
+                                                                            activePlatform.id,
+                                                                            field.name,
+                                                                            value,
+                                                                        )
+                                                                    }
+                                                                    onStartEdit={() =>
+                                                                        startEditingField(
+                                                                            activePlatform.id,
+                                                                            field.name,
+                                                                        )
+                                                                    }
+                                                                    onCancelEdit={() =>
+                                                                        cancelEditingField(
+                                                                            activePlatform.id,
+                                                                            field.name,
+                                                                        )
+                                                                    }
+                                                                    onRemove={() =>
+                                                                        clearField(
+                                                                            activePlatform.id,
+                                                                            field.name,
+                                                                            field.label,
+                                                                        )
+                                                                    }
+                                                                />
                                                             );
                                                         },
                                                     )}
@@ -358,53 +492,6 @@ export function SettingsPage({
                                                 ),
                                             )}
                                         </ol>
-
-                                        <div className="settings-grid">
-                                            <div>
-                                                <h4>Environment</h4>
-                                                <ul className="settings-env">
-                                                    {activePlatform.setup.env.map(
-                                                        (item) => (
-                                                            <li
-                                                                key={item.name}
-                                                            >
-                                                                <code>
-                                                                    {item.name}
-                                                                </code>
-                                                                <span>
-                                                                    {item.required
-                                                                        ? 'required'
-                                                                        : 'optional'}
-                                                                </span>
-                                                                <p>
-                                                                    {
-                                                                        item.description
-                                                                    }
-                                                                </p>
-                                                            </li>
-                                                        ),
-                                                    )}
-                                                </ul>
-                                            </div>
-
-                                            <div>
-                                                <h4>Resource ID</h4>
-                                                <p>
-                                                    <strong>
-                                                        {
-                                                            activePlatform.setup
-                                                                .channelIdLabel
-                                                        }
-                                                    </strong>
-                                                </p>
-                                                <p className="muted">
-                                                    {
-                                                        activePlatform.setup
-                                                            .channelIdHelp
-                                                    }
-                                                </p>
-                                            </div>
-                                        </div>
 
                                         {!!activePlatform.setup.notes
                                             ?.length && (

@@ -115,8 +115,9 @@ export function ResourceManager({
                 <section className="resource-panel">
                     <h2>Manage publishing resources</h2>
                     <p className="muted">
-                        Store channel names and real platform IDs in MongoDB.
-                        Tokens stay in .env; publish targets live here.
+                        Add the channels, groups, servers, or profiles you want to
+                        publish to. Platform credentials (bot tokens, access
+                        tokens) are entered separately on the Settings page.
                     </p>
 
                     <form className="resource-form" onSubmit={submit}>
@@ -175,7 +176,7 @@ export function ResourceManager({
                                     <div className="resource-meta">
                                         {channel.platform} · {channel.id}
                                         {channel.source === 'config' &&
-                                            ' · .env / config fallback'}
+                                            ' · server default'}
                                     </div>
                                 </div>
                                 {channel.resourceId ? (

@@ -79,20 +79,6 @@ export class TelegramPlatform implements Platform {
     readonly setup = {
         summary:
             'Publishes through a Telegram bot that is added to each target channel or chat.',
-        env: [
-            {
-                name: 'TELEGRAM_BOT_TOKEN',
-                required: true,
-                description:
-                    'Bot token from BotFather. Keep it private and restart the app after changing it.',
-            },
-            {
-                name: 'TELEGRAM_CHANNEL_USERNAMES',
-                required: false,
-                description:
-                    'Optional picker entries: @channel, numeric chat id, or "id|Name" values separated by commas.',
-            },
-        ],
         configFields: [
             {
                 name: 'TELEGRAM_BOT_TOKEN',
@@ -103,19 +89,16 @@ export class TelegramPlatform implements Platform {
                 placeholder: '123456:ABC...',
             },
         ],
-        channelIdLabel: 'Channel username or chat id',
-        channelIdHelp:
-            'Use @public_channel for public channels, or a numeric id such as -1001234567890 for private channels/chats.',
         steps: [
-            'Open [BotFather](https://t.me/BotFather) in Telegram and create a bot with /newbot.',
-            'Paste the bot token into this Settings form. TELEGRAM_BOT_TOKEN in .env is only a server-wide fallback.',
-            'Add the bot to the target channel or group and grant permission to post messages.',
-            'Add the target as TELEGRAM_CHANNEL_USERNAMES or create a Telegram resource here.',
-            'Save settings. Restart is needed only when you change .env fallback values.',
+            'Open [BotFather](https://t.me/BotFather) in Telegram, send /newbot, and follow the prompts to create a bot.',
+            'Copy the token BotFather gives you, paste it into the "Bot token" field above, and click Save.',
+            'Add the bot to the channel or group you want to post to, and give it permission to post messages.',
+            'Go to Resources and add that channel/group as a Telegram resource — use its @username (e.g. @public_channel), or a numeric chat id (e.g. -1001234567890) for private channels/chats.',
+            'It will now show up in the channel picker whenever you publish or schedule a post.',
         ],
         docsUrl: 'https://core.telegram.org/bots',
         notes: [
-            'Telegram bots cannot list every channel they belong to, so channels must be added in .env, channels.json, or Resources.',
+            "Telegram bots can't list every channel they belong to, so each target must be added on the Resources page.",
         ],
     };
     private bot: TelegramBot | null = null;

@@ -31,21 +31,14 @@ export interface PlatformMeta {
 
 export interface PlatformSetup {
     summary: string;
-    env: PlatformSetupEnvVar[];
     configFields?: PlatformConfigField[];
-    channelIdLabel: string;
-    channelIdHelp: string;
     // Steps/notes may embed a link as "[label](https://...)"; the UI renders it inline
-    // where it's mentioned instead of listing links separately out of context.
+    // where it's mentioned instead of listing links separately out of context. The
+    // Resources-page ID format belongs inline in the step that tells the user to add
+    // it there, not as a separate section repeating the same thing out of context.
     steps: string[];
     docsUrl?: string;
     notes?: string[];
-}
-
-export interface PlatformSetupEnvVar {
-    name: string;
-    required: boolean;
-    description: string;
 }
 
 export interface PlatformConfigField {
