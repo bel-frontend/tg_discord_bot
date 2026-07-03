@@ -19,6 +19,19 @@ afterEach(() => {
 });
 
 describe('ThreadsPlatform', () => {
+    test('setup guide calls out Threads-specific Meta app requirements', () => {
+        const platform = new ThreadsPlatform();
+        const guide = [
+            ...platform.setup.steps,
+            ...(platform.setup.notes ?? []),
+        ].join('\n');
+
+        expect(guide).toContain('Create app');
+        expect(guide).toContain('separate from the regular app id');
+        expect(guide).toContain('does not support localhost');
+        expect(guide).toContain('threads_content_publish');
+    });
+
     test('publishes text through create-container and publish calls', async () => {
         const calls: Array<{ url: string; body: URLSearchParams }> = [];
         mockFetch(async (url, init) => {

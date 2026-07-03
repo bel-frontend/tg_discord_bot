@@ -117,6 +117,13 @@ export async function clearPlatformConfigField(
     return config;
 }
 
+export async function startThreadsOAuth(): Promise<{
+    authUrl: string;
+    redirectUri: string;
+}> {
+    return api('/api/threads/oauth/start', { method: 'POST' });
+}
+
 export async function fetchScheduledPublications(): Promise<
     ScheduledPublication[]
 > {

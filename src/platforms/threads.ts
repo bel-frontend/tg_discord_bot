@@ -48,28 +48,46 @@ export class ThreadsPlatform implements Platform {
             'Publishes to a Threads profile through the official Threads Graph API.',
         configFields: [
             {
-                name: 'THREADS_ACCESS_TOKEN',
-                label: 'Access token',
+                name: 'THREADS_APP_ID',
+                label: 'Threads API app id',
+                required: true,
+                description:
+                    'App id from the Threads API product settings in Meta for Developers.',
+                placeholder: '123456789012345',
+            },
+            {
+                name: 'THREADS_APP_SECRET',
+                label: 'Threads API app secret',
                 required: true,
                 secret: true,
                 description:
-                    'Long-lived Threads Graph API user access token.',
+                    'App secret from the Threads API product settings. Meta documents this as separate from the regular app secret.',
+                placeholder: 'app-secret',
+            },
+            {
+                name: 'THREADS_ACCESS_TOKEN',
+                label: 'Access token',
+                required: false,
+                secret: true,
+                description:
+                    'Long-lived Threads Graph API user access token. The Connect Threads button can fill this after app credentials are saved.',
                 placeholder: 'EAAB...',
             },
             {
                 name: 'THREADS_USER_ID',
                 label: 'Threads user id',
-                required: true,
+                required: false,
                 description:
-                    'Threads profile id used in Graph API publishing paths.',
+                    'Threads profile id used in Graph API publishing paths. OAuth fills this automatically.',
                 placeholder: '12345678901234567',
             },
         ],
         steps: [
-            'Create or open a [Meta developer app](https://developers.facebook.com/apps/) and add the Threads API product.',
-            'Configure OAuth and request the Threads publishing permission for the account that will post.',
-            'Generate a long-lived access token and copy your Threads user id.',
-            'Paste both into the "Access token" and "Threads user id" fields above, then click Save.',
+            'Open [Meta for Developers Apps](https://developers.facebook.com/apps/). If the list is empty, click Create app first; the Threads API settings only appear inside an app.',
+            'Add the Threads API product/use case to that app and use the Threads API app id and app secret shown there. Meta documents these as separate from the regular app id and app secret.',
+            'Configure OAuth redirect URLs for the Threads API: /api/threads/oauth/callback for redirects, /api/threads/deauthorize for app removal, and /api/threads/data-deletion for data deletion. Meta does not support localhost redirect URLs for Threads OAuth; use an HTTPS domain, even for local testing.',
+            'Request the scopes needed for publishing, including threads_basic and threads_content_publish, for the Threads account that will post.',
+            'Save the Threads API app id and app secret here, then click Connect Threads to authorize the posting account.',
             'Go to Resources and add your Threads profile as a resource, using that same user id.',
         ],
         docsUrl: 'https://developers.facebook.com/docs/threads',
@@ -77,6 +95,7 @@ export class ThreadsPlatform implements Platform {
             'Posts longer than 500 characters are automatically split into a connected thread of replies.',
             'Threads image publishing requires a public image_url. Local uploaded files in Composer are not sent to Threads yet.',
             'Updates and deletes are not enabled in this adapter yet.',
+            'A blank Apps page in Meta for Developers is normal before you create or select an app; it is not evidence of a fake site by itself.',
         ],
     };
 

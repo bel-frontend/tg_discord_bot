@@ -37,6 +37,11 @@ import {
     deleteScheduledPublicationsForDraft,
     listScheduledPublications,
 } from './scheduledPublications';
+import {
+    completeThreadsOAuth,
+    createThreadsOAuthStart,
+    threadsDataDeletionResponse,
+} from './threadsOAuth';
 
 // The Next static export is copied here by frontend/scripts/copy-static-export.ts.
 const PUBLIC_DIR = join(import.meta.dir, '..', 'public');
@@ -52,6 +57,22 @@ function json(data: unknown, status = 200): Response {
         status,
         headers: { 'content-type': 'application/json' },
     });
+}
+
+function html(body: string, status = 200): Response {
+    return new Response(body, {
+        status,
+        headers: { 'content-type': 'text/html; charset=utf-8' },
+    });
+}
+
+function escapeHtml(value: string): string {
+    return value
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
 }
 
 async function serveStatic(pathname: string): Promise<Response> {
@@ -97,6 +118,41 @@ async function handleApi(req: Request, url: URL): Promise<Response> {
         return json(result);
     }
 
+    if (path === '/api/threads/oauth/callback' && method === 'GET') {
+        try {
+            const result = await completeThreadsOAuth(url);
+            const label = result.username || result.threadsUserId;
+            return html(
+                '<!doctype html><meta charset="utf-8">' +
+                    '<title>Threads connected</title>' +
+                    '<body style="font-family:sans-serif;padding:40px;max-width:640px;margin:auto">' +
+                    '<h1>Threads connected</h1>' +
+                    `<p>Connected Threads profile: <strong>${escapeHtml(label)}</strong>.</p>` +
+                    '<p><a href="/settings">Return to settings</a></p>' +
+                    '</body>',
+            );
+        } catch (err: any) {
+            return html(
+                '<!doctype html><meta charset="utf-8">' +
+                    '<title>Threads connection failed</title>' +
+                    '<body style="font-family:sans-serif;padding:40px;max-width:640px;margin:auto">' +
+                    '<h1>Threads connection failed</h1>' +
+                    `<p>${escapeHtml(err?.message || 'OAuth failed')}</p>` +
+                    '<p><a href="/settings">Return to settings</a></p>' +
+                    '</body>',
+                400,
+            );
+        }
+    }
+
+    if (path === '/api/threads/deauthorize' && method === 'POST') {
+        return json({ ok: true });
+    }
+
+    if (path === '/api/threads/data-deletion' && method === 'POST') {
+        return json(threadsDataDeletionResponse(url.origin));
+    }
+
     // --- Everything below requires authentication ---
     const user = await requireAuth(req);
 
@@ -114,6 +170,17 @@ async function handleApi(req: Request, url: URL): Promise<Response> {
 
     if (path === '/api/platform-configs' && method === 'GET') {
         return json({ configs: await listPlatformConfigs(user.id) });
+    }
+
+    if (path === '/api/threads/oauth/start' && method === 'POST') {
+        try {
+            return json(await createThreadsOAuthStart(user.id, url.origin));
+        } catch (err: any) {
+            return json(
+                { error: err?.message || 'Failed to start Threads OAuth' },
+                400,
+            );
+        }
     }
 
     const platformConfigMatch = path.match(

@@ -1275,7 +1275,12 @@ tg-spoiler {
     color: var(--text-dim);
     line-height: 1.35;
 }
-.settings-form button {
+.settings-form-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+.settings-form-actions button {
     align-self: flex-start;
 }
 .settings-steps,

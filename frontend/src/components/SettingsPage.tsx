@@ -7,6 +7,7 @@ import {
     clearPlatformConfigField,
     fetchPlatformConfigs,
     savePlatformConfig,
+    startThreadsOAuth,
 } from '../api';
 import { useToast } from '../toast';
 import { usePlatforms } from '../hooks/usePlatforms';
@@ -125,6 +126,7 @@ export function SettingsPage() {
     );
     const [saving, setSaving] = useState<string | null>(null);
     const [clearing, setClearing] = useState<string | null>(null);
+    const [connectingThreads, setConnectingThreads] = useState(false);
     const [editingFields, setEditingFields] = useState<Set<string>>(
         new Set(),
     );
@@ -239,6 +241,17 @@ export function SettingsPage() {
             toast(err.message, 'error');
         } finally {
             setClearing(null);
+        }
+    }
+
+    async function connectThreads() {
+        setConnectingThreads(true);
+        try {
+            const { authUrl } = await startThreadsOAuth();
+            window.location.href = authUrl;
+        } catch (err: any) {
+            toast(err.message, 'error');
+            setConnectingThreads(false);
         }
     }
 
@@ -398,15 +411,33 @@ export function SettingsPage() {
                                                         },
                                                     )}
                                                 </div>
-                                                <button
-                                                    className="btn primary"
-                                                    disabled={
-                                                        saving ===
-                                                        activePlatform.id
-                                                    }
-                                                >
-                                                    Save {activePlatform.name}
-                                                </button>
+                                                <div className="settings-form-actions">
+                                                    <button
+                                                        className="btn primary"
+                                                        disabled={
+                                                            saving ===
+                                                            activePlatform.id
+                                                        }
+                                                    >
+                                                        Save{' '}
+                                                        {activePlatform.name}
+                                                    </button>
+                                                    {activePlatform.id ===
+                                                        'threads' && (
+                                                        <button
+                                                            type="button"
+                                                            className="btn ghost"
+                                                            disabled={
+                                                                connectingThreads
+                                                            }
+                                                            onClick={
+                                                                connectThreads
+                                                            }
+                                                        >
+                                                            Connect Threads
+                                                        </button>
+                                                    )}
+                                                </div>
                                             </form>
                                         ) : (
                                             <p className="muted">
