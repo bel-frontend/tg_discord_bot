@@ -9,8 +9,13 @@ function escapeHtml(value: string): string {
 
 // Discord renders Markdown natively, so publish mostly passes Markdown through.
 export function markdownToDiscord(markdown: string): string {
+    // Discord's own renderer only supports heading levels up to ### (h3) — #### and
+    // deeper otherwise show up as literal "####" text, so collapse them to ###.
+    const withCappedHeadings = markdown.replace(/^#{4,6}(?=\s)/gm, '###');
     // Discord doesn't support Markdown horizontal rules; avoid leaking raw separators.
-    return markdown.replace(/^\s{0,3}([-*_])(?:\s*\1){2,}\s*$/gm, '').trim();
+    return withCappedHeadings
+        .replace(/^\s{0,3}([-*_])(?:\s*\1){2,}\s*$/gm, '')
+        .trim();
 }
 
 export function markdownToDiscordPreviewHtml(markdown: string): string {
