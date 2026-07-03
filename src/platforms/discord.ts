@@ -58,8 +58,8 @@ export class DiscordPlatform implements Platform {
     private ready: Promise<void> | null = null;
 
     constructor(
-        private token = process.env.DISCORD_BOT_TOKEN || '',
-        private guildId = process.env.DISCORD_GUILD_ID || '',
+        private token = '',
+        private guildId = '',
     ) {}
 
     isConfigured(): boolean {
@@ -131,12 +131,13 @@ export class DiscordPlatform implements Platform {
         return client;
     }
 
-    async listChannels(): Promise<Channel[]> {
-        if (!this.guildId) return [];
+    async listChannels(context?: PlatformContext): Promise<Channel[]> {
+        const { token, guildId } = await this.resolveConfig(context);
+        if (!token || !guildId) return [];
 
         try {
-            const client = await this.getClient();
-            const guild = await client.guilds.fetch(this.guildId);
+            const client = await this.getClient(token);
+            const guild = await client.guilds.fetch(guildId);
             const channels = await guild.channels.fetch();
             const live: Channel[] = [];
             for (const channel of channels.values()) {

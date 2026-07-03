@@ -50,7 +50,7 @@ export interface Platform {
     /** Whether the adapter has the config/tokens it needs to run. */
     isConfigured(): boolean;
     /** name -> id options for the channel picker. */
-    listChannels(): Promise<Channel[]>;
+    listChannels(context?: PlatformContext): Promise<Channel[]>;
     /** Publish the same content to each of the given channel ids. */
     publish(
         channelIds: string[],

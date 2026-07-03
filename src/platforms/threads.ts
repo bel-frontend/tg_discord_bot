@@ -99,8 +99,8 @@ export class ThreadsPlatform implements Platform {
     };
 
     constructor(
-        private accessToken = process.env.THREADS_ACCESS_TOKEN || '',
-        private userId = process.env.THREADS_USER_ID || '',
+        private accessToken = '',
+        private userId = '',
         private graphBaseUrl = process.env.THREADS_GRAPH_BASE_URL ||
             DEFAULT_GRAPH_BASE_URL,
     ) {}
@@ -120,9 +120,10 @@ export class ThreadsPlatform implements Platform {
         };
     }
 
-    listChannels(): Promise<Channel[]> {
-        if (!this.userId) return Promise.resolve([]);
-        return Promise.resolve([{ id: this.userId, name: 'Threads profile' }]);
+    async listChannels(context?: PlatformContext): Promise<Channel[]> {
+        const config = await this.resolveConfig(context);
+        if (!config.userId) return [];
+        return [{ id: config.userId, name: 'Threads profile' }];
     }
 
     toPreviewHtml(markdown: string): string {

@@ -56,9 +56,8 @@ export async function listAllChannels(userId: string): Promise<ChannelOption[]> 
     }
 
     for (const platform of platforms.values()) {
-        if (!platform.isConfigured()) continue;
         try {
-            const channels = await platform.listChannels();
+            const channels = await platform.listChannels({ userId });
             for (const channel of channels) {
                 const key = `${platform.id}:${channel.id}`;
                 if (seen.has(key)) continue;

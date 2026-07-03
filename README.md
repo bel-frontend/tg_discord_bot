@@ -64,19 +64,13 @@ MONGODB_AUTH_SOURCE=admin
 MONGODB_REPLICA_SET=your-replica-set
 # Optional: override the generated URI completely.
 # MONGODB_URI=mongodb://user:password@db.example.internal:27017/app?authSource=admin&replicaSet=rs0
-
-DISCORD_BOT_TOKEN=your-discord-bot-token
-TELEGRAM_BOT_TOKEN=your-telegram-bot-token
-THREADS_APP_ID=your-threads-api-app-id
-THREADS_APP_SECRET=your-threads-api-app-secret
-THREADS_ACCESS_TOKEN=your-long-lived-threads-user-access-token
-THREADS_USER_ID=your-threads-user-id
-# Optional: force the HTTPS callback URL registered in Meta, useful behind a tunnel/proxy.
-# THREADS_OAUTH_REDIRECT_URI=https://your-domain.example/api/threads/oauth/callback
 ```
 
 Do not commit `.env`, real tokens, passwords, or production resource IDs. Keep real values in
 server-side environment variables or in the app's authenticated Settings/Resources pages.
+
+Configure Telegram, Discord, and Threads credentials in the authenticated Settings page. These
+settings are stored in MongoDB per user, not in `.env`.
 
 Add the channels, groups, servers, or profiles you want to publish to on the authenticated
 Resources page. They are stored in MongoDB per user. Telegram bots cannot enumerate the channels

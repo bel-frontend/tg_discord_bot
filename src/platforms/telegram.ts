@@ -102,7 +102,7 @@ export class TelegramPlatform implements Platform {
     };
     private bot: TelegramBot | null = null;
 
-    constructor(private token = process.env.TELEGRAM_BOT_TOKEN || '') {}
+    constructor(private token = '') {}
 
     isConfigured(): boolean {
         return Boolean(this.token);
@@ -151,7 +151,7 @@ export class TelegramPlatform implements Platform {
         return this.bot;
     }
 
-    async listChannels(): Promise<Channel[]> {
+    async listChannels(_context?: PlatformContext): Promise<Channel[]> {
         // Telegram bots cannot enumerate the channels they're in.
         // Add Telegram channels on the Resources page so they are stored in MongoDB.
         return [];

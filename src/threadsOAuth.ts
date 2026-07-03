@@ -39,10 +39,7 @@ function graphBaseUrl(): string {
 }
 
 function oauthRedirectUri(origin: string): string {
-    return (
-        process.env.THREADS_OAUTH_REDIRECT_URI ||
-        `${origin.replace(/\/$/, '')}/api/threads/oauth/callback`
-    );
+    return `${origin.replace(/\/$/, '')}/api/threads/oauth/callback`;
 }
 
 function oauthAuthUrl(): string {
@@ -94,9 +91,8 @@ export async function createThreadsOAuthStart(
     origin: string,
 ): Promise<{ authUrl: string; redirectUri: string }> {
     const values = await getPlatformConfigValues(userId, THREADS_PLATFORM_ID);
-    const appId = values.THREADS_APP_ID || process.env.THREADS_APP_ID || '';
-    const appSecret =
-        values.THREADS_APP_SECRET || process.env.THREADS_APP_SECRET || '';
+    const appId = values.THREADS_APP_ID || '';
+    const appSecret = values.THREADS_APP_SECRET || '';
     if (!appId || !appSecret) {
         throw new Error('Threads app id and app secret are required first');
     }
@@ -126,9 +122,8 @@ export async function completeThreadsOAuth(
 
     const userId = await verifyState(state);
     const values = await getPlatformConfigValues(userId, THREADS_PLATFORM_ID);
-    const appId = values.THREADS_APP_ID || process.env.THREADS_APP_ID || '';
-    const appSecret =
-        values.THREADS_APP_SECRET || process.env.THREADS_APP_SECRET || '';
+    const appId = values.THREADS_APP_ID || '';
+    const appSecret = values.THREADS_APP_SECRET || '';
     if (!appId || !appSecret) {
         throw new Error('Threads app id and app secret are not configured');
     }
