@@ -380,6 +380,9 @@ select:focus {
     margin: 8px 0 0;
 }
 .scheduled-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
     flex-shrink: 0;
 }
 .resource-form {
@@ -985,6 +988,15 @@ tg-spoiler {
     padding: 12px;
     transition: background-color 0.3s ease;
 }
+.pub-card.ok {
+    border-color: color-mix(in srgb, var(--success) 40%, var(--border));
+}
+.pub-card.partial {
+    border-color: color-mix(in srgb, var(--warn) 48%, var(--border));
+}
+.pub-card.fail {
+    border-color: color-mix(in srgb, var(--danger) 45%, var(--border));
+}
 .pub-card.highlight {
     animation: publish-pulse 2.2s ease-out;
 }
@@ -1015,6 +1027,31 @@ tg-spoiler {
     justify-content: flex-end;
     gap: 6px;
     flex-shrink: 0;
+}
+.status-pill {
+    display: inline-flex;
+    align-items: center;
+    white-space: nowrap;
+    border-radius: 999px;
+    padding: 4px 8px;
+    font-size: 12px;
+    font-weight: 700;
+    border: 1px solid var(--border);
+}
+.status-pill.ok {
+    color: var(--success);
+    background: color-mix(in srgb, var(--success) 12%, transparent);
+    border-color: color-mix(in srgb, var(--success) 35%, var(--border));
+}
+.status-pill.partial {
+    color: var(--warn);
+    background: color-mix(in srgb, var(--warn) 12%, transparent);
+    border-color: color-mix(in srgb, var(--warn) 40%, var(--border));
+}
+.status-pill.fail {
+    color: var(--danger);
+    background: color-mix(in srgb, var(--danger) 12%, transparent);
+    border-color: color-mix(in srgb, var(--danger) 35%, var(--border));
 }
 .pub-targets {
     display: flex;

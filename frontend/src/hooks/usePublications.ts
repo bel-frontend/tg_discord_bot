@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState, type RefObject } from 'react';
-import { api } from '../api';
+import { api, deletePublication } from '../api';
 import { useToast } from '../toast';
 import type { Publication, PublishResult, Target } from '../../../shared/types';
 import type { ValidationIssue } from './useValidation';
@@ -164,12 +164,9 @@ export function usePublications() {
             if (!confirm('Delete this publication from all channels?')) return;
             setPublishing(true);
             try {
-                const { results, deleted } = await api<{
-                    results: PublishResult[];
-                    deleted: boolean;
-                }>(`/api/publications/${publication.id}/delete`, {
-                    method: 'POST',
-                });
+                const { results, deleted } = await deletePublication(
+                    publication.id,
+                );
                 if (deleted) {
                     setPublications((cur) =>
                         cur.filter((p) => p.id !== publication.id),

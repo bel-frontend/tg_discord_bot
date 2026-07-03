@@ -1,11 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, renderHook } from '@testing-library/react';
 
+const apiMock = vi.hoisted(() => vi.fn());
+
 vi.mock('../toast', () => ({
     useToast: () => vi.fn(),
 }));
 vi.mock('../api', () => ({
-    api: vi.fn(),
+    api: apiMock,
+    deletePublication: (id: string) =>
+        apiMock(`/api/publications/${encodeURIComponent(id)}/delete`, {
+            method: 'POST',
+        }),
 }));
 
 import { api } from '../api';

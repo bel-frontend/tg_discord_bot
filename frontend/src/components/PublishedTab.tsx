@@ -16,6 +16,18 @@ interface Props {
     onDelete: (publication: Publication) => void;
 }
 
+function publicationStatus(publication: Publication): {
+    label: string;
+    tone: 'ok' | 'partial' | 'fail';
+} {
+    const okTargets = publication.targets.filter((target) => target.ok).length;
+    if (okTargets === publication.targets.length) {
+        return { label: 'Published', tone: 'ok' };
+    }
+    if (okTargets > 0) return { label: 'Partially published', tone: 'partial' };
+    return { label: 'Failed', tone: 'fail' };
+}
+
 export function PublishedTab({
     publications,
     channels,
@@ -38,9 +50,10 @@ export function PublishedTab({
                         const okTargets = publication.targets.filter(
                             (target) => target.ok,
                         ).length;
+                        const status = publicationStatus(publication);
                         return (
                             <div
-                                className={`pub-card ${
+                                className={`pub-card ${status.tone} ${
                                     publication.id === highlightedPublicationId
                                         ? 'highlight'
                                         : ''
@@ -60,6 +73,11 @@ export function PublishedTab({
                                             channels
                                         </span>
                                     </div>
+                                    <span
+                                        className={`status-pill ${status.tone}`}
+                                    >
+                                        {status.label}
+                                    </span>
                                     <div className="pub-card-actions">
                                         <button
                                             className="btn small"

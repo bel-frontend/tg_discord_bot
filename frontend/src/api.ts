@@ -143,6 +143,15 @@ export async function fetchPublication(id: string): Promise<Publication> {
     return publication;
 }
 
+export async function deletePublication(id: string): Promise<{
+    results: Array<{ ok: boolean }>;
+    deleted: boolean;
+}> {
+    return api(`/api/publications/${encodeURIComponent(id)}/delete`, {
+        method: 'POST',
+    });
+}
+
 export async function schedulePublication(
     draftId: string,
     scheduledAt: string,

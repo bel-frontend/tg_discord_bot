@@ -4,6 +4,10 @@ import { ScheduledQueue } from './ScheduledQueue';
 
 const loadScheduledPublications = vi.fn(async () => undefined);
 const cancelScheduledPublication = vi.fn(async () => undefined);
+const deleteArchivePublication = vi.fn(async () => ({
+    results: [{ ok: true }],
+    deleted: true,
+}));
 
 vi.mock('../toast', () => ({
     useToast: () => vi.fn(),
@@ -34,6 +38,7 @@ vi.mock('../hooks/useScheduledPublications', () => ({
         ],
         loadScheduledPublications,
         cancelScheduledPublication,
+        deleteArchivePublication,
     }),
 }));
 
@@ -52,5 +57,23 @@ describe('ScheduledQueue', () => {
                 'publication-1',
             );
         });
+    });
+
+    it('deletes archive rows without opening the editor', async () => {
+        const onOpenDraft = vi.fn();
+        vi.spyOn(window, 'confirm').mockReturnValueOnce(true);
+        deleteArchivePublication.mockClear();
+
+        render(<ScheduledQueue onOpenDraft={onOpenDraft} />);
+
+        fireEvent.click(screen.getByRole('button', { name: /archive/i }));
+        fireEvent.click(screen.getAllByRole('button', { name: /delete/i })[1]);
+
+        await waitFor(() => {
+            expect(deleteArchivePublication).toHaveBeenCalledWith(
+                'publication-1',
+            );
+        });
+        expect(onOpenDraft).not.toHaveBeenCalled();
     });
 });

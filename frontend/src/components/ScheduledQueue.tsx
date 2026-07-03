@@ -66,9 +66,10 @@ function ScheduledItem({ item, onCancel, onOpenDraft }: ScheduledItemProps) {
 interface ArchiveItemProps {
     publication: Publication;
     onOpenDraft: (draftId: string, publicationId?: string) => void;
+    onDelete: (publication: Publication) => void;
 }
 
-function ArchiveItem({ publication, onOpenDraft }: ArchiveItemProps) {
+function ArchiveItem({ publication, onOpenDraft, onDelete }: ArchiveItemProps) {
     const okCount = publication.targets.filter((target) => target.ok).length;
     return (
         <article
@@ -90,6 +91,17 @@ function ArchiveItem({ publication, onOpenDraft }: ArchiveItemProps) {
                     {publication.targets.length} targets
                 </div>
             </div>
+            <div className="scheduled-actions">
+                <button
+                    className="btn danger"
+                    onClick={(event) => {
+                        event.stopPropagation();
+                        onDelete(publication);
+                    }}
+                >
+                    Delete
+                </button>
+            </div>
         </article>
     );
 }
@@ -104,6 +116,7 @@ export function ScheduledQueue({ onOpenDraft }: Props) {
         publicationArchive,
         loadScheduledPublications,
         cancelScheduledPublication,
+        deleteArchivePublication,
     } = useScheduledPublications();
 
     const upcomingPublications = scheduledPublications.filter((item) =>
@@ -118,6 +131,20 @@ export function ScheduledQueue({ onOpenDraft }: Props) {
         try {
             await cancelScheduledPublication(id);
             toast('Scheduled publication cancelled', 'success');
+        } catch (err: any) {
+            toast(err.message, 'error');
+        }
+    }
+
+    async function deleteArchived(publication: Publication) {
+        if (!confirm('Delete this publication from all channels?')) return;
+        try {
+            const { results } = await deleteArchivePublication(publication.id);
+            const okCount = results.filter((result) => result.ok).length;
+            toast(
+                `Deleted ${okCount}/${results.length} published messages`,
+                okCount === results.length ? 'success' : 'warn',
+            );
         } catch (err: any) {
             toast(err.message, 'error');
         }
@@ -183,6 +210,7 @@ export function ScheduledQueue({ onOpenDraft }: Props) {
                                 key={publication.id}
                                 publication={publication}
                                 onOpenDraft={onOpenDraft}
+                                onDelete={deleteArchived}
                             />
                         ))}
                     </div>

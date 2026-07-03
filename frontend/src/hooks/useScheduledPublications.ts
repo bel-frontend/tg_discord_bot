@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 import {
     cancelScheduledPublication,
+    deletePublication,
     fetchPublications,
     fetchScheduledPublications,
 } from '../api';
@@ -34,10 +35,21 @@ export function useScheduledPublications() {
         return updated;
     }, []);
 
+    const deleteArchivePublication = useCallback(async (id: string) => {
+        const outcome = await deletePublication(id);
+        if (outcome.deleted) {
+            setPublicationArchive((current) =>
+                current.filter((publication) => publication.id !== id),
+            );
+        }
+        return outcome;
+    }, []);
+
     return {
         scheduledPublications,
         publicationArchive,
         loadScheduledPublications,
         cancelScheduledPublication: cancel,
+        deleteArchivePublication,
     };
 }
