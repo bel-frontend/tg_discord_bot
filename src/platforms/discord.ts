@@ -3,11 +3,13 @@ import type { TextChannel } from 'discord.js';
 import type {
     Channel,
     Platform,
+    PlatformContext,
     PublishContent,
     PublishedMessageRef,
     PublishResult,
 } from './types';
 import { getConfiguredChannels } from '../channels';
+import { getPlatformConfigValues } from '../platformConfigs';
 import {
     markdownToDiscord,
     markdownToDiscordPreviewHtml,
@@ -42,14 +44,33 @@ export class DiscordPlatform implements Platform {
                     'Optional picker entries: channel ids or "id|Name" values separated by commas.',
             },
         ],
+        configFields: [
+            {
+                name: 'DISCORD_BOT_TOKEN',
+                label: 'Bot token',
+                required: true,
+                secret: true,
+                description:
+                    'Discord bot token from the Developer Portal.',
+                placeholder: 'Bot token',
+            },
+            {
+                name: 'DISCORD_GUILD_ID',
+                label: 'Server id',
+                required: false,
+                description:
+                    'Optional server id for message links and live channel discovery.',
+                placeholder: '123456789012345678',
+            },
+        ],
         channelIdLabel: 'Discord channel id',
         channelIdHelp:
             'Enable Developer Mode in Discord, then copy the target text channel id.',
         steps: [
-            'Create an application in the Discord Developer Portal and add a bot.',
-            'Copy the bot token into DISCORD_BOT_TOKEN in .env.',
+            'Create an application in the [Discord Developer Portal](https://discord.com/developers/applications) and add a bot.',
+            'Paste the bot token into this Settings form. DISCORD_BOT_TOKEN in .env is only a server-wide fallback.',
             'Invite the bot to your server with permission to view channels and send messages.',
-            'Copy the server id into DISCORD_GUILD_ID if you want live channel discovery.',
+            'Save the server id here or set DISCORD_GUILD_ID if you want a server-wide fallback.',
             'Add channel ids through DISCORD_CHANNEL_IDS or create Discord resources here.',
         ],
         docsUrl: 'https://discord.com/developers/docs/intro',
@@ -78,22 +99,50 @@ export class DiscordPlatform implements Platform {
         return `https://discord.com/channels/${this.guildId}/${channelId}/${messageId}`;
     }
 
-    /** Log in once and reuse the connection for both listing and publishing. */
-    private getClient(): Promise<Client> {
+    private async resolveConfig(context?: PlatformContext): Promise<{
+        token: string;
+        guildId: string;
+    }> {
+        const values = await getPlatformConfigValues(context?.userId, this.id);
+        return {
+            token: values.DISCORD_BOT_TOKEN || this.token,
+            guildId: values.DISCORD_GUILD_ID || this.guildId,
+        };
+    }
+
+    /** Log in once and reuse the env connection for both listing and publishing. */
+    private getClient(token = this.token): Promise<Client> {
+        if (token !== this.token) {
+            return this.createClient(token);
+        }
         if (!this.client) {
-            this.client = new Client({
-                intents: [
-                    GatewayIntentBits.Guilds,
-                    GatewayIntentBits.GuildMessages,
-                ],
-            });
-            this.ready = new Promise((resolve, reject) => {
-                this.client!.once('ready', () => resolve());
-                this.client!.once('error', reject);
-                this.client!.login(this.token).catch(reject);
-            });
+            this.client = this.buildClient();
+            this.ready = this.loginClient(this.client, this.token);
         }
         return this.ready!.then(() => this.client!);
+    }
+
+    private buildClient(): Client {
+        return new Client({
+            intents: [
+                GatewayIntentBits.Guilds,
+                GatewayIntentBits.GuildMessages,
+            ],
+        });
+    }
+
+    private loginClient(client: Client, token: string): Promise<void> {
+        return new Promise((resolve, reject) => {
+            client.once('ready', () => resolve());
+            client.once('error', reject);
+            client.login(token).catch(reject);
+        });
+    }
+
+    private async createClient(token: string): Promise<Client> {
+        const client = this.buildClient();
+        await this.loginClient(client, token);
+        return client;
     }
 
     async listChannels(): Promise<Channel[]> {
@@ -125,8 +174,11 @@ export class DiscordPlatform implements Platform {
     async publish(
         channelIds: string[],
         content: PublishContent,
+        context?: PlatformContext,
     ): Promise<PublishResult[]> {
-        const client = await this.getClient();
+        const { token } = await this.resolveConfig(context);
+        if (!token) throw new Error('Discord bot token is not configured');
+        const client = await this.getClient(token);
         const text = markdownToDiscord(content.markdown);
         const chunks = splitTextIntoChunks(text, DISCORD_LIMIT, true);
 
@@ -189,14 +241,18 @@ export class DiscordPlatform implements Platform {
                 });
             }
         }
+        if (token !== this.token) client.destroy();
         return results;
     }
 
     async update(
         refs: PublishedMessageRef[],
         content: PublishContent,
+        context?: PlatformContext,
     ): Promise<PublishResult[]> {
-        const client = await this.getClient();
+        const { token } = await this.resolveConfig(context);
+        if (!token) throw new Error('Discord bot token is not configured');
+        const client = await this.getClient(token);
         const text = markdownToDiscord(content.markdown);
         const chunks = splitTextIntoChunks(text, DISCORD_LIMIT, true);
         const results: PublishResult[] = [];
@@ -248,11 +304,17 @@ export class DiscordPlatform implements Platform {
             }
         }
 
+        if (token !== this.token) client.destroy();
         return results;
     }
 
-    async delete(refs: PublishedMessageRef[]): Promise<PublishResult[]> {
-        const client = await this.getClient();
+    async delete(
+        refs: PublishedMessageRef[],
+        context?: PlatformContext,
+    ): Promise<PublishResult[]> {
+        const { token } = await this.resolveConfig(context);
+        if (!token) throw new Error('Discord bot token is not configured');
+        const client = await this.getClient(token);
         const results: PublishResult[] = [];
 
         for (const ref of refs) {
@@ -284,6 +346,7 @@ export class DiscordPlatform implements Platform {
             }
         }
 
+        if (token !== this.token) client.destroy();
         return results;
     }
 }

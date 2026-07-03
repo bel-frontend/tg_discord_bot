@@ -32,8 +32,11 @@ export interface PlatformMeta {
 export interface PlatformSetup {
     summary: string;
     env: PlatformSetupEnvVar[];
+    configFields?: PlatformConfigField[];
     channelIdLabel: string;
     channelIdHelp: string;
+    // Steps/notes may embed a link as "[label](https://...)"; the UI renders it inline
+    // where it's mentioned instead of listing links separately out of context.
     steps: string[];
     docsUrl?: string;
     notes?: string[];
@@ -43,6 +46,22 @@ export interface PlatformSetupEnvVar {
     name: string;
     required: boolean;
     description: string;
+}
+
+export interface PlatformConfigField {
+    name: string;
+    label: string;
+    required: boolean;
+    secret?: boolean;
+    description: string;
+    placeholder?: string;
+}
+
+export interface PlatformConfigStatus {
+    platform: string;
+    values: Record<string, string>;
+    configuredSecrets: string[];
+    updatedAt?: string;
 }
 
 export interface Draft {

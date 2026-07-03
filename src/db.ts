@@ -44,6 +44,15 @@ export interface ChannelResourceDoc {
     updatedAt: Date;
 }
 
+export interface PlatformConfigDoc {
+    _id?: ObjectId;
+    userId: string;
+    platform: string;
+    values: Record<string, string>;
+    createdAt: Date;
+    updatedAt: Date;
+}
+
 export interface PublicationTargetDoc {
     platform: string;
     channelId: string;
@@ -85,6 +94,7 @@ let usersColl: Collection<UserDoc> | null = null;
 let draftsColl: Collection<DraftDoc> | null = null;
 let uploadsColl: Collection<UploadDoc> | null = null;
 let channelResourcesColl: Collection<ChannelResourceDoc> | null = null;
+let platformConfigsColl: Collection<PlatformConfigDoc> | null = null;
 let publicationsColl: Collection<PublicationDoc> | null = null;
 let scheduledPublicationsColl: Collection<ScheduledPublicationDoc> | null = null;
 
@@ -105,6 +115,7 @@ export async function connect(): Promise<void> {
     uploadsColl = db.collection<UploadDoc>('uploads');
     channelResourcesColl =
         db.collection<ChannelResourceDoc>('channelResources');
+    platformConfigsColl = db.collection<PlatformConfigDoc>('platformConfigs');
     publicationsColl = db.collection<PublicationDoc>('publications');
     scheduledPublicationsColl =
         db.collection<ScheduledPublicationDoc>('scheduledPublications');
@@ -112,8 +123,17 @@ export async function connect(): Promise<void> {
     await usersColl.createIndex({ email: 1 }, { unique: true });
     await draftsColl.createIndex({ userId: 1, updatedAt: -1 });
     await uploadsColl.createIndex({ userId: 1, createdAt: -1 });
+    try {
+        await channelResourcesColl.dropIndex('platform_1_channelId_1');
+    } catch {
+        // Older installs may not have this global uniqueness index.
+    }
     await channelResourcesColl.createIndex(
-        { platform: 1, channelId: 1 },
+        { createdBy: 1, platform: 1, channelId: 1 },
+        { unique: true },
+    );
+    await platformConfigsColl.createIndex(
+        { userId: 1, platform: 1 },
         { unique: true },
     );
     await publicationsColl.createIndex({ userId: 1, draftId: 1, updatedAt: -1 });
@@ -149,6 +169,13 @@ export function channelResources(): Collection<ChannelResourceDoc> {
         throw new Error('DB not connected — call connect() first');
     }
     return channelResourcesColl;
+}
+
+export function platformConfigs(): Collection<PlatformConfigDoc> {
+    if (!platformConfigsColl) {
+        throw new Error('DB not connected — call connect() first');
+    }
+    return platformConfigsColl;
 }
 
 export function publications(): Collection<PublicationDoc> {

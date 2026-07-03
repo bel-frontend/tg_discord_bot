@@ -25,6 +25,8 @@ mock.module('./platforms/registry', () => ({
     publishToTargets: publishToTargetsMock,
     updateTargets: mock(async () => []),
     deleteTargets: mock(async () => []),
+    getPlatform: mock(() => undefined),
+    listPlatforms: mock(() => []),
 }));
 // publications.test.ts imports the REAL './publications' as its own subject under test —
 // this mock only stays isolated to this file because Bun runs *.test.ts alphabetically
@@ -213,7 +215,11 @@ describe('executePublish', () => {
             images: [],
         });
 
-        expect(publishToTargetsMock).toHaveBeenCalledTimes(1);
+        expect(publishToTargetsMock).toHaveBeenCalledWith(
+            [{ platform: 'telegram', channelId: 'chan1' }],
+            { markdown: 'hi', imageUrls: [], images: [] },
+            'user1',
+        );
         expect(createPublicationMock).toHaveBeenCalledTimes(1);
         expect(outcome.publication).not.toBeNull();
         expect(outcome.publication?.title).toBe('Untitled');
@@ -233,7 +239,11 @@ describe('executePublish', () => {
             images: [],
         });
 
-        expect(publishToTargetsMock).toHaveBeenCalledTimes(1);
+        expect(publishToTargetsMock).toHaveBeenCalledWith(
+            [{ platform: 'telegram', channelId: 'chan1' }],
+            { markdown: 'hi', imageUrls: [], images: [] },
+            'user1',
+        );
         expect(createPublicationMock).not.toHaveBeenCalled();
         expect(outcome.publication).toBeNull();
     });

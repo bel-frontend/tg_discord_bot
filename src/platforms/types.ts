@@ -26,6 +26,10 @@ export interface PublishedMessageRef {
     messageIds: string[];
 }
 
+export interface PlatformContext {
+    userId?: string;
+}
+
 export interface ValidationIssue {
     platform: string;
     chunk: number;
@@ -51,14 +55,19 @@ export interface Platform {
     publish(
         channelIds: string[],
         content: PublishContent,
+        context?: PlatformContext,
     ): Promise<PublishResult[]>;
     /** Update previously published messages, when the platform can edit them. */
     update?(
         refs: PublishedMessageRef[],
         content: PublishContent,
+        context?: PlatformContext,
     ): Promise<PublishResult[]>;
     /** Delete previously published messages, when the platform can delete them. */
-    delete?(refs: PublishedMessageRef[]): Promise<PublishResult[]>;
+    delete?(
+        refs: PublishedMessageRef[],
+        context?: PlatformContext,
+    ): Promise<PublishResult[]>;
     /** Render markdown as this platform's preview HTML. */
     toPreviewHtml(markdown: string): string;
     /** Check markdown/content for platform-specific formatting problems. */

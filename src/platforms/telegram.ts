@@ -2,12 +2,14 @@ import TelegramBot from 'node-telegram-bot-api';
 import type {
     Channel,
     Platform,
+    PlatformContext,
     PublishContent,
     PublishedMessageRef,
     PublishResult,
     ValidationIssue,
 } from './types';
 import { getConfiguredChannels } from '../channels';
+import { getPlatformConfigValues } from '../platformConfigs';
 import { markdownToTelegramHtml } from './telegram/markdown';
 import { splitTextIntoChunks, TELEGRAM_LIMIT } from '../chunk';
 import { isValidTelegramHtml, validateTelegramHtml } from '../telegramValidation';
@@ -91,15 +93,25 @@ export class TelegramPlatform implements Platform {
                     'Optional picker entries: @channel, numeric chat id, or "id|Name" values separated by commas.',
             },
         ],
+        configFields: [
+            {
+                name: 'TELEGRAM_BOT_TOKEN',
+                label: 'Bot token',
+                required: true,
+                secret: true,
+                description: 'Token from BotFather for the bot that will post.',
+                placeholder: '123456:ABC...',
+            },
+        ],
         channelIdLabel: 'Channel username or chat id',
         channelIdHelp:
             'Use @public_channel for public channels, or a numeric id such as -1001234567890 for private channels/chats.',
         steps: [
-            'Open BotFather in Telegram and create a bot with /newbot.',
-            'Copy the bot token into TELEGRAM_BOT_TOKEN in .env.',
+            'Open [BotFather](https://t.me/BotFather) in Telegram and create a bot with /newbot.',
+            'Paste the bot token into this Settings form. TELEGRAM_BOT_TOKEN in .env is only a server-wide fallback.',
             'Add the bot to the target channel or group and grant permission to post messages.',
             'Add the target as TELEGRAM_CHANNEL_USERNAMES or create a Telegram resource here.',
-            'Restart the app so the backend picks up the new token and channel list.',
+            'Save settings. Restart is needed only when you change .env fallback values.',
         ],
         docsUrl: 'https://core.telegram.org/bots',
         notes: [
@@ -142,7 +154,15 @@ export class TelegramPlatform implements Platform {
         return `https://t.me/${username}/${messageId}`;
     }
 
-    private getBot(): TelegramBot {
+    private async resolveToken(context?: PlatformContext): Promise<string> {
+        const values = await getPlatformConfigValues(context?.userId, this.id);
+        return values.TELEGRAM_BOT_TOKEN || this.token;
+    }
+
+    private getBot(token: string): TelegramBot {
+        if (token !== this.token) {
+            return new TelegramBot(token, { polling: false });
+        }
         if (!this.bot) {
             this.bot = new TelegramBot(this.token, { polling: false });
         }
@@ -157,8 +177,11 @@ export class TelegramPlatform implements Platform {
     async publish(
         channelIds: string[],
         content: PublishContent,
+        context?: PlatformContext,
     ): Promise<PublishResult[]> {
-        const bot = this.getBot();
+        const token = await this.resolveToken(context);
+        if (!token) throw new Error('Telegram bot token is not configured');
+        const bot = this.getBot(token);
         const html = markdownToTelegramHtml(content.markdown);
         const chunks = splitTextIntoChunks(html, TELEGRAM_LIMIT, true);
         const invalidChunk = chunks.find(
@@ -263,8 +286,11 @@ export class TelegramPlatform implements Platform {
     async update(
         refs: PublishedMessageRef[],
         content: PublishContent,
+        context?: PlatformContext,
     ): Promise<PublishResult[]> {
-        const bot = this.getBot();
+        const token = await this.resolveToken(context);
+        if (!token) throw new Error('Telegram bot token is not configured');
+        const bot = this.getBot(token);
         const html = markdownToTelegramHtml(content.markdown);
         const chunks = splitTextIntoChunks(html, TELEGRAM_LIMIT, true);
         const results: PublishResult[] = [];
@@ -339,8 +365,13 @@ export class TelegramPlatform implements Platform {
         return results;
     }
 
-    async delete(refs: PublishedMessageRef[]): Promise<PublishResult[]> {
-        const bot = this.getBot();
+    async delete(
+        refs: PublishedMessageRef[],
+        context?: PlatformContext,
+    ): Promise<PublishResult[]> {
+        const token = await this.resolveToken(context);
+        if (!token) throw new Error('Telegram bot token is not configured');
+        const bot = this.getBot(token);
         const results: PublishResult[] = [];
 
         for (const ref of refs) {

@@ -1,0 +1,84 @@
+import { describe, expect, mock, test } from 'bun:test';
+
+let stored: any = null;
+
+const platformConfigsCollection = {
+    findOne: mock(async () => stored),
+    find: mock(() => ({
+        toArray: async () => (stored ? [stored] : []),
+    })),
+    findOneAndUpdate: mock(async (_filter: any, update: any) => {
+        stored = {
+            userId: update.$setOnInsert.userId,
+            platform: update.$setOnInsert.platform,
+            values: update.$set.values,
+            createdAt: update.$setOnInsert.createdAt,
+            updatedAt: update.$set.updatedAt,
+        };
+        return stored;
+    }),
+};
+
+mock.module('./db', () => ({
+    platformConfigs: () => platformConfigsCollection,
+}));
+
+mock.module('./platforms/registry', () => ({
+    getPlatform: mock(() => ({
+        setup: {
+            configFields: [
+                {
+                    name: 'TOKEN',
+                    label: 'Token',
+                    required: true,
+                    secret: true,
+                    description: 'Secret token',
+                },
+                {
+                    name: 'PROFILE_ID',
+                    label: 'Profile id',
+                    required: true,
+                    description: 'Profile id',
+                },
+            ],
+        },
+    })),
+    listPlatforms: mock(() => [
+        {
+            id: 'unit',
+        },
+    ]),
+}));
+
+const { listPlatformConfigs, upsertPlatformConfig } = await import(
+    './platformConfigs'
+);
+
+describe('platform config storage', () => {
+    test('hides secrets and preserves an existing secret when submitted blank', async () => {
+        stored = null;
+
+        const first = await upsertPlatformConfig('user1', 'unit', {
+            TOKEN: 'secret',
+            PROFILE_ID: 'profile-1',
+        });
+
+        expect(first.values).toEqual({ PROFILE_ID: 'profile-1' });
+        expect(first.configuredSecrets).toEqual(['TOKEN']);
+
+        const second = await upsertPlatformConfig('user1', 'unit', {
+            TOKEN: '',
+            PROFILE_ID: 'profile-2',
+        });
+
+        expect(stored.values).toEqual({
+            TOKEN: 'secret',
+            PROFILE_ID: 'profile-2',
+        });
+        expect(second.values).toEqual({ PROFILE_ID: 'profile-2' });
+
+        const [listed] = await listPlatformConfigs('user1');
+        expect(listed.values).toEqual({ PROFILE_ID: 'profile-2' });
+        expect(listed.configuredSecrets).toEqual(['TOKEN']);
+    });
+});

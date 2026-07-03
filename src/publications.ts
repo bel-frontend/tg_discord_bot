@@ -184,7 +184,7 @@ export async function updatePublishedTargets(
         return { error: 'Content is empty', status: 400 };
     }
 
-    const results = await updateTargets(refs, { markdown, imageUrls });
+    const results = await updateTargets(refs, { markdown, imageUrls }, userId);
     const updated = await updatePublicationResults(userId, publicationId, {
         title: String(input.title ?? publication.title ?? 'Untitled'),
         markdown,
@@ -213,7 +213,7 @@ export async function deletePublishedTargets(
         };
     }
 
-    const results = await deleteTargets(refs);
+    const results = await deleteTargets(refs, userId);
     const ok = results.every((result) => result.ok);
     if (ok) await deletePublicationRecord(userId, publicationId);
     return { results, deleted: ok };

@@ -1,7 +1,32 @@
-import { useEffect } from 'react';
-import type { User } from '../../../shared/types';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import type { PlatformConfigStatus, User } from '../../../shared/types';
+import { fetchPlatformConfigs, savePlatformConfig } from '../api';
 import { useToast } from '../toast';
 import { usePlatforms } from '../hooks/usePlatforms';
+
+const LINK_PATTERN = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g;
+
+/** Render "[label](url)" markers inline as real links, so a step/note can link exactly where it's mentioned. */
+function linkify(text: string): ReactNode[] {
+    const parts: ReactNode[] = [];
+    let lastIndex = 0;
+    let match: RegExpExecArray | null;
+    let key = 0;
+    LINK_PATTERN.lastIndex = 0;
+    while ((match = LINK_PATTERN.exec(text))) {
+        if (match.index > lastIndex) {
+            parts.push(text.slice(lastIndex, match.index));
+        }
+        parts.push(
+            <a key={key++} href={match[2]} target="_blank" rel="noreferrer">
+                {match[1]}
+            </a>,
+        );
+        lastIndex = match.index + match[0].length;
+    }
+    if (lastIndex < text.length) parts.push(text.slice(lastIndex));
+    return parts;
+}
 
 interface Props {
     user: User;
@@ -22,10 +47,73 @@ export function SettingsPage({
 }: Props) {
     const toast = useToast();
     const { platforms, loadPlatforms } = usePlatforms();
+    const [configs, setConfigs] = useState<PlatformConfigStatus[]>([]);
+    const [drafts, setDrafts] = useState<Record<string, Record<string, string>>>(
+        {},
+    );
+    const [saving, setSaving] = useState<string | null>(null);
+    const [activeTab, setActiveTab] = useState('');
+    const [instructionsOpen, setInstructionsOpen] = useState(false);
+
+    const configByPlatform = useMemo(
+        () => new Map(configs.map((config) => [config.platform, config])),
+        [configs],
+    );
+
+    const activePlatform = platforms.find((p) => p.id === activeTab);
 
     useEffect(() => {
-        loadPlatforms().catch((err) => toast(err.message, 'error'));
+        if (!activeTab && platforms.length) setActiveTab(platforms[0].id);
+    }, [platforms, activeTab]);
+
+    useEffect(() => {
+        Promise.all([loadPlatforms(), fetchPlatformConfigs()])
+            .then(([, nextConfigs]) => {
+                setConfigs(nextConfigs);
+                setDrafts(
+                    Object.fromEntries(
+                        nextConfigs.map((config) => [
+                            config.platform,
+                            config.values,
+                        ]),
+                    ),
+                );
+            })
+            .catch((err) => toast(err.message, 'error'));
     }, [loadPlatforms, toast]);
+
+    function updateDraft(platform: string, name: string, value: string) {
+        setDrafts((current) => ({
+            ...current,
+            [platform]: {
+                ...(current[platform] ?? {}),
+                [name]: value,
+            },
+        }));
+    }
+
+    async function save(platform: string) {
+        setSaving(platform);
+        try {
+            const config = await savePlatformConfig(
+                platform,
+                drafts[platform] ?? {},
+            );
+            setConfigs((current) => [
+                ...current.filter((item) => item.platform !== platform),
+                config,
+            ]);
+            setDrafts((current) => ({
+                ...current,
+                [platform]: config.values,
+            }));
+            toast('Platform settings saved', 'success');
+        } catch (err: any) {
+            toast(err.message, 'error');
+        } finally {
+            setSaving(null);
+        }
+    }
 
     return (
         <div className="app">
@@ -59,58 +147,243 @@ export function SettingsPage({
                 <section className="settings-intro">
                     <h2>Platform setup</h2>
                     <p className="muted">
-                        Tokens live in .env. Publish targets can be added in
-                        Resources, environment variables, or channels.json.
+                        Save each user's platform credentials here. Publish
+                        targets still live in Resources, environment variables,
+                        or channels.json.
                     </p>
                 </section>
 
-                <section className="settings-platforms">
-                    {platforms.map((platform) => {
-                        const setup = platform.setup;
-                        return (
-                            <article
-                                className="settings-platform"
-                                key={platform.id}
+                {platforms.length === 0 ? (
+                    <p className="muted">No platforms are registered.</p>
+                ) : (
+                    <>
+                        <div className="settings-tabs">
+                            {platforms.map((platform) => (
+                                <button
+                                    key={platform.id}
+                                    type="button"
+                                    className={`settings-tab ${
+                                        activeTab === platform.id
+                                            ? 'active'
+                                            : ''
+                                    }`}
+                                    onClick={() => setActiveTab(platform.id)}
+                                >
+                                    <span>{platform.icon ?? '🌐'}</span>{' '}
+                                    {platform.name}
+                                </button>
+                            ))}
+                        </div>
+
+                        {activePlatform && (
+                            <section
+                                className="settings-platform-panel"
+                                key={activePlatform.id}
                             >
                                 <div className="settings-platform-head">
                                     <h3>
-                                        <span>{platform.icon ?? '🌐'}</span>
-                                        {platform.name}
-                                    </h3>
-                                    {platform.charLimit && (
-                                        <span className="settings-pill">
-                                            {platform.charLimit} chars
+                                        <span>
+                                            {activePlatform.icon ?? '🌐'}
                                         </span>
-                                    )}
+                                        {activePlatform.name}
+                                    </h3>
+                                    <div className="settings-platform-head-actions">
+                                        {activePlatform.charLimit && (
+                                            <span className="settings-pill">
+                                                {activePlatform.charLimit} chars
+                                            </span>
+                                        )}
+                                        {activePlatform.setup && (
+                                            <button
+                                                type="button"
+                                                className="settings-howto-btn"
+                                                onClick={() =>
+                                                    setInstructionsOpen(true)
+                                                }
+                                            >
+                                                📖 Setup guide
+                                            </button>
+                                        )}
+                                    </div>
                                 </div>
 
-                                {setup ? (
+                                {activePlatform.setup ? (
                                     <>
                                         <p className="muted">
-                                            {setup.summary}
+                                            {activePlatform.setup.summary}
                                         </p>
+
+                                        {activePlatform.setup.configFields
+                                            ?.length ? (
+                                            <form
+                                                className="settings-form"
+                                                onSubmit={(event) => {
+                                                    event.preventDefault();
+                                                    save(activePlatform.id);
+                                                }}
+                                            >
+                                                <div className="settings-form-fields">
+                                                    {activePlatform.setup.configFields.map(
+                                                        (field) => {
+                                                            const fieldConfig =
+                                                                configByPlatform.get(
+                                                                    activePlatform.id,
+                                                                );
+                                                            const saved = field.secret
+                                                                ? Boolean(
+                                                                      fieldConfig?.configuredSecrets.includes(
+                                                                          field.name,
+                                                                      ),
+                                                                  )
+                                                                : Boolean(
+                                                                      fieldConfig
+                                                                          ?.values[
+                                                                          field.name
+                                                                      ],
+                                                                  );
+                                                            return (
+                                                                <label
+                                                                    key={
+                                                                        field.name
+                                                                    }
+                                                                >
+                                                                    <span>
+                                                                        {
+                                                                            field.label
+                                                                        }
+                                                                        {field.required &&
+                                                                            ' *'}
+                                                                        {saved && (
+                                                                            <span className="settings-field-saved">
+                                                                                Saved
+                                                                            </span>
+                                                                        )}
+                                                                    </span>
+                                                                    <input
+                                                                        type={
+                                                                            field.secret
+                                                                                ? 'password'
+                                                                                : 'text'
+                                                                        }
+                                                                        required={
+                                                                            field.required &&
+                                                                            (!field.secret ||
+                                                                                !saved)
+                                                                        }
+                                                                        placeholder={
+                                                                            saved
+                                                                                ? 'Saved; leave blank to keep'
+                                                                                : field.placeholder
+                                                                        }
+                                                                        value={
+                                                                            drafts[
+                                                                                activePlatform
+                                                                                    .id
+                                                                            ]?.[
+                                                                                field
+                                                                                    .name
+                                                                            ] ??
+                                                                            ''
+                                                                        }
+                                                                        onChange={(
+                                                                            event,
+                                                                        ) =>
+                                                                            updateDraft(
+                                                                                activePlatform.id,
+                                                                                field.name,
+                                                                                event
+                                                                                    .target
+                                                                                    .value,
+                                                                            )
+                                                                        }
+                                                                    />
+                                                                    <small>
+                                                                        {
+                                                                            field.description
+                                                                        }
+                                                                    </small>
+                                                                </label>
+                                                            );
+                                                        },
+                                                    )}
+                                                </div>
+                                                <button
+                                                    className="btn primary"
+                                                    disabled={
+                                                        saving ===
+                                                        activePlatform.id
+                                                    }
+                                                >
+                                                    Save {activePlatform.name}
+                                                </button>
+                                            </form>
+                                        ) : (
+                                            <p className="muted">
+                                                This platform has no
+                                                user-configurable credentials.
+                                            </p>
+                                        )}
+                                    </>
+                                ) : (
+                                    <p className="muted">
+                                        No setup instructions are registered
+                                        for this platform yet.
+                                    </p>
+                                )}
+                            </section>
+                        )}
+
+                        {instructionsOpen && activePlatform?.setup && (
+                            <div
+                                className="modal-backdrop"
+                                onClick={() => setInstructionsOpen(false)}
+                            >
+                                <div
+                                    className="settings-instructions-modal"
+                                    onClick={(e) => e.stopPropagation()}
+                                >
+                                    <h3>
+                                        {activePlatform.icon ?? '🌐'}{' '}
+                                        {activePlatform.name} setup
+                                    </h3>
+
+                                    <div className="settings-instructions-body">
+                                        <h4>Steps</h4>
+                                        <ol className="settings-steps">
+                                            {activePlatform.setup.steps.map(
+                                                (step) => (
+                                                    <li key={step}>
+                                                        {linkify(step)}
+                                                    </li>
+                                                ),
+                                            )}
+                                        </ol>
 
                                         <div className="settings-grid">
                                             <div>
                                                 <h4>Environment</h4>
                                                 <ul className="settings-env">
-                                                    {setup.env.map((item) => (
-                                                        <li key={item.name}>
-                                                            <code>
-                                                                {item.name}
-                                                            </code>
-                                                            <span>
-                                                                {item.required
-                                                                    ? 'required'
-                                                                    : 'optional'}
-                                                            </span>
-                                                            <p>
-                                                                {
-                                                                    item.description
-                                                                }
-                                                            </p>
-                                                        </li>
-                                                    ))}
+                                                    {activePlatform.setup.env.map(
+                                                        (item) => (
+                                                            <li
+                                                                key={item.name}
+                                                            >
+                                                                <code>
+                                                                    {item.name}
+                                                                </code>
+                                                                <span>
+                                                                    {item.required
+                                                                        ? 'required'
+                                                                        : 'optional'}
+                                                                </span>
+                                                                <p>
+                                                                    {
+                                                                        item.description
+                                                                    }
+                                                                </p>
+                                                            </li>
+                                                        ),
+                                                    )}
                                                 </ul>
                                             </div>
 
@@ -119,57 +392,69 @@ export function SettingsPage({
                                                 <p>
                                                     <strong>
                                                         {
-                                                            setup.channelIdLabel
+                                                            activePlatform.setup
+                                                                .channelIdLabel
                                                         }
                                                     </strong>
                                                 </p>
                                                 <p className="muted">
-                                                    {setup.channelIdHelp}
+                                                    {
+                                                        activePlatform.setup
+                                                            .channelIdHelp
+                                                    }
                                                 </p>
                                             </div>
                                         </div>
 
-                                        <h4>Steps</h4>
-                                        <ol className="settings-steps">
-                                            {setup.steps.map((step) => (
-                                                <li key={step}>{step}</li>
-                                            ))}
-                                        </ol>
-
-                                        {!!setup.notes?.length && (
+                                        {!!activePlatform.setup.notes
+                                            ?.length && (
                                             <>
                                                 <h4>Notes</h4>
                                                 <ul className="settings-notes">
-                                                    {setup.notes.map((note) => (
-                                                        <li key={note}>
-                                                            {note}
-                                                        </li>
-                                                    ))}
+                                                    {activePlatform.setup.notes.map(
+                                                        (note) => (
+                                                            <li key={note}>
+                                                                {linkify(
+                                                                    note,
+                                                                )}
+                                                            </li>
+                                                        ),
+                                                    )}
                                                 </ul>
                                             </>
                                         )}
 
-                                        {setup.docsUrl && (
+                                        {activePlatform.setup.docsUrl && (
                                             <a
                                                 className="settings-doc-link"
-                                                href={setup.docsUrl}
+                                                href={
+                                                    activePlatform.setup
+                                                        .docsUrl
+                                                }
                                                 target="_blank"
                                                 rel="noreferrer"
                                             >
                                                 Open official docs
                                             </a>
                                         )}
-                                    </>
-                                ) : (
-                                    <p className="muted">
-                                        No setup instructions are registered for
-                                        this platform yet.
-                                    </p>
-                                )}
-                            </article>
-                        );
-                    })}
-                </section>
+                                    </div>
+
+                                    <div className="modal-actions">
+                                        <button
+                                            type="button"
+                                            className="btn ghost"
+                                            onClick={() =>
+                                                setInstructionsOpen(false)
+                                            }
+                                        >
+                                            Close
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </>
+                )}
             </main>
         </div>
     );

@@ -11,9 +11,14 @@ const scheduledCollection = {
     findOneAndUpdate: findOneAndUpdateMock,
     find: mock(() => ({ sort: () => ({ toArray: async () => [] }) })),
 };
+const platformConfigsCollection = {
+    findOne: mock(async () => null),
+    find: mock(() => ({ toArray: async () => [] })),
+};
 
 mock.module('./db', () => ({
     scheduledPublications: () => scheduledCollection,
+    platformConfigs: () => platformConfigsCollection,
 }));
 
 const currentDraft = {
@@ -55,6 +60,8 @@ mock.module('./uploads', () => ({
 }));
 mock.module('./platforms/registry', () => ({
     publishToTargets: publishToTargetsMock,
+    getPlatform: mock(() => undefined),
+    listPlatforms: mock(() => []),
 }));
 mock.module('./publications', () => ({
     createPublication: createPublicationMock,
@@ -113,6 +120,7 @@ describe('publishScheduledPublication', () => {
                     },
                 ],
             },
+            'user1',
         );
         expect(createPublicationMock).toHaveBeenCalledWith('user1', {
             draftId: currentDraft.id,

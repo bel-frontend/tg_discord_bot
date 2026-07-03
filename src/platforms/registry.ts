@@ -35,10 +35,10 @@ export function listPlatformsMeta(): PlatformMeta[] {
 }
 
 /** Aggregate the channel options of every configured platform for the picker. */
-export async function listAllChannels(): Promise<ChannelOption[]> {
+export async function listAllChannels(userId: string): Promise<ChannelOption[]> {
     const options: ChannelOption[] = [];
 
-    const managed = await listChannelResources();
+    const managed = await listChannelResources(userId);
     const seen = new Set<string>();
 
     for (const channel of managed) {
@@ -105,6 +105,7 @@ export interface PublishTarget {
 export async function publishToTargets(
     targets: PublishTarget[],
     content: PublishContent,
+    userId?: string,
 ): Promise<PublishResult[]> {
     // Group channel ids by platform so each adapter is called once.
     const byPlatform = new Map<string, string[]>();
@@ -130,7 +131,10 @@ export async function publishToTargets(
         }
         try {
             results.push(
-                ...withLinks(platform, await platform.publish(channelIds, content)),
+                ...withLinks(
+                    platform,
+                    await platform.publish(channelIds, content, { userId }),
+                ),
             );
         } catch (error: any) {
             results.push(
@@ -153,6 +157,7 @@ export interface ExistingPublishTarget extends PublishTarget {
 export async function updateTargets(
     targets: ExistingPublishTarget[],
     content: PublishContent,
+    userId?: string,
 ): Promise<PublishResult[]> {
     const byPlatform = new Map<string, PublishedMessageRef[]>();
     for (const target of targets) {
@@ -193,7 +198,10 @@ export async function updateTargets(
         }
         try {
             results.push(
-                ...withLinks(platform, await platform.update(refs, content)),
+                ...withLinks(
+                    platform,
+                    await platform.update(refs, content, { userId }),
+                ),
             );
         } catch (error: any) {
             results.push(
@@ -212,6 +220,7 @@ export async function updateTargets(
 
 export async function deleteTargets(
     targets: ExistingPublishTarget[],
+    userId?: string,
 ): Promise<PublishResult[]> {
     const byPlatform = new Map<string, PublishedMessageRef[]>();
     for (const target of targets) {
@@ -251,7 +260,7 @@ export async function deleteTargets(
             continue;
         }
         try {
-            results.push(...(await platform.delete(refs)));
+            results.push(...(await platform.delete(refs, { userId })));
         } catch (error: any) {
             results.push(
                 ...refs.map((ref) => ({

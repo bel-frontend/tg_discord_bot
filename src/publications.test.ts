@@ -11,9 +11,14 @@ const fakeCollection = {
     deleteOne: deleteOneMock,
     find: mock(() => ({ sort: () => ({ toArray: async () => [] }) })),
 };
+const platformConfigsCollection = {
+    findOne: mock(async () => null),
+    find: mock(() => ({ toArray: async () => [] })),
+};
 
 mock.module('./db', () => ({
     publications: () => fakeCollection,
+    platformConfigs: () => platformConfigsCollection,
 }));
 
 const updateTargetsMock = mock(async (_refs: unknown[], _content: unknown) => [
@@ -30,6 +35,8 @@ mock.module('./platforms/registry', () => ({
     updateTargets: updateTargetsMock,
     deleteTargets: deleteTargetsMock,
     publishToTargets: mock(async () => []),
+    getPlatform: mock(() => undefined),
+    listPlatforms: mock(() => []),
 }));
 
 const { updatePublishedTargets, deletePublishedTargets } = await import(

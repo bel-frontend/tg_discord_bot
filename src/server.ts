@@ -17,6 +17,10 @@ import {
     deleteChannelResource,
     updateChannelResource,
 } from './channelResources';
+import {
+    listPlatformConfigs,
+    upsertPlatformConfig,
+} from './platformConfigs';
 import { getUpload, saveUpload } from './uploads';
 import { validateMarkdown, previewContent } from './validation';
 import { parsePublishRequest, executePublish } from './publishRequest';
@@ -92,11 +96,35 @@ async function handleApi(req: Request, url: URL): Promise<Response> {
     }
 
     if (path === '/api/channels' && method === 'GET') {
-        return json({ channels: await listAllChannels() });
+        return json({ channels: await listAllChannels(user.id) });
     }
 
     if (path === '/api/platforms' && method === 'GET') {
         return json({ platforms: listPlatformsMeta() });
+    }
+
+    if (path === '/api/platform-configs' && method === 'GET') {
+        return json({ configs: await listPlatformConfigs(user.id) });
+    }
+
+    const platformConfigMatch = path.match(
+        /^\/api\/platform-configs\/([^/]+)$/,
+    );
+    if (platformConfigMatch && method === 'PUT') {
+        const body = await req.json().catch(() => ({}));
+        try {
+            const config = await upsertPlatformConfig(
+                user.id,
+                platformConfigMatch[1],
+                body,
+            );
+            return json({ config });
+        } catch (err: any) {
+            return json(
+                { error: err?.message || 'Failed to save platform settings' },
+                400,
+            );
+        }
     }
 
     if (path === '/api/validate' && method === 'POST') {
@@ -129,7 +157,7 @@ async function handleApi(req: Request, url: URL): Promise<Response> {
         if (method === 'PUT') {
             const body = await req.json().catch(() => ({}));
             try {
-                const channel = await updateChannelResource(id, body);
+                const channel = await updateChannelResource(user.id, id, body);
                 return channel
                     ? json({ channel })
                     : json({ error: 'Not found' }, 404);
@@ -141,7 +169,7 @@ async function handleApi(req: Request, url: URL): Promise<Response> {
             }
         }
         if (method === 'DELETE') {
-            const ok = await deleteChannelResource(id);
+            const ok = await deleteChannelResource(user.id, id);
             return ok ? json({ ok: true }) : json({ error: 'Not found' }, 404);
         }
     }

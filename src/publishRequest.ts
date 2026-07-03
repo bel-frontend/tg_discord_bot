@@ -116,11 +116,15 @@ export async function executePublish(
         throw new Error('Content is empty');
     }
 
-    const results = await publishToTargets(parsed.targets, {
-        markdown: parsed.markdown,
-        imageUrls: parsed.imageUrls,
-        images: parsed.images,
-    });
+    const results = await publishToTargets(
+        parsed.targets,
+        {
+            markdown: parsed.markdown,
+            imageUrls: parsed.imageUrls,
+            images: parsed.images,
+        },
+        userId,
+    );
     const publication = parsed.draftId
         ? await createPublication(userId, {
               draftId: parsed.draftId,

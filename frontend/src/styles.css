@@ -1037,14 +1037,33 @@ tg-spoiler {
 .settings-intro h2 {
     margin: 0 0 8px;
 }
-.settings-platforms {
+.settings-tabs {
     max-width: 980px;
     margin: 0 auto;
     display: flex;
-    flex-direction: column;
-    gap: 14px;
+    gap: 4px;
+    border-bottom: 1px solid var(--border);
 }
-.settings-platform {
+.settings-tab {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    border: none;
+    background: transparent;
+    color: var(--text-dim);
+    padding: 10px 16px;
+    border-radius: 6px 6px 0 0;
+    cursor: pointer;
+    font: inherit;
+}
+.settings-tab.active {
+    background: var(--bg-elev-2);
+    color: var(--text);
+    box-shadow: inset 0 -2px 0 var(--accent);
+}
+.settings-platform-panel {
+    max-width: 980px;
+    margin: 14px auto 0;
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
     background: var(--bg-elev);
@@ -1057,18 +1076,43 @@ tg-spoiler {
     gap: 12px;
     margin-bottom: 8px;
 }
-.settings-platform h3 {
+.settings-platform-head-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+}
+.settings-platform-panel h3 {
     display: flex;
     align-items: center;
     gap: 8px;
     margin: 0;
 }
-.settings-platform h4 {
+.settings-platform-panel h4 {
     margin: 16px 0 8px;
     font-size: 13px;
     text-transform: uppercase;
     letter-spacing: 0.04em;
     color: var(--text-dim);
+}
+.settings-howto-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 10px;
+    border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--border));
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--accent) 12%, transparent);
+    color: var(--accent);
+    font: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+    cursor: pointer;
+}
+.settings-howto-btn:hover {
+    background: color-mix(in srgb, var(--accent) 20%, transparent);
+    border-color: var(--accent);
 }
 .settings-pill {
     border: 1px solid var(--border);
@@ -1082,6 +1126,51 @@ tg-spoiler {
     display: grid;
     grid-template-columns: minmax(0, 1.5fr) minmax(220px, 0.8fr);
     gap: 18px;
+}
+.settings-form {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    margin: 14px 0 4px;
+    padding: 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--bg);
+}
+.settings-form-fields {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 12px;
+}
+.settings-form label {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 0;
+}
+.settings-form label span {
+    color: var(--text-dim);
+    font-size: 13px;
+}
+.settings-field-saved {
+    display: inline-flex;
+    align-items: center;
+    margin-left: 8px;
+    padding: 1px 8px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--success) 20%, transparent);
+    color: var(--success);
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+.settings-form small {
+    color: var(--text-dim);
+    line-height: 1.35;
+}
+.settings-form button {
+    align-self: flex-start;
 }
 .settings-env,
 .settings-steps,
@@ -1109,7 +1198,7 @@ tg-spoiler {
     font-size: 12px;
 }
 .settings-env p,
-.settings-platform p {
+.settings-platform-panel p {
     margin: 6px 0 0;
 }
 .settings-steps,
@@ -1126,6 +1215,35 @@ tg-spoiler {
 }
 .settings-doc-link:hover {
     text-decoration: underline;
+}
+.settings-instructions-modal {
+    width: min(640px, 100%);
+    max-height: 80vh;
+    display: flex;
+    flex-direction: column;
+    padding: 20px;
+    background: var(--bg-elev);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+}
+.settings-instructions-modal h3 {
+    flex-shrink: 0;
+    margin: 0 0 12px;
+}
+.settings-instructions-body {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.settings-instructions-modal .modal-actions {
+    flex-shrink: 0;
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid var(--border);
 }
 
 /* ---------- toasts ---------- */

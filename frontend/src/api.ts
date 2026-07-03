@@ -1,5 +1,6 @@
 import type {
     PlatformMeta,
+    PlatformConfigStatus,
     ScheduledPublication,
 } from '../../shared/types';
 
@@ -74,6 +75,27 @@ export async function fetchPlatforms(): Promise<PlatformMeta[]> {
         '/api/platforms',
     );
     return platforms;
+}
+
+export async function fetchPlatformConfigs(): Promise<PlatformConfigStatus[]> {
+    const { configs } = await api<{ configs: PlatformConfigStatus[] }>(
+        '/api/platform-configs',
+    );
+    return configs;
+}
+
+export async function savePlatformConfig(
+    platform: string,
+    values: Record<string, string>,
+): Promise<PlatformConfigStatus> {
+    const { config } = await api<{ config: PlatformConfigStatus }>(
+        `/api/platform-configs/${platform}`,
+        {
+            method: 'PUT',
+            body: values,
+        },
+    );
+    return config;
 }
 
 export async function fetchScheduledPublications(): Promise<

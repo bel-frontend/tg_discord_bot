@@ -1,11 +1,13 @@
 import type {
     Channel,
     Platform,
+    PlatformContext,
     PublishContent,
     PublishResult,
     ValidationIssue,
 } from './types';
 import { getConfiguredChannels } from '../channels';
+import { getPlatformConfigValues } from '../platformConfigs';
 import {
     markdownToThreadsPreviewHtml,
     markdownToThreadsText,
@@ -64,14 +66,33 @@ export class ThreadsPlatform implements Platform {
                     'Optional picker entries. Use the Threads user id, optionally with "|Name".',
             },
         ],
+        configFields: [
+            {
+                name: 'THREADS_ACCESS_TOKEN',
+                label: 'Access token',
+                required: true,
+                secret: true,
+                description:
+                    'Long-lived Threads Graph API user access token.',
+                placeholder: 'EAAB...',
+            },
+            {
+                name: 'THREADS_USER_ID',
+                label: 'Threads user id',
+                required: true,
+                description:
+                    'Threads profile id used in Graph API publishing paths.',
+                placeholder: '12345678901234567',
+            },
+        ],
         channelIdLabel: 'Threads user id',
         channelIdHelp:
             'For a single profile this is usually the same value as THREADS_USER_ID.',
         steps: [
-            'Create or open a Meta developer app and add the Threads API product.',
+            'Create or open a [Meta developer app](https://developers.facebook.com/apps/) and add the Threads API product.',
             'Configure OAuth and request the Threads publishing permission for the account that will post.',
             'Generate a long-lived user access token and copy the Threads user id.',
-            'Set THREADS_ACCESS_TOKEN and THREADS_USER_ID in .env.',
+            'Paste THREADS_ACCESS_TOKEN and THREADS_USER_ID into this Settings form. .env is only a server-wide fallback.',
             'Add THREADS_CHANNEL_IDS or create a Threads resource on this page using the same user id.',
         ],
         docsUrl: 'https://developers.facebook.com/docs/threads',
@@ -90,6 +111,17 @@ export class ThreadsPlatform implements Platform {
 
     isConfigured(): boolean {
         return Boolean(this.accessToken && this.userId);
+    }
+
+    private async resolveConfig(context?: PlatformContext): Promise<{
+        accessToken: string;
+        userId: string;
+    }> {
+        const values = await getPlatformConfigValues(context?.userId, this.id);
+        return {
+            accessToken: values.THREADS_ACCESS_TOKEN || this.accessToken,
+            userId: values.THREADS_USER_ID || this.userId,
+        };
     }
 
     listChannels(): Promise<Channel[]> {
@@ -122,6 +154,7 @@ export class ThreadsPlatform implements Platform {
     private async createContainer(
         channelId: string,
         content: PublishContent,
+        accessToken: string,
     ): Promise<string> {
         const text = markdownToThreadsText(content.markdown);
         const imageUrls = content.imageUrls ?? [];
@@ -145,7 +178,7 @@ export class ThreadsPlatform implements Platform {
         }
 
         const body = new URLSearchParams({
-            access_token: this.accessToken,
+            access_token: accessToken,
             media_type: imageUrls.length ? 'IMAGE' : 'TEXT',
         });
         if (text) body.set('text', text);
@@ -168,9 +201,10 @@ export class ThreadsPlatform implements Platform {
     private async publishContainer(
         channelId: string,
         creationId: string,
+        accessToken: string,
     ): Promise<string> {
         const body = new URLSearchParams({
-            access_token: this.accessToken,
+            access_token: accessToken,
             creation_id: creationId,
         });
         const response = await fetch(
@@ -193,15 +227,28 @@ export class ThreadsPlatform implements Platform {
     async publish(
         channelIds: string[],
         content: PublishContent,
+        context?: PlatformContext,
     ): Promise<PublishResult[]> {
+        const config = await this.resolveConfig(context);
+        if (!config.accessToken || !config.userId) {
+            throw new Error('Threads access token and user id are not configured');
+        }
         const results: PublishResult[] = [];
         for (const channelId of channelIds) {
-            const id = channelId.trim();
+            const id = channelId.trim() || config.userId;
             if (!id) continue;
 
             try {
-                const creationId = await this.createContainer(id, content);
-                const postId = await this.publishContainer(id, creationId);
+                const creationId = await this.createContainer(
+                    id,
+                    content,
+                    config.accessToken,
+                );
+                const postId = await this.publishContainer(
+                    id,
+                    creationId,
+                    config.accessToken,
+                );
                 results.push({
                     platform: this.id,
                     channelId: id,
