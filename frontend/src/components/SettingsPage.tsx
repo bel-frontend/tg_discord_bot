@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import type {
     PlatformConfigField,
     PlatformConfigStatus,
-    User,
 } from '../../../shared/types';
 import {
     clearPlatformConfigField,
@@ -11,6 +10,7 @@ import {
 } from '../api';
 import { useToast } from '../toast';
 import { usePlatforms } from '../hooks/usePlatforms';
+import { PageLayout } from '../layouts/PageLayout';
 
 const LINK_PATTERN = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g;
 
@@ -116,23 +116,7 @@ function ConfigFieldRow({
     );
 }
 
-interface Props {
-    user: User;
-    theme: 'dark' | 'light';
-    onToggleTheme: () => void;
-    onBack: () => void;
-    onManageResources: () => void;
-    onLogout: () => void;
-}
-
-export function SettingsPage({
-    user,
-    theme,
-    onToggleTheme,
-    onBack,
-    onManageResources,
-    onLogout,
-}: Props) {
+export function SettingsPage() {
     const toast = useToast();
     const { platforms, loadPlatforms } = usePlatforms();
     const [configs, setConfigs] = useState<PlatformConfigStatus[]>([]);
@@ -259,34 +243,7 @@ export function SettingsPage({
     }
 
     return (
-        <div className="app">
-            <header className="topbar">
-                <div className="brand">
-                    <span className="brand-mark">✦</span>
-                    <span className="brand-name">Settings</span>
-                </div>
-                <div className="topbar-right">
-                    <button className="btn ghost" onClick={onBack}>
-                        Back to composer
-                    </button>
-                    <button className="btn ghost" onClick={onManageResources}>
-                        Resources
-                    </button>
-                    <button
-                        className="btn ghost"
-                        title="Toggle theme"
-                        onClick={onToggleTheme}
-                    >
-                        {theme === 'dark' ? '◐' : '◑'}
-                    </button>
-                    <span className="user-email">{user.email}</span>
-                    <button className="btn ghost" onClick={onLogout}>
-                        Log out
-                    </button>
-                </div>
-            </header>
-
-            <main className="settings-page">
+        <PageLayout className="settings-page">
                 <section className="settings-intro">
                     <h2>Platform setup</h2>
                     <p className="muted">
@@ -542,7 +499,6 @@ export function SettingsPage({
                         )}
                     </>
                 )}
-            </main>
-        </div>
+        </PageLayout>
     );
 }

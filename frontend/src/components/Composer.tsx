@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { PanelRightClose, PanelRightOpen } from 'lucide-react';
 import { api, schedulePublication } from '../api';
 import { useToast } from '../toast';
-import type { Draft, Publication, User } from '../../../shared/types';
+import type { Draft, Publication } from '../../../shared/types';
 import { type MarkdownEditorHandle } from './MarkdownEditor';
 import { DraftsRail } from './DraftsRail';
 import { ComposerEditorPane } from './ComposerEditorPane';
@@ -17,24 +17,10 @@ import { loadImagePreviews } from '../hooks/useImagePreviews';
 import { usePlatforms } from '../hooks/usePlatforms';
 
 interface Props {
-    user: User;
     theme: 'dark' | 'light';
-    onToggleTheme: () => void;
-    onManageResources: () => void;
-    onOpenScheduled: () => void;
-    onOpenSettings: () => void;
-    onLogout: () => void;
 }
 
-export function Composer({
-    user,
-    theme,
-    onToggleTheme,
-    onManageResources,
-    onOpenScheduled,
-    onOpenSettings,
-    onLogout,
-}: Props) {
+export function Composer({ theme }: Props) {
     const toast = useToast();
     const editorRef = useRef<MarkdownEditorHandle>(null);
     const draftLoadSeq = useRef(0);
@@ -194,37 +180,7 @@ export function Composer({
     const SidePanelsIcon = focusMode ? PanelRightOpen : PanelRightClose;
 
     return (
-        <div className="app">
-            <header className="topbar">
-                <div className="brand">
-                    <span className="brand-mark">✦</span>
-                    <span className="brand-name">Composer</span>
-                </div>
-                <div className="topbar-right">
-                    <button
-                        className="btn ghost"
-                        title="Toggle theme"
-                        onClick={onToggleTheme}
-                    >
-                        ◐
-                    </button>
-                    <button className="btn ghost" onClick={onManageResources}>
-                        Resources
-                    </button>
-                    <button className="btn ghost" onClick={onOpenScheduled}>
-                        Scheduled
-                    </button>
-                    <button className="btn ghost" onClick={onOpenSettings}>
-                        Settings
-                    </button>
-                    <span className="user-email">{user.email}</span>
-                    <button className="btn ghost" onClick={onLogout}>
-                        Log out
-                    </button>
-                </div>
-            </header>
-
-            <main className={`layout ${focusMode ? 'focus-mode' : ''}`}>
+        <main className={`layout ${focusMode ? 'focus-mode' : ''}`}>
                 <button
                     type="button"
                     className={`side-panels-toggle ${
@@ -320,7 +276,6 @@ export function Composer({
                         onSchedule={schedule}
                     />
                 )}
-            </main>
-        </div>
+        </main>
     );
 }

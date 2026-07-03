@@ -1,18 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '../api';
 import { useToast } from '../toast';
-import type { ChannelOption, User } from '../../../shared/types';
+import type { ChannelOption } from '../../../shared/types';
 import { platformIcon } from './ChannelPicker';
 import { useChannels } from '../hooks/useChannels';
 import { usePlatforms } from '../hooks/usePlatforms';
-
-interface Props {
-    user: User;
-    theme: 'dark' | 'light';
-    onToggleTheme: () => void;
-    onBack: () => void;
-    onLogout: () => void;
-}
+import { PageLayout } from '../layouts/PageLayout';
 
 // Fallback platform names for ids without a registered adapter yet — lets users
 // pre-provision channel resources before the platform module exists.
@@ -25,13 +18,7 @@ const PLATFORM_PLACEHOLDERS = [
     { id: 'other', name: 'Other' },
 ];
 
-export function ResourceManager({
-    user,
-    theme,
-    onToggleTheme,
-    onBack,
-    onLogout,
-}: Props) {
+export function ResourceManager() {
     const toast = useToast();
     const { channels, loadChannels } = useChannels();
     const { platforms, loadPlatforms } = usePlatforms();
@@ -87,31 +74,7 @@ export function ResourceManager({
     }
 
     return (
-        <div className="app">
-            <header className="topbar">
-                <div className="brand">
-                    <span className="brand-mark">✦</span>
-                    <span className="brand-name">Resources</span>
-                </div>
-                <div className="topbar-right">
-                    <button className="btn ghost" onClick={onBack}>
-                        Back to composer
-                    </button>
-                    <button
-                        className="btn ghost"
-                        title="Toggle theme"
-                        onClick={onToggleTheme}
-                    >
-                        {theme === 'dark' ? '◐' : '◑'}
-                    </button>
-                    <span className="user-email">{user.email}</span>
-                    <button className="btn ghost" onClick={onLogout}>
-                        Log out
-                    </button>
-                </div>
-            </header>
-
-            <main className="resource-page">
+        <PageLayout className="resource-page">
                 <section className="resource-panel">
                     <h2>Manage publishing resources</h2>
                     <p className="muted">
@@ -195,7 +158,6 @@ export function ResourceManager({
                         ))}
                     </div>
                 </section>
-            </main>
-        </div>
+        </PageLayout>
     );
 }

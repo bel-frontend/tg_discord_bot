@@ -284,7 +284,7 @@ select:focus {
 }
 
 /* ---------- resources manager ---------- */
-.resource-page {
+.page-shell {
     flex: 1;
     overflow: auto;
     padding: 24px;
@@ -296,11 +296,6 @@ select:focus {
 .resource-panel h2 {
     margin: 0 0 8px;
     font-size: 26px;
-}
-.scheduled-page {
-    flex: 1;
-    overflow: auto;
-    padding: 24px;
 }
 .scheduled-panel {
     max-width: 980px;
@@ -1027,11 +1022,6 @@ tg-spoiler {
 }
 
 /* ---------- settings ---------- */
-.settings-page {
-    height: calc(100vh - var(--topbar-h));
-    overflow: auto;
-    padding: 24px;
-}
 .settings-intro {
     max-width: 980px;
     margin: 0 auto 18px;
@@ -1336,8 +1326,7 @@ tg-spoiler {
         align-items: flex-start;
         flex-direction: column;
     }
-    .settings-page {
-        height: auto;
+    .page-shell {
         padding: 16px;
     }
 }

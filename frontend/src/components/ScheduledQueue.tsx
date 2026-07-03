@@ -1,27 +1,13 @@
 import { useEffect } from 'react';
-import type { User } from '../../../shared/types';
 import { useToast } from '../toast';
 import { useScheduledPublications } from '../hooks/useScheduledPublications';
-
-interface Props {
-    user: User;
-    theme: 'dark' | 'light';
-    onToggleTheme: () => void;
-    onBack: () => void;
-    onLogout: () => void;
-}
+import { PageLayout } from '../layouts/PageLayout';
 
 function statusLabel(status: string): string {
     return status.charAt(0).toUpperCase() + status.slice(1);
 }
 
-export function ScheduledQueue({
-    user,
-    theme,
-    onToggleTheme,
-    onBack,
-    onLogout,
-}: Props) {
+export function ScheduledQueue() {
     const toast = useToast();
     const {
         scheduledPublications,
@@ -43,31 +29,7 @@ export function ScheduledQueue({
     }
 
     return (
-        <div className="app">
-            <header className="topbar">
-                <div className="brand">
-                    <span className="brand-mark">✦</span>
-                    <span className="brand-name">Scheduled</span>
-                </div>
-                <div className="topbar-right">
-                    <button className="btn ghost" onClick={onBack}>
-                        Back to composer
-                    </button>
-                    <button
-                        className="btn ghost"
-                        title="Toggle theme"
-                        onClick={onToggleTheme}
-                    >
-                        {theme === 'dark' ? '◐' : '◑'}
-                    </button>
-                    <span className="user-email">{user.email}</span>
-                    <button className="btn ghost" onClick={onLogout}>
-                        Log out
-                    </button>
-                </div>
-            </header>
-
-            <main className="scheduled-page">
+        <PageLayout className="scheduled-page">
                 <section className="scheduled-panel">
                     <div className="scheduled-head">
                         <h2>Scheduled queue</h2>
@@ -117,7 +79,6 @@ export function ScheduledQueue({
                         </div>
                     )}
                 </section>
-            </main>
-        </div>
+        </PageLayout>
     );
 }
