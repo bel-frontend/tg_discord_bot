@@ -4,7 +4,6 @@ import type {
     PlatformContext,
     PublishContent,
     PublishResult,
-    ValidationIssue,
 } from './types';
 import { getConfiguredChannels } from '../channels';
 import { getPlatformConfigValues } from '../platformConfigs';
@@ -12,6 +11,7 @@ import {
     markdownToThreadsPreviewHtml,
     markdownToThreadsText,
 } from './threads/markdown';
+import { splitTextIntoChunks } from '../chunk';
 
 const THREADS_LIMIT = 500;
 const DEFAULT_GRAPH_BASE_URL = 'https://graph.threads.net/v1.0';
@@ -74,6 +74,7 @@ export class ThreadsPlatform implements Platform {
         ],
         docsUrl: 'https://developers.facebook.com/docs/threads',
         notes: [
+            'Posts longer than 500 characters are automatically split into a connected thread of replies.',
             'Threads image publishing requires a public image_url. Local uploaded files in Composer are not sent to Threads yet.',
             'Updates and deletes are not enabled in this adapter yet.',
         ],
@@ -112,54 +113,23 @@ export class ThreadsPlatform implements Platform {
         return markdownToThreadsPreviewHtml(markdown);
     }
 
-    validateContent(markdown: string): ValidationIssue[] {
-        const text = markdownToThreadsText(markdown);
-        if (text.length <= THREADS_LIMIT) return [];
-        return [
-            {
-                platform: this.id,
-                chunk: 1,
-                message: `Threads posts must be ${THREADS_LIMIT} characters or less`,
-            },
-        ];
-    }
-
     private endpoint(path: string): string {
         return `${this.graphBaseUrl.replace(/\/$/, '')}/${path}`;
     }
 
+    /** Creates one container: the first post of a thread, or a reply to `replyToId`. */
     private async createContainer(
         channelId: string,
-        content: PublishContent,
         accessToken: string,
+        options: { text?: string; imageUrl?: string; replyToId?: string },
     ): Promise<string> {
-        const text = markdownToThreadsText(content.markdown);
-        const imageUrls = content.imageUrls ?? [];
-        if (content.images?.length) {
-            throw new Error(
-                'Threads requires public image URLs; uploaded files are not supported yet',
-            );
-        }
-        if (imageUrls.length > 1) {
-            throw new Error(
-                'Threads publishing supports one image URL per post in this adapter',
-            );
-        }
-        if (!text && !imageUrls.length) {
-            throw new Error('Write something or add an image URL first');
-        }
-        if (text.length > THREADS_LIMIT) {
-            throw new Error(
-                `Threads posts must be ${THREADS_LIMIT} characters or less`,
-            );
-        }
-
         const body = new URLSearchParams({
             access_token: accessToken,
-            media_type: imageUrls.length ? 'IMAGE' : 'TEXT',
+            media_type: options.imageUrl ? 'IMAGE' : 'TEXT',
         });
-        if (text) body.set('text', text);
-        if (imageUrls[0]) body.set('image_url', imageUrls[0]);
+        if (options.text) body.set('text', options.text);
+        if (options.imageUrl) body.set('image_url', options.imageUrl);
+        if (options.replyToId) body.set('reply_to_id', options.replyToId);
 
         const response = await fetch(this.endpoint(`${channelId}/threads`), {
             method: 'POST',
@@ -201,6 +171,20 @@ export class ThreadsPlatform implements Platform {
         return json.id;
     }
 
+    /** Publishes one chunk, replying to `replyToId` when this isn't the thread's first post. */
+    private async publishChunk(
+        channelId: string,
+        accessToken: string,
+        options: { text?: string; imageUrl?: string; replyToId?: string },
+    ): Promise<string> {
+        const creationId = await this.createContainer(
+            channelId,
+            accessToken,
+            options,
+        );
+        return this.publishContainer(channelId, creationId, accessToken);
+    }
+
     async publish(
         channelIds: string[],
         content: PublishContent,
@@ -210,27 +194,53 @@ export class ThreadsPlatform implements Platform {
         if (!config.accessToken || !config.userId) {
             throw new Error('Threads access token and user id are not configured');
         }
+
+        const text = markdownToThreadsText(content.markdown);
+        const imageUrls = content.imageUrls ?? [];
+        if (content.images?.length) {
+            throw new Error(
+                'Threads requires public image URLs; uploaded files are not supported yet',
+            );
+        }
+        if (imageUrls.length > 1) {
+            throw new Error(
+                'Threads publishing supports one image URL per post in this adapter',
+            );
+        }
+        if (!text && !imageUrls.length) {
+            throw new Error('Write something or add an image URL first');
+        }
+
+        // Posts over the limit become a thread: chunk 1 publishes normally, then each
+        // following chunk replies to the post published just before it.
+        const chunks = splitTextIntoChunks(text, THREADS_LIMIT, true);
+
         const results: PublishResult[] = [];
         for (const channelId of channelIds) {
             const id = channelId.trim() || config.userId;
             if (!id) continue;
 
             try {
-                const creationId = await this.createContainer(
-                    id,
-                    content,
-                    config.accessToken,
-                );
-                const postId = await this.publishContainer(
-                    id,
-                    creationId,
-                    config.accessToken,
-                );
+                const messageIds: string[] = [];
+                let replyToId: string | undefined;
+                for (let i = 0; i < chunks.length; i++) {
+                    const postId = await this.publishChunk(
+                        id,
+                        config.accessToken,
+                        {
+                            text: chunks[i] || undefined,
+                            imageUrl: i === 0 ? imageUrls[0] : undefined,
+                            replyToId,
+                        },
+                    );
+                    messageIds.push(postId);
+                    replyToId = postId;
+                }
                 results.push({
                     platform: this.id,
                     channelId: id,
                     ok: true,
-                    messageIds: [postId],
+                    messageIds,
                 });
             } catch (error: any) {
                 results.push({

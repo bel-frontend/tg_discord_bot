@@ -129,8 +129,16 @@ async function handleApi(req: Request, url: URL): Promise<Response> {
 
     if (path === '/api/validate' && method === 'POST') {
         const body = await req.json().catch(() => ({}));
+        // Only validate against platforms the user actually selected as targets —
+        // e.g. a Threads character-limit issue is noise if this post isn't going to Threads.
+        const targetIds = new Set(
+            Array.isArray(body.platforms) ? body.platforms.map(String) : [],
+        );
+        const targetPlatforms = listPlatforms().filter((platform) =>
+            targetIds.has(platform.id),
+        );
         return json(
-            validateMarkdown(String(body.markdown ?? ''), listPlatforms()),
+            validateMarkdown(String(body.markdown ?? ''), targetPlatforms),
         );
     }
 

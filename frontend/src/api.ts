@@ -42,7 +42,10 @@ export async function api<T = any>(
     return data as T;
 }
 
-export async function validatePost(markdown: string): Promise<{
+export async function validatePost(
+    markdown: string,
+    platforms: string[],
+): Promise<{
     ok: boolean;
     issues: Array<{
         platform: string;
@@ -57,7 +60,7 @@ export async function validatePost(markdown: string): Promise<{
 }> {
     return api('/api/validate', {
         method: 'POST',
-        body: { markdown },
+        body: { markdown, platforms },
     });
 }
 

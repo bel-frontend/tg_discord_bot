@@ -57,40 +57,60 @@ describe('ThreadsPlatform', () => {
         expect(calls[1].body.get('creation_id')).toBe('c1');
     });
 
-    test('rejects posts over the Threads character limit before calling API', async () => {
-        let called = false;
-        mockFetch(async () => {
-            called = true;
-            return Response.json({ id: 'unused' });
+    test('splits a post over 500 characters into a threaded chain of replies', async () => {
+        const containerCalls: URLSearchParams[] = [];
+        let publishCount = 0;
+        mockFetch(async (url, init) => {
+            const body = init?.body as URLSearchParams;
+            if (String(url).endsWith('/threads_publish')) {
+                publishCount++;
+                return Response.json({ id: `post-${publishCount}` });
+            }
+            containerCalls.push(body);
+            return Response.json({ id: `container-${containerCalls.length}` });
         });
 
-        const platform = new ThreadsPlatform('token', 'user-1');
-        const [result] = await platform.publish(['user-1'], {
-            markdown: 'x'.repeat(501),
-        });
-
-        expect(called).toBe(false);
-        expect(result.ok).toBe(false);
-        expect(result.error).toBe(
-            'Threads posts must be 500 characters or less',
+        const platform = new ThreadsPlatform(
+            'token',
+            'user-1',
+            'https://threads.test/v1.0',
         );
+        const longText = 'word '.repeat(200).trim(); // 999 chars, no punctuation/paragraphs
+        const [result] = await platform.publish(['user-1'], {
+            markdown: longText,
+        });
+
+        const messageIds = result.messageIds ?? [];
+        expect(result.ok).toBe(true);
+        expect(messageIds.length).toBeGreaterThan(1);
+        expect(containerCalls.length).toBe(messageIds.length);
+
+        // First post has no reply_to_id; every later chunk replies to the post right before it.
+        expect(containerCalls[0].get('reply_to_id')).toBeNull();
+        for (let i = 1; i < containerCalls.length; i++) {
+            expect(containerCalls[i].get('reply_to_id')).toBe(
+                messageIds[i - 1],
+            );
+        }
     });
 
     test('reports local uploads as unsupported because Threads needs public URLs', async () => {
         const platform = new ThreadsPlatform('token', 'user-1');
-        const [result] = await platform.publish(['user-1'], {
-            markdown: 'caption',
-            images: [
-                {
-                    data: new Uint8Array([1]),
-                    filename: 'photo.png',
-                    contentType: 'image/png',
-                },
-            ],
-        });
-
-        expect(result.ok).toBe(false);
-        expect(result.error).toBe(
+        // This validation applies identically to every target channel, so it's checked
+        // once up front and rejects the whole publish() call rather than per channel;
+        // registry.ts (the real caller) turns that rejection into a per-channel failure.
+        await expect(
+            platform.publish(['user-1'], {
+                markdown: 'caption',
+                images: [
+                    {
+                        data: new Uint8Array([1]),
+                        filename: 'photo.png',
+                        contentType: 'image/png',
+                    },
+                ],
+            }),
+        ).rejects.toThrow(
             'Threads requires public image URLs; uploaded files are not supported yet',
         );
     });

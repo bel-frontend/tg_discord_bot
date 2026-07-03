@@ -83,7 +83,10 @@ export function Composer({
         draftEditor.saveDraft,
         draftEditor.setSaveStatus,
     );
-    const { validationIssues } = useValidation(draftEditor.markdown);
+    const { validationIssues } = useValidation(
+        draftEditor.markdown,
+        draftEditor.targets,
+    );
     const publications = usePublications();
 
     // Load platform metadata, channels, and drafts once.
