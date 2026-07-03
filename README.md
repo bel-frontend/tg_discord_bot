@@ -7,8 +7,8 @@ accounts** and **draft saving** backed by MongoDB.
 
 Built with [Bun](https://bun.sh), [discord.js](https://discord.js.org/),
 [node-telegram-bot-api](https://github.com/yagop/node-telegram-bot-api),
-[MongoDB](https://www.mongodb.com/), and a [React](https://react.dev/) +
-[Vite](https://vite.dev/) frontend using [Toast UI Editor](https://ui.toast.com/tui-editor).
+[MongoDB](https://www.mongodb.com/), and a [Next.js](https://nextjs.org/) frontend
+using [Toast UI Editor](https://ui.toast.com/tui-editor).
 
 ---
 
@@ -28,7 +28,7 @@ Built with [Bun](https://bun.sh), [discord.js](https://discord.js.org/),
 ## How it works
 
 ```
-frontend/ ── React + Vite SPA (auth, drafts, channel picker, publish)
+frontend/ ── Next.js frontend (auth, drafts, channel picker, publish)
    │  built into public/, served as static files
    │  HTTP (JWT)
 src/server.ts ── Bun.serve router
@@ -75,7 +75,7 @@ entries take precedence.
 
 ## Running
 
-**Production / single process** — build the React frontend, then run the Bun server (which
+**Production / single process** — build the Next.js frontend, then run the Bun server (which
 serves the built UI + API on one port):
 
 ```bash
@@ -85,14 +85,13 @@ bun run start        # builds frontend into public/, then starts the server
 
 Open `http://localhost:3000`, register an account, write a post, pick channels, and Publish.
 
-**Development** — run the API server and the Vite dev server (HMR) in two terminals:
+**Development** — run the API server and the Next.js dev server together:
 
 ```bash
-bun run dev          # terminal 1: Bun API server on :3000 (watch mode)
-bun run web          # terminal 2: Vite dev server on :5173 (proxies /api -> :3000)
+bun run dev          # starts the Bun API server and Next.js dev server
 ```
 
-Then open `http://localhost:5173`. The frontend lives in `frontend/` (its own package);
+Then open the frontend URL printed by Next.js. The frontend lives in `frontend/` (its own package);
 `bun run build` compiles it into `public/`.
 
 ### Docker

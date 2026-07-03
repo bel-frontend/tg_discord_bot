@@ -5,7 +5,7 @@
   "scripts": {
     "start": "bun run build && bun run index.ts",
     "dev": "bun run scripts/dev.ts",
-    "build": "cd frontend && bun install && bun run build -- --configLoader runner",
+    "build": "cd frontend && bun install && bun run build",
     "test": "bun test src/*.test.ts && cd frontend && bun run test"
   },
   "devDependencies": {

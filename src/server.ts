@@ -35,12 +35,12 @@ import {
     listScheduledPublications,
 } from './scheduledPublications';
 
-// The Vite build outputs the frontend here (see frontend/vite.config.ts).
+// The Next static export is copied here by frontend/scripts/copy-static-export.ts.
 const PUBLIC_DIR = join(import.meta.dir, '..', 'public');
 const NOT_BUILT_HTML =
     '<!doctype html><meta charset="utf-8"><title>Composer</title>' +
     '<body style="font-family:sans-serif;padding:40px;max-width:640px;margin:auto">' +
-    '<h1>Frontend not built</h1><p>Run <code>bun run build</code> (or start the Vite dev ' +
+    '<h1>Frontend not built</h1><p>Run <code>bun run build</code> (or start the Next.js dev ' +
     'server with <code>cd frontend &amp;&amp; bun run dev</code>) to build the UI into ' +
     '<code>public/</code>.</p></body>';
 
@@ -52,12 +52,18 @@ function json(data: unknown, status = 200): Response {
 }
 
 async function serveStatic(pathname: string): Promise<Response> {
-    // Prevent path traversal; default to index.html for the SPA.
+    // Prevent path traversal; default to index.html for the SPA/static export.
     const rel = pathname === '/' ? '/index.html' : pathname;
     const safe = normalize(rel).replace(/^(\.\.[/\\])+/, '');
-    const file = Bun.file(join(PUBLIC_DIR, safe));
-    if (await file.exists()) {
-        return new Response(file);
+    const candidates = safe.endsWith('/')
+        ? [join(safe, 'index.html')]
+        : [join(safe, 'index.html'), safe];
+
+    for (const candidate of candidates) {
+        const file = Bun.file(join(PUBLIC_DIR, candidate));
+        if (await file.exists()) {
+            return new Response(file);
+        }
     }
     // SPA fallback
     const index = Bun.file(join(PUBLIC_DIR, 'index.html'));

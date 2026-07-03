@@ -8,7 +8,13 @@ import { ScheduledPage } from '../routes/scheduled/page';
 import { SettingsPage } from '../routes/settings/page';
 import { AppLayout } from '../layouts/AppLayout';
 import type { User } from '../../../shared/types';
-import { pathForRoute, routeFromPath, type AppRoute } from './routes';
+import {
+    draftIdFromPath,
+    pathForDraft,
+    pathForRoute,
+    routeFromPath,
+    type AppRoute,
+} from './routes';
 import {
     persistTheme,
     readInitialTheme,
@@ -23,6 +29,12 @@ export function App() {
     const [view, setView] = useState<AppRoute>(() =>
         routeFromPath(window.location.pathname),
     );
+    const [locationPathname, setLocationPathname] = useState(
+        window.location.pathname,
+    );
+    const [locationSearch, setLocationSearch] = useState(
+        window.location.search,
+    );
 
     // Apply the theme to the document root (drives the CSS variables).
     useEffect(() => {
@@ -36,8 +48,11 @@ export function App() {
 
     // Keep the selected screen in the URL so refresh/back/forward don't reset it.
     useEffect(() => {
-        const onPopState = () =>
+        const onPopState = () => {
+            setLocationPathname(window.location.pathname);
             setView(routeFromPath(window.location.pathname));
+            setLocationSearch(window.location.search);
+        };
         window.addEventListener('popstate', onPopState);
         return () => window.removeEventListener('popstate', onPopState);
     }, []);
@@ -67,19 +82,59 @@ export function App() {
         setTheme(getNextTheme);
     }
 
-    function navigate(next: AppRoute) {
+    function navigate(
+        next: AppRoute,
+        params: Record<string, string | undefined> = {},
+    ) {
+        const search = new URLSearchParams();
+        for (const [key, value] of Object.entries(params)) {
+            if (value) search.set(key, value);
+        }
         const path = pathForRoute(next);
-        if (window.location.pathname !== path) {
-            window.history.pushState({}, '', path);
+        const url = search.size ? `${path}?${search}` : path;
+        if (`${window.location.pathname}${window.location.search}` !== url) {
+            window.history.pushState({}, '', url);
         }
         setView(next);
+        setLocationPathname(window.location.pathname);
+        setLocationSearch(window.location.search);
+    }
+
+    function openDraftRoute(draftId: string, publicationId?: string) {
+        const search = new URLSearchParams();
+        if (publicationId) search.set('publicationId', publicationId);
+        const path = pathForDraft(draftId);
+        const url = search.size ? `${path}?${search}` : path;
+        if (`${window.location.pathname}${window.location.search}` !== url) {
+            window.history.pushState({}, '', url);
+        }
+        setView('composer');
+        setLocationPathname(window.location.pathname);
+        setLocationSearch(window.location.search);
     }
 
     function renderPage() {
         if (view === 'resources') return <ResourcesPage />;
-        if (view === 'scheduled') return <ScheduledPage />;
+        if (view === 'scheduled') {
+            return (
+                <ScheduledPage
+                    onOpenDraft={(draftId, publicationId) =>
+                        openDraftRoute(draftId, publicationId)
+                    }
+                />
+            );
+        }
         if (view === 'settings') return <SettingsPage />;
-        return <ComposerPage theme={theme} />;
+        const search = new URLSearchParams(locationSearch);
+        return (
+            <ComposerPage
+                theme={theme}
+                initialDraftId={draftIdFromPath(locationPathname)}
+                initialPublicationId={search.get('publicationId') ?? undefined}
+                onOpenDraftRoute={openDraftRoute}
+                onNewDraftRoute={() => navigate('composer')}
+            />
+        );
     }
 
     function navItem(route: AppRoute, label: string) {

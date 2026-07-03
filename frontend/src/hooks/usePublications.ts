@@ -194,6 +194,7 @@ export function usePublications() {
         publishing,
         highlightedPublicationId,
         clearHighlight,
+        highlightPublication: flashHighlight,
         loadPublications,
         reset,
         publish,

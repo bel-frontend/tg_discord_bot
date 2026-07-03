@@ -18,12 +18,23 @@ import { usePlatforms } from '../hooks/usePlatforms';
 
 interface Props {
     theme: 'dark' | 'light';
+    initialDraftId?: string;
+    initialPublicationId?: string;
+    onOpenDraftRoute?: (draftId: string, publicationId?: string) => void;
+    onNewDraftRoute?: () => void;
 }
 
-export function Composer({ theme }: Props) {
+export function Composer({
+    theme,
+    initialDraftId,
+    initialPublicationId,
+    onOpenDraftRoute,
+    onNewDraftRoute,
+}: Props) {
     const toast = useToast();
     const editorRef = useRef<MarkdownEditorHandle>(null);
     const draftLoadSeq = useRef(0);
+    const openedRouteDraftRef = useRef('');
     const [editorTab, setEditorTab] = useState<
         'edit' | 'preview' | 'published'
     >('edit');
@@ -95,7 +106,7 @@ export function Composer({ theme }: Props) {
         autosave.scheduleSave();
     }
 
-    async function openDraft(id: string) {
+    async function openDraft(id: string, highlightPublicationId?: string) {
         const seq = ++draftLoadSeq.current;
         try {
             const { draft } = await api<{ draft: Draft }>(`/api/drafts/${id}`);
@@ -109,6 +120,9 @@ export function Composer({ theme }: Props) {
             draftEditor.setImages(previews);
             publications.clearHighlight();
             await publications.loadPublications(draft.id);
+            if (highlightPublicationId) {
+                publications.highlightPublication(highlightPublicationId);
+            }
         } catch (err: any) {
             toast(err.message, 'error');
         }
@@ -120,6 +134,14 @@ export function Composer({ theme }: Props) {
         draftEditor.setImages([]);
         autosave.withSuppressed(() => draftEditor.resetForNewDraft());
         publications.reset();
+        openedRouteDraftRef.current = '';
+        onNewDraftRoute?.();
+    }
+
+    function openDraftFromRail(id: string) {
+        openedRouteDraftRef.current = `${id}:`;
+        onOpenDraftRoute?.(id);
+        openDraft(id);
     }
 
     async function deleteDraft(id: string) {
@@ -177,6 +199,15 @@ export function Composer({ theme }: Props) {
         });
     }
 
+    useEffect(() => {
+        if (!initialDraftId) return;
+        const key = `${initialDraftId}:${initialPublicationId ?? ''}`;
+        if (openedRouteDraftRef.current === key) return;
+        openedRouteDraftRef.current = key;
+        if (initialPublicationId) setEditorTab('published');
+        openDraft(initialDraftId, initialPublicationId);
+    }, [initialDraftId, initialPublicationId]);
+
     const SidePanelsIcon = focusMode ? PanelRightOpen : PanelRightClose;
 
     return (
@@ -202,7 +233,7 @@ export function Composer({ theme }: Props) {
                         drafts={drafts}
                         activeId={draftEditor.draftId}
                         onNew={newDraft}
-                        onOpen={openDraft}
+                        onOpen={openDraftFromRail}
                         onDelete={deleteDraft}
                     />
                 )}

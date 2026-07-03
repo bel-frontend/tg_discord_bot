@@ -59,7 +59,7 @@ function spawn(
 const requestedPort = await getFreePort(Number(process.env.PORT) || 3001);
 
 console.log(`Dev backend:  requesting http://localhost:${requestedPort}`);
-console.log('Dev frontend: Vite will print its URL below');
+console.log('Dev frontend: Next.js will print its URL below');
 
 // The backend does its own fallback port scan if the requested port turns out
 // to be taken by the time it binds (see src/server.ts startServer). Rather
@@ -86,10 +86,8 @@ const frontend = spawn(
         'run',
         'dev',
         '--',
-        '--host',
+        '-H',
         '127.0.0.1',
-        '--configLoader',
-        'runner',
     ],
     {
         cwd: 'frontend',

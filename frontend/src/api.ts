@@ -1,4 +1,5 @@
 import type {
+    Publication,
     PlatformMeta,
     PlatformConfigStatus,
     ScheduledPublication,
@@ -123,6 +124,16 @@ export async function fetchScheduledPublications(): Promise<
         scheduledPublications: ScheduledPublication[];
     }>('/api/scheduled-publications');
     return scheduledPublications;
+}
+
+export async function fetchPublications(draftId?: string): Promise<
+    Publication[]
+> {
+    const query = draftId ? `?draftId=${encodeURIComponent(draftId)}` : '';
+    const { publications } = await api<{ publications: Publication[] }>(
+        `/api/publications${query}`,
+    );
+    return publications;
 }
 
 export async function schedulePublication(

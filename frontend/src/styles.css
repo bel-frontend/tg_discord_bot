@@ -312,6 +312,40 @@ select:focus {
     margin: 0;
     font-size: 26px;
 }
+.scheduled-tabs {
+    display: inline-flex;
+    gap: 4px;
+    margin-bottom: 16px;
+    padding: 4px;
+    background: var(--bg-elev-2);
+    border-radius: var(--radius-sm);
+}
+.scheduled-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    border: none;
+    background: transparent;
+    color: var(--text-dim);
+    padding: 8px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    font: inherit;
+}
+.scheduled-tab.active {
+    background: var(--bg-elev);
+    color: var(--text);
+    box-shadow: var(--shadow);
+}
+.scheduled-tab span {
+    min-width: 20px;
+    padding: 2px 6px;
+    border-radius: 999px;
+    background: var(--bg-elev-2);
+    color: var(--text-dim);
+    font-size: 12px;
+    text-align: center;
+}
 .scheduled-list {
     display: flex;
     flex-direction: column;
@@ -326,6 +360,14 @@ select:focus {
     background: var(--bg-elev);
     border: 1px solid var(--border);
     border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+}
+.scheduled-row:hover,
+.scheduled-row:focus-visible {
+    border-color: var(--accent);
+    background: var(--bg-elev-2);
+    outline: none;
 }
 .scheduled-row.published {
     border-color: color-mix(in srgb, var(--success) 35%, var(--border));

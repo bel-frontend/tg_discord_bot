@@ -11,11 +11,15 @@
         "isolatedModules": true,
         "moduleDetection": "force",
         "noEmit": true,
-        "jsx": "react-jsx",
+        "jsx": "preserve",
         "strict": true,
         "noUnusedLocals": false,
         "noUnusedParameters": false,
-        "noFallthroughCasesInSwitch": true
+        "noFallthroughCasesInSwitch": true,
+        "allowJs": true,
+        "incremental": true,
+        "esModuleInterop": true
     },
-    "include": ["src", "../shared"]
+    "include": ["next-env.d.ts", "pages", "src", "../shared"],
+    "exclude": ["node_modules"]
 }
