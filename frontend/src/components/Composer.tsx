@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { PanelRightClose, PanelRightOpen } from 'lucide-react';
-import { api, schedulePublication } from '../api';
+import { api, fetchPublication, schedulePublication } from '../api';
 import { useToast } from '../toast';
 import type { Draft, Publication } from '../../../shared/types';
 import { type MarkdownEditorHandle } from './MarkdownEditor';
@@ -18,7 +18,7 @@ import { usePlatforms } from '../hooks/usePlatforms';
 
 interface Props {
     theme: 'dark' | 'light';
-    initialDraftId?: string;
+    initialEditId?: string;
     initialPublicationId?: string;
     onOpenDraftRoute?: (draftId: string, publicationId?: string) => void;
     onNewDraftRoute?: () => void;
@@ -26,7 +26,7 @@ interface Props {
 
 export function Composer({
     theme,
-    initialDraftId,
+    initialEditId,
     initialPublicationId,
     onOpenDraftRoute,
     onNewDraftRoute,
@@ -106,25 +106,48 @@ export function Composer({
         autosave.scheduleSave();
     }
 
-    async function openDraft(id: string, highlightPublicationId?: string) {
+    async function loadDraft(id: string, highlightPublicationId?: string) {
         const seq = ++draftLoadSeq.current;
+        const { draft } = await api<{ draft: Draft }>(`/api/drafts/${id}`);
+        if (seq !== draftLoadSeq.current) return;
+        draftEditor.revokeImages();
+        draftEditor.setImages([]);
+        autosave.withSuppressed(() => draftEditor.applyDraft(draft));
+        // Restore image thumbnails (fetched from the server, may take a moment).
+        const previews = await loadImagePreviews(draft.imageIds || []);
+        if (seq !== draftLoadSeq.current) return;
+        draftEditor.setImages(previews);
+        publications.clearHighlight();
+        await publications.loadPublications(draft.id);
+        if (highlightPublicationId) {
+            publications.highlightPublication(highlightPublicationId);
+        }
+    }
+
+    async function openDraft(id: string, highlightPublicationId?: string) {
         try {
-            const { draft } = await api<{ draft: Draft }>(`/api/drafts/${id}`);
-            if (seq !== draftLoadSeq.current) return;
-            draftEditor.revokeImages();
-            draftEditor.setImages([]);
-            autosave.withSuppressed(() => draftEditor.applyDraft(draft));
-            // Restore image thumbnails (fetched from the server, may take a moment).
-            const previews = await loadImagePreviews(draft.imageIds || []);
-            if (seq !== draftLoadSeq.current) return;
-            draftEditor.setImages(previews);
-            publications.clearHighlight();
-            await publications.loadPublications(draft.id);
-            if (highlightPublicationId) {
-                publications.highlightPublication(highlightPublicationId);
-            }
+            await loadDraft(id, highlightPublicationId);
         } catch (err: any) {
             toast(err.message, 'error');
+        }
+    }
+
+    async function openEditTarget(id: string, highlightPublicationId?: string) {
+        try {
+            await loadDraft(id, highlightPublicationId);
+        } catch (err: any) {
+            if (err?.message !== 'Not found') {
+                toast(err.message, 'error');
+                return;
+            }
+
+            try {
+                const publication = await fetchPublication(id);
+                setEditorTab('published');
+                await loadDraft(publication.draftId, publication.id);
+            } catch (publicationErr: any) {
+                toast(publicationErr.message, 'error');
+            }
         }
     }
 
@@ -200,13 +223,13 @@ export function Composer({
     }
 
     useEffect(() => {
-        if (!initialDraftId) return;
-        const key = `${initialDraftId}:${initialPublicationId ?? ''}`;
+        if (!initialEditId) return;
+        const key = `${initialEditId}:${initialPublicationId ?? ''}`;
         if (openedRouteDraftRef.current === key) return;
         openedRouteDraftRef.current = key;
         if (initialPublicationId) setEditorTab('published');
-        openDraft(initialDraftId, initialPublicationId);
-    }, [initialDraftId, initialPublicationId]);
+        openEditTarget(initialEditId, initialPublicationId);
+    }, [initialEditId, initialPublicationId]);
 
     const SidePanelsIcon = focusMode ? PanelRightOpen : PanelRightClose;
 

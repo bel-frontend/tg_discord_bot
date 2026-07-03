@@ -12,7 +12,6 @@ const isDev = process.env.NODE_ENV === 'development';
 const nextConfig = {
     ...(isDev ? {} : { output: 'export' }),
     outputFileTracingRoot: frontendDir,
-    trailingSlash: true,
     images: {
         unoptimized: true,
     },

@@ -100,6 +100,15 @@ export async function cancelScheduledPublication(
     return doc ? serialize(doc) : null;
 }
 
+export async function deleteScheduledPublicationsForDraft(
+    userId: string,
+    draftId: string,
+): Promise<number> {
+    if (!ObjectId.isValid(draftId)) return 0;
+    const result = await scheduledPublications().deleteMany({ userId, draftId });
+    return result.deletedCount;
+}
+
 export async function claimDueScheduledPublication(
     now = new Date(),
 ): Promise<ScheduledPublicationDoc | null> {

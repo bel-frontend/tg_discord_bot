@@ -136,6 +136,13 @@ export async function fetchPublications(draftId?: string): Promise<
     return publications;
 }
 
+export async function fetchPublication(id: string): Promise<Publication> {
+    const { publication } = await api<{ publication: Publication }>(
+        `/api/publications/${encodeURIComponent(id)}`,
+    );
+    return publication;
+}
+
 export async function schedulePublication(
     draftId: string,
     scheduledAt: string,

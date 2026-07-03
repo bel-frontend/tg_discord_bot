@@ -16,7 +16,13 @@ export function useDrafts() {
     /** Returns true if the draft was deleted, so callers can reset an open editor. */
     const deleteDraft = useCallback(
         async (id: string): Promise<boolean> => {
-            if (!confirm('Delete this draft?')) return false;
+            if (
+                !confirm(
+                    'Delete this draft and its scheduled/publication records?',
+                )
+            ) {
+                return false;
+            }
             try {
                 await api(`/api/drafts/${id}`, { method: 'DELETE' });
                 setDrafts((cur) => cur.filter((d) => d.id !== id));

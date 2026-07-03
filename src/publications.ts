@@ -121,6 +121,15 @@ export async function deletePublicationRecord(userId: string, id: string) {
     return result.deletedCount > 0;
 }
 
+export async function deletePublicationsForDraft(
+    userId: string,
+    draftId: string,
+): Promise<number> {
+    if (!ObjectId.isValid(draftId)) return 0;
+    const result = await publications().deleteMany({ userId, draftId });
+    return result.deletedCount;
+}
+
 function buildRefs(publication: Publication): ExistingPublishTarget[] {
     return publication.targets
         .filter((target) => target.messageIds.length)

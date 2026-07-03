@@ -79,6 +79,13 @@ const backendPort = await actualPort.promise;
 const backendUrl = `http://localhost:${backendPort}`;
 console.log(`Dev backend:  ${backendUrl}`);
 
+const requestedFrontendPort = await getFreePort(
+    Number(process.env.FRONTEND_PORT) || 3000,
+);
+console.log(
+    `Dev frontend: requesting http://127.0.0.1:${requestedFrontendPort}`,
+);
+
 const frontend = spawn(
     'web',
     [
@@ -88,6 +95,8 @@ const frontend = spawn(
         '--',
         '-H',
         '127.0.0.1',
+        '-p',
+        String(requestedFrontendPort),
     ],
     {
         cwd: 'frontend',

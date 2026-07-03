@@ -14,7 +14,7 @@ export function routeFromPath(pathname: string): AppRoute {
     return entry ? (entry[0] as AppRoute) : 'composer';
 }
 
-export function draftIdFromPath(pathname: string): string | undefined {
+export function editIdFromPath(pathname: string): string | undefined {
     const match = pathname.match(/^\/edit\/([^/?#]+)\/?$/);
     return match ? decodeURIComponent(match[1]) : undefined;
 }
@@ -23,6 +23,13 @@ export function pathForRoute(route: AppRoute): string {
     return APP_ROUTES[route];
 }
 
-export function pathForDraft(draftId: string): string {
-    return `/edit/${encodeURIComponent(draftId)}`;
+export function pathForEdit(id: string): string {
+    return `/edit/${encodeURIComponent(id)}`;
+}
+
+export function editIdForPublishedOrDraft(
+    draftId: string,
+    publicationId?: string,
+): string {
+    return publicationId ?? draftId;
 }

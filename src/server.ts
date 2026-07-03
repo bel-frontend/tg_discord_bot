@@ -26,12 +26,15 @@ import { validateMarkdown, previewContent } from './validation';
 import { parsePublishRequest, executePublish } from './publishRequest';
 import {
     deletePublishedTargets,
+    deletePublicationsForDraft,
+    getPublication,
     listPublications,
     updatePublishedTargets,
 } from './publications';
 import {
     cancelScheduledPublication,
     createScheduledPublication,
+    deleteScheduledPublicationsForDraft,
     listScheduledPublications,
 } from './scheduledPublications';
 
@@ -195,6 +198,14 @@ async function handleApi(req: Request, url: URL): Promise<Response> {
         });
     }
 
+    const publicationByIdMatch = path.match(/^\/api\/publications\/([^/]+)$/);
+    if (publicationByIdMatch && method === 'GET') {
+        const publication = await getPublication(user.id, publicationByIdMatch[1]);
+        return publication
+            ? json({ publication })
+            : json({ error: 'Not found' }, 404);
+    }
+
     if (path === '/api/scheduled-publications' && method === 'GET') {
         return json({
             scheduledPublications: await listScheduledPublications(user.id),
@@ -320,7 +331,18 @@ async function handleApi(req: Request, url: URL): Promise<Response> {
         }
         if (method === 'DELETE') {
             const ok = await deleteDraft(user.id, id);
-            return ok ? json({ ok: true }) : json({ error: 'Not found' }, 404);
+            if (!ok) return json({ error: 'Not found' }, 404);
+            const [scheduledDeleted, publicationsDeleted] = await Promise.all([
+                deleteScheduledPublicationsForDraft(user.id, id),
+                deletePublicationsForDraft(user.id, id),
+            ]);
+            return json({
+                ok: true,
+                deleted: {
+                    scheduledPublications: scheduledDeleted,
+                    publications: publicationsDeleted,
+                },
+            });
         }
     }
 

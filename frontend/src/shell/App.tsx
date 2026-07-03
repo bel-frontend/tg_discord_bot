@@ -9,8 +9,9 @@ import { SettingsPage } from '../routes/settings/page';
 import { AppLayout } from '../layouts/AppLayout';
 import type { User } from '../../../shared/types';
 import {
-    draftIdFromPath,
-    pathForDraft,
+    editIdForPublishedOrDraft,
+    editIdFromPath,
+    pathForEdit,
     pathForRoute,
     routeFromPath,
     type AppRoute,
@@ -100,11 +101,8 @@ export function App() {
         setLocationSearch(window.location.search);
     }
 
-    function openDraftRoute(draftId: string, publicationId?: string) {
-        const search = new URLSearchParams();
-        if (publicationId) search.set('publicationId', publicationId);
-        const path = pathForDraft(draftId);
-        const url = search.size ? `${path}?${search}` : path;
+    function openEditRoute(id: string) {
+        const url = pathForEdit(id);
         if (`${window.location.pathname}${window.location.search}` !== url) {
             window.history.pushState({}, '', url);
         }
@@ -113,13 +111,20 @@ export function App() {
         setLocationSearch(window.location.search);
     }
 
+    function openPublishedOrDraftRoute(
+        draftId: string,
+        publicationId?: string,
+    ) {
+        openEditRoute(editIdForPublishedOrDraft(draftId, publicationId));
+    }
+
     function renderPage() {
         if (view === 'resources') return <ResourcesPage />;
         if (view === 'scheduled') {
             return (
                 <ScheduledPage
                     onOpenDraft={(draftId, publicationId) =>
-                        openDraftRoute(draftId, publicationId)
+                        openPublishedOrDraftRoute(draftId, publicationId)
                     }
                 />
             );
@@ -129,9 +134,9 @@ export function App() {
         return (
             <ComposerPage
                 theme={theme}
-                initialDraftId={draftIdFromPath(locationPathname)}
+                initialEditId={editIdFromPath(locationPathname)}
                 initialPublicationId={search.get('publicationId') ?? undefined}
-                onOpenDraftRoute={openDraftRoute}
+                onOpenDraftRoute={openEditRoute}
                 onNewDraftRoute={() => navigate('composer')}
             />
         );

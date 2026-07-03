@@ -4,11 +4,13 @@ import { ObjectId } from 'mongodb';
 const findOneMock = mock(async (_filter: any) => null as any);
 const findOneAndUpdateMock = mock(async (_filter: any, _update: any) => null as any);
 const deleteOneMock = mock(async (_filter: any) => ({ deletedCount: 0 }));
+const deleteManyMock = mock(async (_filter: any) => ({ deletedCount: 0 }));
 
 const fakeCollection = {
     findOne: findOneMock,
     findOneAndUpdate: findOneAndUpdateMock,
     deleteOne: deleteOneMock,
+    deleteMany: deleteManyMock,
     find: mock(() => ({ sort: () => ({ toArray: async () => [] }) })),
 };
 const platformConfigsCollection = {
@@ -39,9 +41,11 @@ mock.module('./platforms/registry', () => ({
     listPlatforms: mock(() => []),
 }));
 
-const { updatePublishedTargets, deletePublishedTargets } = await import(
-    './publications'
-);
+const {
+    deletePublicationsForDraft,
+    updatePublishedTargets,
+    deletePublishedTargets,
+} = await import('./publications');
 
 function makeDoc(overrides: Record<string, any> = {}) {
     return {
@@ -239,6 +243,21 @@ describe('updatePublishedTargets', () => {
             expect(outcome.publication.title).toBe('New title');
             expect(outcome.publication.markdown).toBe('new content');
         }
+    });
+});
+
+describe('deletePublicationsForDraft', () => {
+    test('deletes publication records scoped to the user and draft', async () => {
+        deleteManyMock.mockClear();
+        deleteManyMock.mockImplementationOnce(async () => ({ deletedCount: 2 }));
+
+        const deleted = await deletePublicationsForDraft('user1', VALID_ID);
+
+        expect(deleted).toBe(2);
+        expect(deleteManyMock).toHaveBeenCalledWith({
+            userId: 'user1',
+            draftId: VALID_ID,
+        });
     });
 });
 

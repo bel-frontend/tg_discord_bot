@@ -4,11 +4,13 @@ import { ObjectId } from 'mongodb';
 const insertOneMock = mock(async () => ({ insertedId: new ObjectId() }));
 const updateOneMock = mock(async () => ({ modifiedCount: 1 }));
 const findOneAndUpdateMock = mock(async () => null as any);
+const deleteManyMock = mock(async () => ({ deletedCount: 0 }));
 
 const scheduledCollection = {
     insertOne: insertOneMock,
     updateOne: updateOneMock,
     findOneAndUpdate: findOneAndUpdateMock,
+    deleteMany: deleteManyMock,
     find: mock(() => ({ sort: () => ({ toArray: async () => [] }) })),
 };
 const platformConfigsCollection = {
@@ -69,6 +71,7 @@ mock.module('./publications', () => ({
 
 const {
     createScheduledPublication,
+    deleteScheduledPublicationsForDraft,
     publishScheduledPublication,
 } = await import('./scheduledPublications');
 
@@ -86,6 +89,24 @@ describe('createScheduledPublication', () => {
         expect(result.title).toBe(currentDraft.title);
         expect(result.status).toBe('scheduled');
         expect(insertOneMock).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe('deleteScheduledPublicationsForDraft', () => {
+    test('deletes scheduled records scoped to the user and draft', async () => {
+        deleteManyMock.mockClear();
+        deleteManyMock.mockImplementationOnce(async () => ({ deletedCount: 3 }));
+
+        const deleted = await deleteScheduledPublicationsForDraft(
+            'user1',
+            currentDraft.id,
+        );
+
+        expect(deleted).toBe(3);
+        expect(deleteManyMock).toHaveBeenCalledWith({
+            userId: 'user1',
+            draftId: currentDraft.id,
+        });
     });
 });
 
