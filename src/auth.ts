@@ -103,6 +103,26 @@ export async function loginUser(
     return { token: await issueSessionToken(user), user };
 }
 
+export async function changePassword(
+    actor: ActorContext,
+    currentPassword: string,
+    newPassword: string,
+): Promise<void> {
+    if (!ObjectId.isValid(actor.userId)) throw new AuthError('User not found', 404);
+    const user = await users().findOne({ _id: new ObjectId(actor.userId) });
+    if (!user) throw new AuthError('User not found', 404);
+
+    const valid = await Bun.password.verify(currentPassword || '', user.passwordHash);
+    if (!valid) throw new AuthError('Invalid password', 401);
+
+    if (!newPassword || newPassword.length < 6) {
+        throw new AuthError('Password must be at least 6 characters');
+    }
+
+    const passwordHash = await Bun.password.hash(newPassword);
+    await users().updateOne({ _id: user._id }, { $set: { passwordHash } });
+}
+
 async function verifyToken(req: Request): Promise<AuthUser> {
     const header = req.headers.get('authorization') || '';
     const token = header.startsWith('Bearer ') ? header.slice(7) : '';

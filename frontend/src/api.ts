@@ -6,6 +6,7 @@ import type {
     Me,
     MemberPermissions,
     MemberSummary,
+    User,
 } from '../../shared/types';
 
 let onUnauthorized: (() => void) | null = null;
@@ -229,6 +230,51 @@ export async function verifyEmail(
     token: string,
 ): Promise<{ ok: true; email: string }> {
     return api(`/api/auth/verify-email/${encodeURIComponent(token)}`, {
+        method: 'POST',
+    });
+}
+
+export async function requestPasswordReset(email: string): Promise<{ ok: true }> {
+    return api('/api/auth/request-password-reset', {
+        method: 'POST',
+        body: { email },
+    });
+}
+
+export async function resetPassword(
+    token: string,
+    password: string,
+): Promise<{ token: string; user: User }> {
+    return api(`/api/auth/reset-password/${encodeURIComponent(token)}`, {
+        method: 'POST',
+        body: { password },
+    });
+}
+
+export async function changePassword(
+    currentPassword: string,
+    newPassword: string,
+): Promise<{ ok: true }> {
+    return api('/api/auth/change-password', {
+        method: 'POST',
+        body: { currentPassword, newPassword },
+    });
+}
+
+export async function requestEmailChange(
+    newEmail: string,
+    password: string,
+): Promise<{ ok: true }> {
+    return api('/api/auth/request-email-change', {
+        method: 'POST',
+        body: { newEmail, password },
+    });
+}
+
+export async function confirmEmailChange(
+    token: string,
+): Promise<{ ok: true; email: string }> {
+    return api(`/api/auth/confirm-email-change/${encodeURIComponent(token)}`, {
         method: 'POST',
     });
 }

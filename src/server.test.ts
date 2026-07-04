@@ -21,6 +21,8 @@ mock.module('./db', () => ({
     users: collection,
     accountMembers: collection,
     emailVerifications: collection,
+    passwordResets: collection,
+    emailChanges: collection,
     channelResources: collection,
     drafts: collection,
     uploads: collection,

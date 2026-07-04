@@ -190,6 +190,20 @@ body {
     font-size: 13px;
     color: var(--text-dim);
 }
+.link-btn {
+    align-self: flex-start;
+    background: none;
+    border: none;
+    padding: 0;
+    color: var(--text-dim);
+    text-decoration: underline;
+    cursor: pointer;
+    font: inherit;
+    font-size: 13px;
+}
+.link-btn:hover {
+    color: var(--text);
+}
 input[type='email'],
 input[type='password'],
 input[type='text'],

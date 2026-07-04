@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { api, setToken } from '../api';
+import { api, requestPasswordReset, setToken } from '../api';
 import type { User } from '../../../shared/types';
 
 interface Props {
@@ -7,17 +7,23 @@ interface Props {
 }
 
 export function Auth({ onAuthenticated }: Props) {
-    const [mode, setMode] = useState<'login' | 'register'>('login');
+    const [mode, setMode] = useState<'login' | 'register' | 'forgot'>('login');
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const [busy, setBusy] = useState(false);
+    const [forgotSent, setForgotSent] = useState(false);
 
     async function submit(e: React.FormEvent) {
         e.preventDefault();
         setError('');
         setBusy(true);
         try {
+            if (mode === 'forgot') {
+                await requestPasswordReset(email);
+                setForgotSent(true);
+                return;
+            }
             const path =
                 mode === 'login' ? '/api/auth/login' : '/api/auth/register';
             const { token, user } = await api<{ token: string; user: User }>(
@@ -31,6 +37,76 @@ export function Auth({ onAuthenticated }: Props) {
         } finally {
             setBusy(false);
         }
+    }
+
+    function goToForgot() {
+        setMode('forgot');
+        setError('');
+        setForgotSent(false);
+    }
+
+    if (mode === 'forgot') {
+        return (
+            <section className="auth">
+                <div className="auth-card">
+                    <div className="brand">
+                        <span className="brand-mark">✦</span>
+                        <span className="brand-name">Composer</span>
+                    </div>
+                    <p className="auth-sub">Reset your password</p>
+
+                    {forgotSent ? (
+                        <>
+                            <p className="muted">
+                                If that email has an account, we've sent a
+                                reset link.
+                            </p>
+                            <button
+                                type="button"
+                                className="btn ghost"
+                                onClick={() => {
+                                    setMode('login');
+                                    setForgotSent(false);
+                                }}
+                            >
+                                Back to log in
+                            </button>
+                        </>
+                    ) : (
+                        <form className="auth-form" onSubmit={submit}>
+                            <label>
+                                Email
+                                <input
+                                    type="email"
+                                    autoComplete="email"
+                                    required
+                                    value={email}
+                                    onChange={(e) => setEmail(e.target.value)}
+                                />
+                            </label>
+                            {error && <p className="error-text">{error}</p>}
+                            <button
+                                type="submit"
+                                className="btn primary"
+                                disabled={busy}
+                            >
+                                Send reset link
+                            </button>
+                            <button
+                                type="button"
+                                className="btn ghost"
+                                onClick={() => {
+                                    setMode('login');
+                                    setError('');
+                                }}
+                            >
+                                Back to log in
+                            </button>
+                        </form>
+                    )}
+                </div>
+            </section>
+        );
     }
 
     return (
@@ -89,6 +165,15 @@ export function Auth({ onAuthenticated }: Props) {
                             onChange={(e) => setPassword(e.target.value)}
                         />
                     </label>
+                    {mode === 'login' && (
+                        <button
+                            type="button"
+                            className="link-btn"
+                            onClick={goToForgot}
+                        >
+                            Forgot password?
+                        </button>
+                    )}
                     {error && <p className="error-text">{error}</p>}
                     <button
                         type="submit"

@@ -71,3 +71,31 @@ export async function sendVerificationEmail(
         params.verifyUrl,
     );
 }
+
+export async function sendPasswordResetEmail(
+    to: string,
+    params: { resetUrl: string },
+): Promise<void> {
+    await send(
+        to,
+        'Reset your Composer password',
+        `<p>We received a request to reset your Composer password.</p>` +
+            `<p><a href="${params.resetUrl}">Reset password</a></p>` +
+            `<p>This link expires in 1 hour. If you didn't request this, you can ignore this email.</p>`,
+        params.resetUrl,
+    );
+}
+
+export async function sendEmailChangeEmail(
+    to: string,
+    params: { confirmUrl: string; currentEmail: string },
+): Promise<void> {
+    await send(
+        to,
+        'Confirm your new email for Composer',
+        `<p>${params.currentEmail} requested to change their Composer account email to this address.</p>` +
+            `<p><a href="${params.confirmUrl}">Confirm email change</a></p>` +
+            `<p>This link expires in 1 hour. If you didn't request this, you can ignore this email.</p>`,
+        params.confirmUrl,
+    );
+}

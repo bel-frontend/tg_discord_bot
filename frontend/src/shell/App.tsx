@@ -4,6 +4,8 @@ import { ToastProvider } from '../toast';
 import { Auth } from '../components/Auth';
 import { InviteAcceptPage } from '../components/InviteAcceptPage';
 import { VerifyEmailPage } from '../components/VerifyEmailPage';
+import { ResetPasswordPage } from '../components/ResetPasswordPage';
+import { ConfirmEmailChangePage } from '../components/ConfirmEmailChangePage';
 import { ComposerPage } from '../routes/composer/page';
 import { ResourcesPage } from '../routes/resources/page';
 import { ScheduledPage } from '../routes/scheduled/page';
@@ -12,11 +14,13 @@ import { AppLayout } from '../layouts/AppLayout';
 import { MeProvider } from '../meContext';
 import type { Me, User } from '../../../shared/types';
 import {
+    confirmEmailChangeTokenFromPath,
     editIdForPublishedOrDraft,
     editIdFromPath,
     inviteTokenFromPath,
     pathForEdit,
     pathForRoute,
+    resetPasswordTokenFromPath,
     routeFromPath,
     verifyEmailTokenFromPath,
     type AppRoute,
@@ -44,6 +48,9 @@ export function App() {
     );
     const inviteToken = inviteTokenFromPath(locationPathname);
     const verifyEmailToken = verifyEmailTokenFromPath(locationPathname);
+    const resetPasswordToken = resetPasswordTokenFromPath(locationPathname);
+    const confirmEmailChangeToken =
+        confirmEmailChangeTokenFromPath(locationPathname);
 
     // Apply the theme to the document root (drives the CSS variables).
     useEffect(() => {
@@ -194,6 +201,19 @@ export function App() {
                 ) : verifyEmailToken ? (
                     <VerifyEmailPage
                         token={verifyEmailToken}
+                        onGoToApp={goToComposerRoute}
+                    />
+                ) : resetPasswordToken ? (
+                    <ResetPasswordPage
+                        token={resetPasswordToken}
+                        onReset={(resetUser) => {
+                            handleAuthenticated(resetUser);
+                            goToComposerRoute();
+                        }}
+                    />
+                ) : confirmEmailChangeToken ? (
+                    <ConfirmEmailChangePage
+                        token={confirmEmailChangeToken}
                         onGoToApp={goToComposerRoute}
                     />
                 ) : user ? (

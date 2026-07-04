@@ -29,6 +29,18 @@ export function verifyEmailTokenFromPath(pathname: string): string | undefined {
     return match ? decodeURIComponent(match[1]) : undefined;
 }
 
+export function resetPasswordTokenFromPath(pathname: string): string | undefined {
+    const match = pathname.match(/^\/reset-password\/([^/?#]+)\/?$/);
+    return match ? decodeURIComponent(match[1]) : undefined;
+}
+
+export function confirmEmailChangeTokenFromPath(
+    pathname: string,
+): string | undefined {
+    const match = pathname.match(/^\/confirm-email-change\/([^/?#]+)\/?$/);
+    return match ? decodeURIComponent(match[1]) : undefined;
+}
+
 export function pathForRoute(route: AppRoute): string {
     return APP_ROUTES[route];
 }

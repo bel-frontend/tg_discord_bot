@@ -1,6 +1,14 @@
 import { join, normalize } from 'path';
-import { AuthError, loginUser, registerUser, requireAuth } from './auth';
+import {
+    AuthError,
+    changePassword,
+    loginUser,
+    registerUser,
+    requireAuth,
+} from './auth';
 import { verifyEmailToken, resendVerification } from './emailVerification';
+import { requestPasswordReset, resetPassword } from './passwordReset';
+import { confirmEmailChange, requestEmailChange } from './emailChange';
 import {
     acceptInvite,
     createInvite,
@@ -155,6 +163,37 @@ export async function handleApi(req: Request, url: URL): Promise<Response> {
         }
     }
 
+    if (path === '/api/auth/request-password-reset' && method === 'POST') {
+        const body = await req.json().catch(() => ({}));
+        await requestPasswordReset(String(body.email ?? ''));
+        return json({ ok: true });
+    }
+
+    const resetPasswordMatch = path.match(/^\/api\/auth\/reset-password\/([^/]+)$/);
+    if (resetPasswordMatch && method === 'POST') {
+        const body = await req.json().catch(() => ({}));
+        try {
+            const result = await resetPassword(resetPasswordMatch[1], body.password);
+            return json(result);
+        } catch (err: any) {
+            if (err instanceof AuthError) return json({ error: err.message }, err.status);
+            return json({ error: err?.message || 'Reset failed' }, 400);
+        }
+    }
+
+    const confirmEmailChangeMatch = path.match(
+        /^\/api\/auth\/confirm-email-change\/([^/]+)$/,
+    );
+    if (confirmEmailChangeMatch && method === 'POST') {
+        try {
+            const result = await confirmEmailChange(confirmEmailChangeMatch[1]);
+            return json({ ok: true, email: result.email });
+        } catch (err: any) {
+            if (err instanceof AuthError) return json({ error: err.message }, err.status);
+            return json({ error: err?.message || 'Confirmation failed' }, 400);
+        }
+    }
+
     const invitePreviewMatch = path.match(/^\/api\/invites\/([^/]+)$/);
     if (invitePreviewMatch && method === 'GET') {
         const preview = await getInvitePreview(invitePreviewMatch[1]);
@@ -234,6 +273,28 @@ export async function handleApi(req: Request, url: URL): Promise<Response> {
             return json({ ok: true });
         } catch (err: any) {
             return json({ error: err?.message || 'Failed to resend' }, 400);
+        }
+    }
+
+    if (path === '/api/auth/change-password' && method === 'POST') {
+        const body = await req.json().catch(() => ({}));
+        try {
+            await changePassword(actor, body.currentPassword, body.newPassword);
+            return json({ ok: true });
+        } catch (err: any) {
+            if (err instanceof AuthError) return json({ error: err.message }, err.status);
+            return json({ error: err?.message || 'Failed to change password' }, 400);
+        }
+    }
+
+    if (path === '/api/auth/request-email-change' && method === 'POST') {
+        const body = await req.json().catch(() => ({}));
+        try {
+            await requestEmailChange(actor, String(body.newEmail ?? ''), body.password);
+            return json({ ok: true });
+        } catch (err: any) {
+            if (err instanceof AuthError) return json({ error: err.message }, err.status);
+            return json({ error: err?.message || 'Failed to request email change' }, 400);
         }
     }
 

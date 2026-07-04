@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
+    confirmEmailChangeTokenFromPath,
     editIdForPublishedOrDraft,
     editIdFromPath,
     pathForEdit,
+    resetPasswordTokenFromPath,
     routeFromPath,
 } from './routes';
 
@@ -21,5 +23,19 @@ describe('shell routes', () => {
             'publication-1',
         );
         expect(editIdForPublishedOrDraft('draft-1')).toBe('draft-1');
+    });
+
+    it('extracts reset-password tokens from the path', () => {
+        expect(resetPasswordTokenFromPath('/reset-password/abc123')).toBe(
+            'abc123',
+        );
+        expect(resetPasswordTokenFromPath('/')).toBeUndefined();
+    });
+
+    it('extracts confirm-email-change tokens from the path', () => {
+        expect(
+            confirmEmailChangeTokenFromPath('/confirm-email-change/abc123'),
+        ).toBe('abc123');
+        expect(confirmEmailChangeTokenFromPath('/')).toBeUndefined();
     });
 });

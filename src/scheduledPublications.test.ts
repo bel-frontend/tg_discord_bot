@@ -38,6 +38,8 @@ mock.module('./db', () => ({
     users: emptyCollection,
     accountMembers: emptyCollection,
     emailVerifications: emptyCollection,
+    passwordResets: emptyCollection,
+    emailChanges: emptyCollection,
     channelResources: emptyCollection,
     drafts: emptyCollection,
     uploads: emptyCollection,

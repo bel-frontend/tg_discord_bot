@@ -45,6 +45,27 @@ export interface EmailVerificationDoc {
     consumedAt?: Date;
 }
 
+export interface PasswordResetDoc {
+    _id?: ObjectId;
+    userId: string;
+    email: string;
+    tokenHash: string;
+    expiresAt: Date;
+    createdAt: Date;
+    consumedAt?: Date;
+}
+
+export interface EmailChangeDoc {
+    _id?: ObjectId;
+    userId: string;
+    currentEmail: string;
+    newEmail: string;
+    tokenHash: string;
+    expiresAt: Date;
+    createdAt: Date;
+    consumedAt?: Date;
+}
+
 export interface DraftDoc {
     _id?: ObjectId;
     userId: string; // owner (user _id as string)
@@ -134,6 +155,8 @@ let publicationsColl: Collection<PublicationDoc> | null = null;
 let scheduledPublicationsColl: Collection<ScheduledPublicationDoc> | null = null;
 let accountMembersColl: Collection<AccountMemberDoc> | null = null;
 let emailVerificationsColl: Collection<EmailVerificationDoc> | null = null;
+let passwordResetsColl: Collection<PasswordResetDoc> | null = null;
+let emailChangesColl: Collection<EmailChangeDoc> | null = null;
 
 export function resolveMongoConfig(
     env: Record<string, string | undefined> = process.env,
@@ -192,6 +215,8 @@ export async function connect(): Promise<void> {
     accountMembersColl = db.collection<AccountMemberDoc>('accountMembers');
     emailVerificationsColl =
         db.collection<EmailVerificationDoc>('emailVerifications');
+    passwordResetsColl = db.collection<PasswordResetDoc>('passwordResets');
+    emailChangesColl = db.collection<EmailChangeDoc>('emailChanges');
 
     await usersColl.createIndex({ email: 1 }, { unique: true });
     await draftsColl.createIndex({ userId: 1, updatedAt: -1 });
@@ -234,6 +259,10 @@ export async function connect(): Promise<void> {
     );
     await emailVerificationsColl.createIndex({ tokenHash: 1 }, { unique: true });
     await emailVerificationsColl.createIndex({ userId: 1 });
+    await passwordResetsColl.createIndex({ tokenHash: 1 }, { unique: true });
+    await passwordResetsColl.createIndex({ userId: 1 });
+    await emailChangesColl.createIndex({ tokenHash: 1 }, { unique: true });
+    await emailChangesColl.createIndex({ userId: 1 });
 
     // One-time idempotent backfills — this project has no migration system, so
     // schema additions are applied on every connect() and are no-ops once done.
@@ -304,4 +333,18 @@ export function emailVerifications(): Collection<EmailVerificationDoc> {
         throw new Error('DB not connected — call connect() first');
     }
     return emailVerificationsColl;
+}
+
+export function passwordResets(): Collection<PasswordResetDoc> {
+    if (!passwordResetsColl) {
+        throw new Error('DB not connected — call connect() first');
+    }
+    return passwordResetsColl;
+}
+
+export function emailChanges(): Collection<EmailChangeDoc> {
+    if (!emailChangesColl) {
+        throw new Error('DB not connected — call connect() first');
+    }
+    return emailChangesColl;
 }

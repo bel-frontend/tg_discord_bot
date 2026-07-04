@@ -14,6 +14,7 @@ import { usePlatforms } from '../hooks/usePlatforms';
 import { PageLayout } from '../layouts/PageLayout';
 import { useMe } from '../meContext';
 import { MembersPanel } from './MembersPanel';
+import { AccountPanel } from './AccountPanel';
 
 const LINK_PATTERN = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g;
 
@@ -304,11 +305,24 @@ export function SettingsPage() {
                                     <span>👥</span> Members
                                 </button>
                             )}
+                            <button
+                                type="button"
+                                className={`settings-tab ${
+                                    activeTab === 'account' ? 'active' : ''
+                                }`}
+                                onClick={() => setActiveTab('account')}
+                            >
+                                <span>👤</span> Account
+                            </button>
                         </div>
 
                         {activeTab === 'members' && <MembersPanel />}
 
-                        {activeTab !== 'members' && activePlatform && (
+                        {activeTab === 'account' && <AccountPanel />}
+
+                        {activeTab !== 'members' &&
+                            activeTab !== 'account' &&
+                            activePlatform && (
                             <section
                                 className="settings-platform-panel"
                                 key={activePlatform.id}

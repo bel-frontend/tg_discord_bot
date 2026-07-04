@@ -32,6 +32,14 @@ if (isDev) {
                 source: '/verify-email/:path*',
                 destination: '/',
             },
+            {
+                source: '/reset-password/:path*',
+                destination: '/',
+            },
+            {
+                source: '/confirm-email-change/:path*',
+                destination: '/',
+            },
         ];
 
         if (process.env.API_PROXY_TARGET || process.env.BACKEND_URL) {
