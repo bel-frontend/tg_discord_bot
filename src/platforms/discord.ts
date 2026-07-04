@@ -240,22 +240,12 @@ export class DiscordPlatform implements Platform {
         const results: PublishResult[] = [];
 
         for (const ref of refs) {
-            const [messageId] = ref.messageIds;
-            if (!messageId) {
+            if (!ref.messageIds.length) {
                 results.push({
                     platform: this.id,
                     channelId: ref.channelId,
                     ok: false,
                     error: 'No Discord message id stored',
-                });
-                continue;
-            }
-            if (chunks.length !== 1) {
-                results.push({
-                    platform: this.id,
-                    channelId: ref.channelId,
-                    ok: false,
-                    error: 'Update is supported only for posts that fit in one Discord message',
                 });
                 continue;
             }
@@ -265,16 +255,36 @@ export class DiscordPlatform implements Platform {
                 if (!channel?.isTextBased() || channel.isDMBased()) {
                     throw new Error('Channel not found or not a text channel');
                 }
-                const message = await (channel as TextChannel).messages.fetch(
-                    messageId,
-                );
-                await message.edit({ content: chunks[0] });
+                const textChannel = channel as TextChannel;
+                const messageIds = [...ref.messageIds];
+                const overlap = Math.min(chunks.length, messageIds.length);
+
+                for (let i = 0; i < overlap; i++) {
+                    const message = await textChannel.messages.fetch(
+                        messageIds[i],
+                    );
+                    await message.edit({ content: chunks[i] });
+                }
+                for (let i = overlap; i < chunks.length; i++) {
+                    const message = await textChannel.send({
+                        content: chunks[i],
+                    });
+                    messageIds.push(message.id);
+                }
+                for (let i = chunks.length; i < messageIds.length; i++) {
+                    const message = await textChannel.messages.fetch(
+                        messageIds[i],
+                    );
+                    await message.delete();
+                }
+                messageIds.length = chunks.length;
+
                 results.push({
                     platform: this.id,
                     channelId: ref.channelId,
                     ok: true,
-                    messageIds: ref.messageIds,
-                    link: this.linkFor(guildId, ref.channelId, messageId),
+                    messageIds,
+                    link: this.linkFor(guildId, ref.channelId, messageIds[0]),
                 });
             } catch (error: any) {
                 results.push({

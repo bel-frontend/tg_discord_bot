@@ -276,11 +276,44 @@ export class TelegramPlatform implements Platform {
         const bot = this.getBot(token);
         const html = markdownToTelegramHtml(content.markdown);
         const chunks = splitTextIntoChunks(html, TELEGRAM_LIMIT, true);
+        const invalidChunk = chunks.find(
+            (chunk) => !isValidTelegramHtml(chunk),
+        );
+        if (invalidChunk) {
+            const issue = validateTelegramHtml(invalidChunk)[0];
+            throw new Error(
+                `Telegram HTML is invalid: ${issue?.message ?? 'unknown parse error'}`,
+            );
+        }
         const results: PublishResult[] = [];
 
+        // Edits one existing message; treats an already-up-to-date message as
+        // success, and falls back to caption editing when the message has no
+        // text (e.g. it's a photo message).
+        const editOne = async (channelId: string, messageId: string, text: string) => {
+            try {
+                await bot.editMessageText(text, {
+                    chat_id: channelId,
+                    message_id: Number(messageId),
+                    parse_mode: 'HTML',
+                });
+            } catch (error: any) {
+                const description = telegramErrorDescription(error);
+                if (description.includes('no text in the message')) {
+                    await bot.editMessageCaption(text, {
+                        chat_id: channelId,
+                        message_id: Number(messageId),
+                        parse_mode: 'HTML',
+                    });
+                    return;
+                }
+                if (description.includes('message is not modified')) return;
+                throw error;
+            }
+        };
+
         for (const ref of refs) {
-            const [messageId] = ref.messageIds;
-            if (!messageId) {
+            if (!ref.messageIds.length) {
                 results.push({
                     platform: this.id,
                     channelId: ref.channelId,
@@ -289,52 +322,38 @@ export class TelegramPlatform implements Platform {
                 });
                 continue;
             }
-            if (chunks.length !== 1) {
-                results.push({
-                    platform: this.id,
-                    channelId: ref.channelId,
-                    ok: false,
-                    error: 'Update is supported only for posts that fit in one Telegram message',
-                });
-                continue;
-            }
 
             try {
-                try {
-                    await bot.editMessageText(chunks[0], {
-                        chat_id: ref.channelId,
-                        message_id: Number(messageId),
-                        parse_mode: 'HTML',
-                    });
-                } catch (error: any) {
-                    const description =
-                        error?.response?.body?.description || '';
-                    if (!description.includes('no text in the message')) {
-                        throw error;
-                    }
-                    await bot.editMessageCaption(chunks[0], {
-                        chat_id: ref.channelId,
-                        message_id: Number(messageId),
-                        parse_mode: 'HTML',
-                    });
+                const messageIds = [...ref.messageIds];
+                const overlap = Math.min(chunks.length, messageIds.length);
+
+                for (let i = 0; i < overlap; i++) {
+                    await editOne(ref.channelId, messageIds[i], chunks[i]);
                 }
+                for (let i = overlap; i < chunks.length; i++) {
+                    const message = await bot.sendMessage(
+                        ref.channelId,
+                        chunks[i],
+                        { parse_mode: 'HTML' },
+                    );
+                    messageIds.push(String(message.message_id));
+                }
+                for (let i = chunks.length; i < messageIds.length; i++) {
+                    await bot.deleteMessage(
+                        ref.channelId,
+                        Number(messageIds[i]),
+                    );
+                }
+                messageIds.length = chunks.length;
+
                 results.push({
                     platform: this.id,
                     channelId: ref.channelId,
                     ok: true,
-                    messageIds: ref.messageIds,
+                    messageIds,
                 });
             } catch (error: any) {
                 const description = telegramErrorDescription(error);
-                if (description.includes('message is not modified')) {
-                    results.push({
-                        platform: this.id,
-                        channelId: ref.channelId,
-                        ok: true,
-                        messageIds: ref.messageIds,
-                    });
-                    continue;
-                }
                 results.push({
                     platform: this.id,
                     channelId: ref.channelId,
