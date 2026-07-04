@@ -19,6 +19,7 @@ export interface PublishContent {
     markdown: string;
     imageUrls?: string[]; // remote image URLs
     images?: PublishImage[]; // uploaded image bytes to send as attachments
+    silent?: boolean; // send without triggering a notification for recipients
 }
 
 export interface PublishedMessageRef {

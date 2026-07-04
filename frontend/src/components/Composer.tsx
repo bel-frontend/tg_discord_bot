@@ -181,6 +181,7 @@ export function Composer({
             title: draftEditor.title,
             validationIssues,
             ensureDraftForPublish: draftEditor.ensureDraftForPublish,
+            silent: draftEditor.silent,
         });
     }
 
@@ -320,6 +321,11 @@ export function Composer({
                         imageUrls={draftEditor.imageUrls}
                         onImageUrlsChange={(value) => {
                             draftEditor.setImageUrls(value);
+                            autosave.scheduleSave();
+                        }}
+                        silent={draftEditor.silent}
+                        onSilentChange={(value) => {
+                            draftEditor.setSilent(value);
                             autosave.scheduleSave();
                         }}
                         publications={publications.publications}

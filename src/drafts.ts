@@ -8,6 +8,7 @@ export interface DraftInput {
     imageUrls?: string[];
     imageIds?: string[];
     targets?: Target[];
+    silent?: unknown;
 }
 
 function serialize(doc: DraftDoc): Draft {
@@ -18,6 +19,7 @@ function serialize(doc: DraftDoc): Draft {
         imageUrls: doc.imageUrls,
         imageIds: doc.imageIds ?? [],
         targets: doc.targets,
+        silent: doc.silent ?? false,
         createdAt: doc.createdAt.toISOString(),
         updatedAt: doc.updatedAt.toISOString(),
     };
@@ -29,6 +31,7 @@ function sanitize(input: DraftInput): {
     imageUrls: string[];
     imageIds: string[];
     targets: Target[];
+    silent: boolean;
 } {
     return {
         title: (input.title ?? 'Untitled').toString().slice(0, 200),
@@ -47,6 +50,7 @@ function sanitize(input: DraftInput): {
                       channelId: String(t.channelId),
                   }))
             : [],
+        silent: Boolean(input.silent),
     };
 }
 

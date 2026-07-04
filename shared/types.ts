@@ -100,6 +100,7 @@ export interface Draft {
     imageUrls: string[];
     imageIds: string[];
     targets: Target[];
+    silent?: boolean;
     createdAt: string;
     updatedAt: string;
 }

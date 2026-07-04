@@ -53,6 +53,7 @@ export interface DraftDoc {
     imageUrls: string[];
     imageIds: string[]; // ids of uploaded images (see UploadDoc)
     targets: Target[];
+    silent: boolean;
     createdAt: Date;
     updatedAt: Date;
 }

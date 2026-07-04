@@ -13,6 +13,7 @@ export interface ParsedPublishRequest {
     targets: PublishTarget[];
     imageUrls: string[];
     images: PublishImage[];
+    silent: boolean;
 }
 
 async function parseMultipartPublish(
@@ -22,6 +23,7 @@ async function parseMultipartPublish(
     const markdown = String(form.get('markdown') ?? '');
     const draftId = String(form.get('draftId') ?? '');
     const title = String(form.get('title') ?? '');
+    const silent = form.get('silent') === 'true';
 
     let targets: PublishTarget[];
     let imageUrls: string[];
@@ -56,7 +58,7 @@ async function parseMultipartPublish(
         throw new Error(err?.message || 'Invalid image');
     }
 
-    return { markdown, draftId, title, targets, imageUrls, images };
+    return { markdown, draftId, title, targets, imageUrls, images, silent };
 }
 
 async function parseJsonPublish(
@@ -77,8 +79,9 @@ async function parseJsonPublish(
         ? body.imageIds.map(String)
         : [];
     const images = await resolveImages(authorId, imageIds);
+    const silent = Boolean(body.silent);
 
-    return { markdown, draftId, title, targets, imageUrls, images };
+    return { markdown, draftId, title, targets, imageUrls, images, silent };
 }
 
 /**
@@ -126,6 +129,7 @@ export async function executePublish(
             markdown: parsed.markdown,
             imageUrls: parsed.imageUrls,
             images: parsed.images,
+            silent: parsed.silent,
         },
         accountId,
     );

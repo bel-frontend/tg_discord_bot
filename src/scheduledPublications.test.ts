@@ -177,6 +177,7 @@ describe('publishScheduledPublication', () => {
                         contentType: 'image/png',
                     },
                 ],
+                silent: false,
             },
             'account1',
         );

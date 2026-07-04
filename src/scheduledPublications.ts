@@ -157,6 +157,7 @@ export async function publishScheduledPublication(
             imageUrls: draft.imageUrls,
             targets: draft.targets,
             images,
+            silent: draft.silent ?? false,
         });
 
         await scheduledPublications().updateOne(

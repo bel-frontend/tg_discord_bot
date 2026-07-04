@@ -28,6 +28,7 @@ export function useDraftEditor(
     const [imageUrls, setImageUrls] = useState('');
     const [images, setImages] = useState<ImageItem[]>([]);
     const [targets, setTargets] = useState<Target[]>([]);
+    const [silent, setSilent] = useState(false);
     const [saveStatus, setSaveStatus] = useState('');
     const [charCount, setCharCount] = useState(0);
     const [markdown, setMarkdown] = useState('');
@@ -38,11 +39,13 @@ export function useDraftEditor(
     const imageUrlsRef = useRef(imageUrls);
     const imagesRef = useRef(images);
     const targetsRef = useRef(targets);
+    const silentRef = useRef(silent);
     draftIdRef.current = draftId;
     titleRef.current = title;
     imageUrlsRef.current = imageUrls;
     imagesRef.current = images;
     targetsRef.current = targets;
+    silentRef.current = silent;
 
     const parseImageUrls = useCallback(
         () =>
@@ -60,6 +63,7 @@ export function useDraftEditor(
             imageUrls: parseImageUrls(),
             imageIds: imagesRef.current.map((i) => i.id),
             targets: targetsRef.current,
+            silent: silentRef.current,
         }),
         [editorRef, parseImageUrls],
     );
@@ -109,6 +113,7 @@ export function useDraftEditor(
         setTitle(draft.title === 'Untitled' ? '' : draft.title);
         setImageUrls((draft.imageUrls || []).join(', '));
         setTargets(draft.targets || []);
+        setSilent(draft.silent ?? false);
         editorRef.current?.setMarkdown(draft.markdown || '');
         setMarkdown(draft.markdown || '');
         setCharCount((draft.markdown || '').length);
@@ -121,6 +126,7 @@ export function useDraftEditor(
         setTitle('');
         setImageUrls('');
         setTargets([]);
+        setSilent(false);
         editorRef.current?.setMarkdown('');
         setMarkdown('');
         setCharCount(0);
@@ -183,6 +189,8 @@ export function useDraftEditor(
         setImages,
         targets,
         setTargets,
+        silent,
+        setSilent,
         saveStatus,
         setSaveStatus,
         charCount,

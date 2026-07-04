@@ -210,8 +210,9 @@ export class TelegramPlatform implements Platform {
                                 ? {
                                       caption: firstChunk,
                                       parse_mode: 'HTML',
+                                      disable_notification: content.silent,
                                   }
-                                : {};
+                                : { disable_notification: content.silent };
                         const message = await bot.sendPhoto(
                             id,
                             photos[i].source,
@@ -228,6 +229,7 @@ export class TelegramPlatform implements Platform {
                     for (const chunk of chunks.slice(canUseCaption ? 1 : 0)) {
                         const message = await bot.sendMessage(id, chunk, {
                             parse_mode: 'HTML',
+                            disable_notification: content.silent,
                         });
                         messageIds.push(String(message.message_id));
                     }
@@ -235,6 +237,7 @@ export class TelegramPlatform implements Platform {
                     for (const chunk of chunks) {
                         const message = await bot.sendMessage(id, chunk, {
                             parse_mode: 'HTML',
+                            disable_notification: content.silent,
                         });
                         messageIds.push(String(message.message_id));
                     }

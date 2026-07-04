@@ -14,6 +14,7 @@ interface PublishParams {
     title: string;
     validationIssues: ValidationIssue[];
     ensureDraftForPublish: () => Promise<string>;
+    silent: boolean;
 }
 
 interface UpdatePublishedParams {
@@ -99,6 +100,7 @@ export function usePublications() {
                         imageUrls: params.parseImageUrls(),
                         imageIds,
                         targets: params.targets,
+                        silent: params.silent,
                     },
                 });
                 await loadPublications(savedDraftId);

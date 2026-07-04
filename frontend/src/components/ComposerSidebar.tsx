@@ -24,6 +24,8 @@ interface Props {
     onImagesChange: (next: ImageItem[]) => void;
     imageUrls: string;
     onImageUrlsChange: (value: string) => void;
+    silent: boolean;
+    onSilentChange: (value: boolean) => void;
     publications: Publication[];
     publishing: boolean;
     scheduling: boolean;
@@ -41,6 +43,8 @@ export function ComposerSidebar({
     onImagesChange,
     imageUrls,
     onImageUrlsChange,
+    silent,
+    onSilentChange,
     publications,
     publishing,
     scheduling,
@@ -92,6 +96,15 @@ export function ComposerSidebar({
                     what's already published.
                 </p>
             )}
+            <label>
+                <input
+                    type="checkbox"
+                    checked={silent}
+                    onChange={(e) => onSilentChange(e.target.checked)}
+                />
+                {' '}Silent send (no notification)
+            </label>
+
             <div className="actions">
                 <button className="btn" onClick={onSaveDraft}>
                     Save draft

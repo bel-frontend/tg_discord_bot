@@ -185,6 +185,7 @@ describe('executePublish', () => {
                 targets: [],
                 imageUrls: [],
                 images: [],
+                silent: false,
             }),
         ).rejects.toThrow('No channels selected');
     });
@@ -198,6 +199,7 @@ describe('executePublish', () => {
                 targets: [{ platform: 'telegram', channelId: 'chan1' }],
                 imageUrls: [],
                 images: [],
+                silent: false,
             }),
         ).rejects.toThrow('Content is empty');
     });
@@ -213,11 +215,12 @@ describe('executePublish', () => {
             targets: [{ platform: 'telegram', channelId: 'chan1' }],
             imageUrls: [],
             images: [],
+            silent: false,
         });
 
         expect(publishToTargetsMock).toHaveBeenCalledWith(
             [{ platform: 'telegram', channelId: 'chan1' }],
-            { markdown: 'hi', imageUrls: [], images: [] },
+            { markdown: 'hi', imageUrls: [], images: [], silent: false },
             'user1',
         );
         expect(createPublicationMock).toHaveBeenCalledTimes(1);
@@ -237,11 +240,12 @@ describe('executePublish', () => {
             targets: [{ platform: 'telegram', channelId: 'chan1' }],
             imageUrls: [],
             images: [],
+            silent: false,
         });
 
         expect(publishToTargetsMock).toHaveBeenCalledWith(
             [{ platform: 'telegram', channelId: 'chan1' }],
-            { markdown: 'hi', imageUrls: [], images: [] },
+            { markdown: 'hi', imageUrls: [], images: [], silent: false },
             'user1',
         );
         expect(createPublicationMock).not.toHaveBeenCalled();

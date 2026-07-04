@@ -60,6 +60,7 @@ describe('usePublications', () => {
                 title: 'My Post',
                 validationIssues: [],
                 ensureDraftForPublish,
+                silent: false,
             });
         });
 
@@ -73,6 +74,7 @@ describe('usePublications', () => {
                 imageUrls: [],
                 imageIds: [],
                 targets: [{ platform: 'telegram', channelId: 'c1' }],
+                silent: false,
             },
         });
     });
@@ -90,6 +92,7 @@ describe('usePublications', () => {
                 title: '',
                 validationIssues: [],
                 ensureDraftForPublish,
+                silent: false,
             });
         });
 
@@ -112,6 +115,7 @@ describe('usePublications', () => {
                     { platform: 'telegram', chunk: 1, message: 'broken tag' },
                 ],
                 ensureDraftForPublish,
+                silent: false,
             });
         });
 

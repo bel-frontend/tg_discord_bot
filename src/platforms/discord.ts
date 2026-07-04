@@ -1,4 +1,4 @@
-import { Client, GatewayIntentBits, ChannelType } from 'discord.js';
+import { Client, GatewayIntentBits, ChannelType, MessageFlags } from 'discord.js';
 import type { TextChannel } from 'discord.js';
 import type {
     Channel,
@@ -190,10 +190,15 @@ export class DiscordPlatform implements Platform {
                 }
                 const textChannel = channel as TextChannel;
                 for (let i = 0; i < chunks.length; i++) {
-                    const payload: { content: string; files?: typeof files } = {
+                    const payload: {
+                        content: string;
+                        files?: typeof files;
+                        flags?: MessageFlags.SuppressNotifications;
+                    } = {
                         content: chunks[i],
                     };
                     if (files.length && i === 0) payload.files = files;
+                    if (content.silent) payload.flags = MessageFlags.SuppressNotifications;
                     const message = await textChannel.send(payload as any);
                     messageIds.push(message.id);
                 }
