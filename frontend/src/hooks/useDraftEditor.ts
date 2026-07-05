@@ -8,6 +8,7 @@ import {
 } from 'react';
 import { api } from '../api';
 import { useToast } from '../toast';
+import { deriveTitle } from '../lib/title';
 import type { Draft, Target } from '../../../shared/types';
 import type { MarkdownEditorHandle } from '../components/MarkdownEditor';
 import type { ImageItem } from '../components/ImageUploader';
@@ -57,14 +58,17 @@ export function useDraftEditor(
     );
 
     const collect = useCallback(
-        () => ({
-            title: titleRef.current.trim() || 'Untitled',
-            markdown: editorRef.current?.getMarkdown() ?? '',
-            imageUrls: parseImageUrls(),
-            imageIds: imagesRef.current.map((i) => i.id),
-            targets: targetsRef.current,
-            silent: silentRef.current,
-        }),
+        () => {
+            const markdown = editorRef.current?.getMarkdown() ?? '';
+            return {
+                title: deriveTitle(titleRef.current, markdown),
+                markdown,
+                imageUrls: parseImageUrls(),
+                imageIds: imagesRef.current.map((i) => i.id),
+                targets: targetsRef.current,
+                silent: silentRef.current,
+            };
+        },
         [editorRef, parseImageUrls],
     );
 

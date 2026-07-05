@@ -24,7 +24,7 @@ function makeEditorRef(initialMarkdown = '') {
 }
 
 describe('useDraftEditor', () => {
-    it('collect() defaults title to Untitled, reads fresh markdown, maps images/targets', () => {
+    it('collect() derives title from markdown, reads fresh markdown, maps images/targets', () => {
         const editorRef = makeEditorRef('hello world');
         const setDrafts = vi.fn();
         const { result } = renderHook(() => useDraftEditor(editorRef as any, setDrafts));
@@ -40,11 +40,23 @@ describe('useDraftEditor', () => {
         });
 
         const data = result.current.collect();
-        expect(data.title).toBe('Untitled');
+        expect(data.title).toBe('hello world');
         expect(data.markdown).toBe('hello world');
         expect(data.imageUrls).toEqual(['https://a.png', 'https://b.png']);
         expect(data.imageIds).toEqual(['img1', 'img2']);
         expect(data.targets).toEqual([{ platform: 'telegram', channelId: 'x' }]);
+    });
+
+    it('collect() defaults title to Untitled when both title and markdown are blank', () => {
+        const editorRef = makeEditorRef('');
+        const setDrafts = vi.fn();
+        const { result } = renderHook(() => useDraftEditor(editorRef as any, setDrafts));
+
+        act(() => {
+            result.current.setTitle('   ');
+        });
+
+        expect(result.current.collect().title).toBe('Untitled');
     });
 
     it('collect() trims and keeps a non-empty title', () => {

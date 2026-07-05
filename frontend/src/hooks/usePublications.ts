@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState, type RefObject } from 'react';
 import { api, deletePublication } from '../api';
 import { useToast } from '../toast';
+import { deriveTitle } from '../lib/title';
 import type { Publication, PublishResult, Target } from '../../../shared/types';
 import type { ValidationIssue } from './useValidation';
 import type { MarkdownEditorHandle } from '../components/MarkdownEditor';
@@ -95,7 +96,7 @@ export function usePublications() {
                     method: 'POST',
                     body: {
                         draftId: savedDraftId,
-                        title: params.title.trim() || 'Untitled',
+                        title: deriveTitle(params.title, markdown),
                         markdown,
                         imageUrls: params.parseImageUrls(),
                         imageIds,
@@ -137,7 +138,7 @@ export function usePublications() {
                 }>(`/api/publications/${publication.id}/update`, {
                     method: 'POST',
                     body: {
-                        title: params.title.trim() || 'Untitled',
+                        title: deriveTitle(params.title, markdown),
                         markdown,
                         imageUrls: params.parseImageUrls(),
                     },
