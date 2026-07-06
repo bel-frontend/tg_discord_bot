@@ -55,11 +55,13 @@ export function useFindReplace(
     const [matchCount, setMatchCount] = useState(0);
     const queryInputRef = useRef<HTMLInputElement>(null);
 
-    function selectMatch(match: Match) {
+    function selectMatch(match: Match, focus: boolean) {
         const ed = editorRef.current;
         if (!ed) return;
         ed.setSelection([match.line, match.chFrom], [match.line, match.chTo]);
-        ed.focus();
+        // Toast UI only renders the selection highlight while focused, but focusing on
+        // every keystroke (see handleQueryChange) would kick focus out of the inputs.
+        if (focus) ed.focus();
         scrollEditorIntoView(holderRef.current);
     }
 
@@ -73,7 +75,7 @@ export function useFindReplace(
     function applyMatches(
         matches: Match[],
         index: number,
-        { select = true }: { select?: boolean } = {},
+        { select = true, focus = true }: { select?: boolean; focus?: boolean } = {},
     ) {
         setMatchCount(matches.length);
         if (matches.length === 0) {
@@ -82,7 +84,7 @@ export function useFindReplace(
         }
         const safeIndex = Math.min(Math.max(index, 0), matches.length - 1);
         setMatchIndex(safeIndex);
-        if (select) selectMatch(matches[safeIndex]);
+        if (select) selectMatch(matches[safeIndex], focus);
     }
 
     function openSearch() {
@@ -123,7 +125,8 @@ export function useFindReplace(
 
     function handleQueryChange(value: string) {
         setQuery(value);
-        applyMatches(refreshMatches(value), 0);
+        // Keep focus in the input so the user can keep typing without interruption.
+        applyMatches(refreshMatches(value), 0, { focus: false });
     }
 
     function handleReplaceOne() {
