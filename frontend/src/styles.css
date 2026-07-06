@@ -558,9 +558,45 @@ select:focus {
     font-weight: 600;
     padding: 10px 12px;
 }
+.editor-wrap {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+    display: flex;
+}
 .editor-holder {
     flex: 1;
     min-height: 0;
+    min-width: 0;
+}
+.editor-search-panel {
+    position: absolute;
+    top: 44px;
+    right: 12px;
+    z-index: 5;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px;
+    background: var(--bg-elev);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    box-shadow: var(--shadow);
+}
+.editor-search-panel input {
+    font: inherit;
+    width: 140px;
+    padding: 6px 8px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--bg);
+    color: var(--text);
+}
+.editor-search-panel .match-count {
+    min-width: 64px;
+    color: var(--text-dim);
+    font-size: 12px;
+    text-align: center;
 }
 .editor-tabs-row {
     display: flex;

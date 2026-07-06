@@ -24,7 +24,11 @@ declare module '@toast-ui/editor' {
         getMarkdown(): string;
         setMarkdown(markdown: string, cursorToEnd?: boolean): void;
         getSelectedText(): string;
-        replaceSelection(text: string): void;
+        replaceSelection(
+            text: string,
+            start?: [number, number],
+            end?: [number, number],
+        ): void;
         setSelection(start: [number, number], end?: [number, number]): void;
         focus(): void;
         destroy(): void;
