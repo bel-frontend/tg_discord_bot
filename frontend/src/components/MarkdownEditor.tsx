@@ -1,11 +1,6 @@
-import {
-    forwardRef,
-    useEffect,
-    useImperativeHandle,
-    useRef,
-    useState,
-} from 'react';
+import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
 import Editor from '@toast-ui/editor';
+import { scrollEditorIntoView, useFindReplace } from '../hooks/useFindReplace';
 
 export interface MarkdownEditorHandle {
     getMarkdown: () => string;
@@ -18,36 +13,6 @@ interface Props {
     onChange: () => void;
 }
 
-interface Match {
-    line: number;
-    chFrom: number;
-    chTo: number;
-}
-
-function findMatches(text: string, query: string): Match[] {
-    if (!query) return [];
-    const needle = query.toLowerCase();
-    const matches: Match[] = [];
-    text.split('\n').forEach((lineText, i) => {
-        const haystack = lineText.toLowerCase();
-        let from = 0;
-        let idx: number;
-        while ((idx = haystack.indexOf(needle, from)) !== -1) {
-            matches.push({
-                line: i + 1,
-                chFrom: idx + 1,
-                chTo: idx + 1 + query.length,
-            });
-            from = idx + needle.length;
-        }
-    });
-    return matches;
-}
-
-function escapeRegExp(value: string): string {
-    return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
 // Wraps the vanilla Toast UI Editor so we don't depend on its (older) React binding.
 export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(
     ({ theme, onChange }, ref) => {
@@ -57,12 +22,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(
         const onChangeRef = useRef(onChange);
         onChangeRef.current = onChange;
 
-        const [searchOpen, setSearchOpen] = useState(false);
-        const [query, setQuery] = useState('');
-        const [replaceText, setReplaceText] = useState('');
-        const [matchIndex, setMatchIndex] = useState(-1);
-        const [matchCount, setMatchCount] = useState(0);
-        const queryInputRef = useRef<HTMLInputElement>(null);
+        const search = useFindReplace(editor, holder, onChangeRef);
 
         useImperativeHandle(ref, () => ({
             getMarkdown: () => editor.current?.getMarkdown() ?? '',
@@ -81,14 +41,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(
                 const safeLine = Math.max(1, Math.floor(line || 1));
                 ed.setSelection([safeLine, 1], [safeLine, 1]);
                 ed.focus();
-
-                // Toast UI scrolls selection into view, but do a DOM fallback for long docs.
-                requestAnimationFrame(() => {
-                    const active = holder.current?.querySelector(
-                        '.toastui-editor-md-container .toastui-editor',
-                    );
-                    active?.scrollIntoView({ block: 'center' });
-                });
+                scrollEditorIntoView(holder.current);
             },
         }));
 
@@ -99,123 +52,6 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(
             ed.replaceSelection(`${open}${selected}${close}`);
             ed.focus();
             onChangeRef.current();
-        }
-
-        function selectMatch(match: Match) {
-            const ed = editor.current;
-            if (!ed) return;
-            ed.setSelection([match.line, match.chFrom], [match.line, match.chTo]);
-            ed.focus();
-
-            // Toast UI scrolls selection into view, but do a DOM fallback for long docs.
-            requestAnimationFrame(() => {
-                const active = holder.current?.querySelector(
-                    '.toastui-editor-md-container .toastui-editor',
-                );
-                active?.scrollIntoView({ block: 'center' });
-            });
-        }
-
-        function openSearch() {
-            const ed = editor.current;
-            const selected = ed?.getSelectedText() || '';
-            if (selected) setQuery(selected);
-            setSearchOpen(true);
-            requestAnimationFrame(() => {
-                queryInputRef.current?.focus();
-                queryInputRef.current?.select();
-            });
-        }
-
-        function closeSearch() {
-            setSearchOpen(false);
-            setQuery('');
-            setReplaceText('');
-            setMatchIndex(-1);
-            setMatchCount(0);
-            editor.current?.focus();
-        }
-
-        function runFind(direction: 'next' | 'prev', q: string = query) {
-            const ed = editor.current;
-            if (!ed || !q) {
-                setMatchCount(0);
-                setMatchIndex(-1);
-                return;
-            }
-            const matches = findMatches(ed.getMarkdown(), q);
-            setMatchCount(matches.length);
-            if (matches.length === 0) {
-                setMatchIndex(-1);
-                return;
-            }
-            let next: number;
-            if (matchIndex === -1) {
-                next = direction === 'next' ? 0 : matches.length - 1;
-            } else if (direction === 'next') {
-                next = (matchIndex + 1) % matches.length;
-            } else {
-                next = (matchIndex - 1 + matches.length) % matches.length;
-            }
-            setMatchIndex(next);
-            selectMatch(matches[next]);
-        }
-
-        function handleQueryChange(value: string) {
-            setQuery(value);
-            const ed = editor.current;
-            if (!ed || !value) {
-                setMatchCount(0);
-                setMatchIndex(-1);
-                return;
-            }
-            const matches = findMatches(ed.getMarkdown(), value);
-            setMatchCount(matches.length);
-            if (matches.length === 0) {
-                setMatchIndex(-1);
-                return;
-            }
-            setMatchIndex(0);
-            selectMatch(matches[0]);
-        }
-
-        function handleReplaceOne() {
-            const ed = editor.current;
-            if (!ed || !query) return;
-            const matches = findMatches(ed.getMarkdown(), query);
-            if (matchIndex < 0 || matchIndex >= matches.length) return;
-            const match = matches[matchIndex];
-            ed.replaceSelection(
-                replaceText,
-                [match.line, match.chFrom],
-                [match.line, match.chTo],
-            );
-            onChangeRef.current();
-
-            const nextMatches = findMatches(ed.getMarkdown(), query);
-            setMatchCount(nextMatches.length);
-            if (nextMatches.length === 0) {
-                setMatchIndex(-1);
-                return;
-            }
-            const nextIndex = Math.min(matchIndex, nextMatches.length - 1);
-            setMatchIndex(nextIndex);
-            selectMatch(nextMatches[nextIndex]);
-        }
-
-        function handleReplaceAll() {
-            const ed = editor.current;
-            if (!ed || !query) return;
-            const text = ed.getMarkdown();
-            const pattern = new RegExp(escapeRegExp(query), 'gi');
-            const nextText = text.replace(pattern, () => replaceText);
-            if (nextText === text) return;
-            ed.setMarkdown(nextText);
-            onChangeRef.current();
-
-            const remaining = findMatches(nextText, query);
-            setMatchCount(remaining.length);
-            setMatchIndex(remaining.length > 0 ? 0 : -1);
         }
 
         function customButton(
@@ -282,7 +118,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(
                             name: 'search',
                             tooltip: 'Find & replace (Ctrl/Cmd+F)',
                             el: customButton('search', '🔍', 'Find & replace', () =>
-                                openSearch(),
+                                search.openSearch(),
                             ),
                         },
                     ],
@@ -303,7 +139,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(
                     wrapSelection('__', '__');
                 } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') {
                     e.preventDefault();
-                    openSearch();
+                    search.openSearch();
                 }
             };
             holderEl.addEventListener('keydown', onKeyDown, true);
@@ -323,28 +159,28 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(
         return (
             <div className="editor-wrap">
                 <div className="editor-holder" ref={holder} />
-                {searchOpen && (
+                {search.searchOpen && (
                     <div className="editor-search-panel">
                         <input
-                            ref={queryInputRef}
+                            ref={search.queryInputRef}
                             type="text"
                             placeholder="Find"
-                            value={query}
-                            onChange={(e) => handleQueryChange(e.target.value)}
+                            value={search.query}
+                            onChange={(e) => search.handleQueryChange(e.target.value)}
                             onKeyDown={(e) => {
                                 if (e.key === 'Enter') {
                                     e.preventDefault();
-                                    runFind(e.shiftKey ? 'prev' : 'next');
+                                    search.runFind(e.shiftKey ? 'prev' : 'next');
                                 } else if (e.key === 'Escape') {
                                     e.preventDefault();
-                                    closeSearch();
+                                    search.closeSearch();
                                 }
                             }}
                         />
                         <span className="match-count">
-                            {query
-                                ? matchCount > 0
-                                    ? `${matchIndex + 1}/${matchCount}`
+                            {search.query
+                                ? search.matchCount > 0
+                                    ? `${search.matchIndex + 1}/${search.matchCount}`
                                     : 'No results'
                                 : ''}
                         </span>
@@ -352,8 +188,8 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(
                             type="button"
                             className="btn small ghost"
                             title="Previous match"
-                            disabled={matchCount === 0}
-                            onClick={() => runFind('prev')}
+                            disabled={search.matchCount === 0}
+                            onClick={() => search.runFind('prev')}
                         >
                             ↑
                         </button>
@@ -361,39 +197,39 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(
                             type="button"
                             className="btn small ghost"
                             title="Next match"
-                            disabled={matchCount === 0}
-                            onClick={() => runFind('next')}
+                            disabled={search.matchCount === 0}
+                            onClick={() => search.runFind('next')}
                         >
                             ↓
                         </button>
                         <input
                             type="text"
                             placeholder="Replace"
-                            value={replaceText}
-                            onChange={(e) => setReplaceText(e.target.value)}
+                            value={search.replaceText}
+                            onChange={(e) => search.setReplaceText(e.target.value)}
                             onKeyDown={(e) => {
                                 if (e.key === 'Enter') {
                                     e.preventDefault();
-                                    handleReplaceOne();
+                                    search.handleReplaceOne();
                                 } else if (e.key === 'Escape') {
                                     e.preventDefault();
-                                    closeSearch();
+                                    search.closeSearch();
                                 }
                             }}
                         />
                         <button
                             type="button"
                             className="btn small"
-                            disabled={matchCount === 0}
-                            onClick={handleReplaceOne}
+                            disabled={search.matchCount === 0}
+                            onClick={search.handleReplaceOne}
                         >
                             Replace
                         </button>
                         <button
                             type="button"
                             className="btn small"
-                            disabled={matchCount === 0}
-                            onClick={handleReplaceAll}
+                            disabled={search.matchCount === 0}
+                            onClick={search.handleReplaceAll}
                         >
                             Replace all
                         </button>
@@ -402,7 +238,7 @@ export const MarkdownEditor = forwardRef<MarkdownEditorHandle, Props>(
                             className="btn small ghost"
                             title="Close"
                             aria-label="Close find & replace"
-                            onClick={closeSearch}
+                            onClick={search.closeSearch}
                         >
                             ×
                         </button>
