@@ -40,6 +40,7 @@ function makeLocator(selector: string, state: FakePageState) {
                 state.uploadedFiles.push(files);
             }),
             getAttribute: mock(async () => state.postedHref),
+            waitFor: mock(async () => {}),
         }),
     };
 }
@@ -69,6 +70,7 @@ function newState(overrides: Partial<FakePageState> = {}): FakePageState {
 
 beforeEach(() => {
     browserSessionsTestState.sessionStatus = null;
+    process.env.X_ACTION_DELAY_MS = '0';
     markPublished.mockClear();
     markReconnectRequired.mockClear();
 });

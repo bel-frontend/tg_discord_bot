@@ -24,8 +24,34 @@ const FILE_INPUT_SELECTOR = 'input[data-testid="fileInput"]';
 const POST_BUTTON_SELECTOR =
     '[data-testid="tweetButtonInline"], [data-testid="tweetButton"]';
 const POSTED_LINK_SELECTOR = 'a[href*="/status/"]';
+const DEFAULT_ACTION_DELAY_MS = 900;
+const DEFAULT_POST_CONFIRM_TIMEOUT_MS = 30_000;
 
 registerBrowserPlatform('x', { loginUrl: LOGIN_URL, detector: xLoginDetector });
+
+function envNumber(name: string, fallback: number): number {
+    const raw = process.env[name];
+    if (raw === undefined || raw === '') return fallback;
+    const value = Number(raw);
+    return Number.isFinite(value) ? value : fallback;
+}
+
+function sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function actionDelay(multiplier = 1): Promise<void> {
+    const delay = envNumber('X_ACTION_DELAY_MS', DEFAULT_ACTION_DELAY_MS);
+    if (delay <= 0) return;
+    await sleep(delay * multiplier);
+}
+
+function postConfirmTimeoutMs(): number {
+    return envNumber(
+        'X_POST_CONFIRM_TIMEOUT_MS',
+        DEFAULT_POST_CONFIRM_TIMEOUT_MS,
+    );
+}
 
 async function readPostedId(page: Page): Promise<string | null> {
     // After posting, X shows a confirmation toast with a "View" link to the new post.
@@ -48,11 +74,19 @@ async function postChunk(
         replyToId ? `https://x.com/i/status/${replyToId}` : COMPOSE_URL,
         { waitUntil: 'domcontentloaded' },
     );
+    await actionDelay();
+
     if (replyToId) {
         await page.locator('[data-testid="reply"]').first().click();
+        await actionDelay();
     }
-    await page.locator(TEXTAREA_SELECTOR).first().click();
-    await page.locator(TEXTAREA_SELECTOR).first().fill(text);
+
+    const textarea = page.locator(TEXTAREA_SELECTOR).first();
+    await textarea.waitFor({ state: 'visible', timeout: 30_000 });
+    await textarea.click();
+    await actionDelay();
+    await textarea.fill(text);
+    await actionDelay();
 
     if (images?.length) {
         await page.locator(FILE_INPUT_SELECTOR).first().setInputFiles(
@@ -62,10 +96,18 @@ async function postChunk(
                 buffer: Buffer.from(image.data),
             })),
         );
+        await actionDelay(2);
     }
 
-    await page.locator(POST_BUTTON_SELECTOR).first().click();
-    await page.waitForSelector(POSTED_LINK_SELECTOR, { timeout: 15_000 });
+    const postButton = page.locator(POST_BUTTON_SELECTOR).first();
+    await postButton.waitFor({ state: 'visible', timeout: 30_000 });
+    await actionDelay();
+    await postButton.click();
+    await page.waitForSelector(POSTED_LINK_SELECTOR, {
+        timeout: postConfirmTimeoutMs(),
+    });
+    await actionDelay();
+
     const postedId = await readPostedId(page);
     if (!postedId) throw new Error('Could not confirm the post was published');
     return postedId;

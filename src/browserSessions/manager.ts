@@ -109,6 +109,7 @@ async function launchBrowser(): Promise<Browser> {
     // by the container entrypoint); set BROWSER_HEADLESS=true to force headless (e.g. CI).
     return chromium.launch({
         headless: process.env.BROWSER_HEADLESS === 'true',
+        executablePath: process.env.CHROME_EXECUTABLE_PATH || undefined,
         args: ['--disable-blink-features=AutomationControlled'],
     });
 }
