@@ -72,9 +72,14 @@ function newState(overrides: Partial<FakePageState> = {}): FakePageState {
     };
 }
 
+function nextTick(): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
 beforeEach(() => {
     browserSessionsTestState.sessionStatus = null;
     process.env.X_ACTION_DELAY_MS = '0';
+    process.env.BROWSER_PLATFORM_OPERATION_COOLDOWN_MS = '0';
     markPublished.mockClear();
     markReconnectRequired.mockClear();
 });
@@ -225,6 +230,50 @@ describe('XPlatform', () => {
             '[data-testid="confirmationSheetConfirm"]',
         );
         expect(markPublished).not.toHaveBeenCalled();
+    });
+
+    test('serializes browser operations for the same account', async () => {
+        const events: string[] = [];
+        let releaseFirst!: () => void;
+
+        browserSessionsTestState.nextAcquire = async () => {
+            const index = events.filter((event) => event === 'acquire').length + 1;
+            events.push('acquire');
+            if (index === 1) {
+                await new Promise<void>((resolve) => {
+                    releaseFirst = resolve;
+                });
+            }
+            return {
+                page: fakePage(newState({ postedHref: `/someone/status/${index}` })),
+                release: mock(async () => {
+                    events.push(`release-${index}`);
+                }),
+            };
+        };
+
+        const platform = new XPlatform();
+        const first = platform.publish(
+            ['me'],
+            { markdown: 'first' },
+            { accountId: 'acct1' },
+        );
+        await nextTick();
+        const second = platform.publish(
+            ['me'],
+            { markdown: 'second' },
+            { accountId: 'acct1' },
+        );
+
+        await nextTick();
+        expect(events).toEqual(['acquire']);
+
+        releaseFirst();
+        const [firstResult, secondResult] = await Promise.all([first, second]);
+
+        expect(firstResult[0].ok).toBe(true);
+        expect(secondResult[0].ok).toBe(true);
+        expect(events).toEqual(['acquire', 'release-1', 'acquire', 'release-2']);
     });
 
     test('listChannels returns the connected account only when a session is connected', async () => {
