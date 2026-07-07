@@ -13,8 +13,9 @@ RUN --mount=type=cache,target=/bun-cache bun install --frozen-lockfile
 # Chromium + Xvfb for the browser-session platforms (src/browserSessions/): a real,
 # headful-in-a-virtual-display browser drives the user's own login for platforms with
 # no usable official publish API (X, Reddit, ...). --with-deps installs the apt packages
-# Chromium needs (fonts, libnss3, etc); xvfb is the virtual display it renders into.
-RUN apt-get update && apt-get install -y --no-install-recommends xvfb \
+# Chromium needs (fonts, libnss3, etc); xvfb is the virtual display it renders into;
+# xauth is required by xvfb-run itself (it fails at startup without it).
+RUN apt-get update && apt-get install -y --no-install-recommends xvfb xauth \
     && rm -rf /var/lib/apt/lists/*
 RUN bunx playwright install --with-deps chromium
 
