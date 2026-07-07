@@ -17,7 +17,15 @@ RUN --mount=type=cache,target=/bun-cache bun install --frozen-lockfile
 # xauth is required by xvfb-run itself (it fails at startup without it).
 RUN apt-get update && apt-get install -y --no-install-recommends xvfb xauth \
     && rm -rf /var/lib/apt/lists/*
-RUN bunx playwright install --with-deps chromium
+# The browser download (~180MB) is the slow part. A --mount=type=cache dir is *not*
+# persisted into the built image, so install into it first (fast on repeat builds even
+# if this layer gets invalidated for an unrelated reason), then copy the result into a
+# normal path that does get committed to the image layer.
+ENV PLAYWRIGHT_BROWSERS_PATH=/playwright-browsers
+RUN --mount=type=cache,target=/playwright-cache,sharing=locked \
+    PLAYWRIGHT_BROWSERS_PATH=/playwright-cache bunx playwright install --with-deps chromium \
+    && mkdir -p /playwright-browsers \
+    && cp -r /playwright-cache/. /playwright-browsers/
 
 # Install frontend dependencies (cached separately from source)
 COPY frontend/package.json frontend/bun.lock ./frontend/
