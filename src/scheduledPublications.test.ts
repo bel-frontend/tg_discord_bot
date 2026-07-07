@@ -46,6 +46,7 @@ mock.module('./db', () => ({
     publications: emptyCollection,
     scheduledPublications: () => scheduledCollection,
     platformConfigs: () => platformConfigsCollection,
+    browserSessions: emptyCollection,
 }));
 
 const currentDraft = {

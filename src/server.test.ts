@@ -1,4 +1,5 @@
 import { describe, expect, mock, test } from 'bun:test';
+import * as browserSessionsTestDouble from './browserSessions/testSupport';
 
 const collection = () => ({
     findOne: mock(async () => null),
@@ -9,6 +10,13 @@ const collection = () => ({
     deleteOne: mock(async () => ({ deletedCount: 0 })),
     deleteMany: mock(async () => ({ deletedCount: 0 })),
 });
+
+// Stubbed out so this file (which only exercises the public-callback HEAD probes) never
+// pulls in the real browser-session/Playwright machinery — that subsystem has its own
+// dedicated tests in src/browserSessions/*.test.ts and src/xPlatform.test.ts. Uses the
+// shared test double (see its header comment) rather than a local factory, since only one
+// `mock.module('./browserSessions', ...)` registration actually takes effect process-wide.
+mock.module('./browserSessions', () => browserSessionsTestDouble);
 
 mock.module('./db', () => ({
     FULL_ACCESS_PERMISSIONS: {
@@ -29,6 +37,7 @@ mock.module('./db', () => ({
     platformConfigs: collection,
     publications: collection,
     scheduledPublications: collection,
+    browserSessions: collection,
 }));
 
 const { handleApi } = await import('./server');

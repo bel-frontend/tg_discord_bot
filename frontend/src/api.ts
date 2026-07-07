@@ -128,6 +128,39 @@ export async function startThreadsOAuth(): Promise<{
     return api('/api/threads/oauth/start', { method: 'POST' });
 }
 
+export async function startBrowserSession(
+    platform: string,
+): Promise<{ sessionId: string; wsUrl: string }> {
+    return api(`/api/browser-sessions/${platform}/start`, { method: 'POST' });
+}
+
+export async function getBrowserSessionStatus(platform: string): Promise<{
+    connected: boolean;
+    status: 'connected' | 'reconnect_required' | 'not_connected';
+    lastVerifiedAt?: string;
+}> {
+    return api(`/api/browser-sessions/${platform}/status`);
+}
+
+export async function closeBrowserSession(sessionId: string): Promise<{ ok: true }> {
+    return api(`/api/browser-sessions/${sessionId}/close`, { method: 'POST' });
+}
+
+export async function disconnectBrowserSession(
+    platform: string,
+): Promise<{ ok: true }> {
+    return api(`/api/browser-sessions/${platform}/disconnect`, {
+        method: 'DELETE',
+    });
+}
+
+/** Builds the live-view WebSocket URL for a started browser session, token in the query string. */
+export function browserSessionLiveViewUrl(wsUrl: string): string {
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const token = getToken() ?? '';
+    return `${protocol}//${window.location.host}${wsUrl}?token=${encodeURIComponent(token)}`;
+}
+
 export async function fetchScheduledPublications(): Promise<
     ScheduledPublication[]
 > {

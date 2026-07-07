@@ -123,9 +123,10 @@ export async function changePassword(
     await users().updateOne({ _id: user._id }, { $set: { passwordHash } });
 }
 
-async function verifyToken(req: Request): Promise<AuthUser> {
+async function verifyToken(req: Request, tokenOverride?: string): Promise<AuthUser> {
     const header = req.headers.get('authorization') || '';
-    const token = header.startsWith('Bearer ') ? header.slice(7) : '';
+    const headerToken = header.startsWith('Bearer ') ? header.slice(7) : '';
+    const token = tokenOverride || headerToken;
     if (!token) throw new AuthError('Authentication required', 401);
 
     try {
@@ -150,8 +151,13 @@ async function verifyToken(req: Request): Promise<AuthUser> {
  * A user is either an owner of their own account or a member of exactly one
  * other account, never both (see plan's v1 single-membership simplification).
  */
-export async function requireAuth(req: Request): Promise<ActorContext> {
-    const user = await verifyToken(req);
+export async function requireAuth(
+    req: Request,
+    options?: { tokenOverride?: string },
+): Promise<ActorContext> {
+    // A WebSocket handshake can't set an Authorization header, so the live-view route
+    // passes the session token as a `?token=` query param instead — verified identically.
+    const user = await verifyToken(req, options?.tokenOverride);
 
     const membership = await accountMembers().findOne({
         userId: user.id,

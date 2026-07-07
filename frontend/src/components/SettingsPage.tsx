@@ -5,7 +5,9 @@ import type {
 } from '../../../shared/types';
 import {
     clearPlatformConfigField,
+    disconnectBrowserSession,
     fetchPlatformConfigs,
+    getBrowserSessionStatus,
     savePlatformConfig,
     startThreadsOAuth,
 } from '../api';
@@ -15,6 +17,7 @@ import { PageLayout } from '../layouts/PageLayout';
 import { useMe } from '../meContext';
 import { MembersPanel } from './MembersPanel';
 import { AccountPanel } from './AccountPanel';
+import { BrowserSessionModal } from './BrowserSessionModal';
 
 const LINK_PATTERN = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g;
 
@@ -120,6 +123,57 @@ function ConfigFieldRow({
     );
 }
 
+interface BrowserConnectPanelProps {
+    platform: string;
+    platformName: string;
+    status?: { connected: boolean; status: string };
+    disconnecting: boolean;
+    onConnect: () => void;
+    onDisconnect: () => void;
+}
+
+/** Status pill + connect/reconnect/disconnect controls for a browser-session-backed platform. */
+function BrowserConnectPanel({
+    platformName,
+    status,
+    disconnecting,
+    onConnect,
+    onDisconnect,
+}: BrowserConnectPanelProps) {
+    const label = !status || status.status === 'not_connected'
+        ? 'Not connected'
+        : status.status === 'reconnect_required'
+          ? 'Reconnect needed'
+          : 'Connected';
+    const pillClass =
+        status?.status === 'connected'
+            ? 'settings-pill settings-pill-ok'
+            : status?.status === 'reconnect_required'
+              ? 'settings-pill settings-pill-warn'
+              : 'settings-pill';
+
+    return (
+        <div className="settings-browser-connect">
+            <span className={pillClass}>{label}</span>
+            <div className="settings-form-actions">
+                <button type="button" className="btn ghost" onClick={onConnect}>
+                    {status?.connected ? 'Reconnect' : 'Connect'} {platformName}
+                </button>
+                {status?.connected && (
+                    <button
+                        type="button"
+                        className="btn ghost settings-field-action-danger"
+                        disabled={disconnecting}
+                        onClick={onDisconnect}
+                    >
+                        Disconnect
+                    </button>
+                )}
+            </div>
+        </div>
+    );
+}
+
 export function SettingsPage() {
     const toast = useToast();
     const me = useMe();
@@ -140,6 +194,14 @@ export function SettingsPage() {
     );
     const [activeTab, setActiveTab] = useState('');
     const [instructionsOpen, setInstructionsOpen] = useState(false);
+    const [browserSessionStatus, setBrowserSessionStatus] = useState<
+        Record<string, { connected: boolean; status: string }>
+    >({});
+    const [browserModalPlatform, setBrowserModalPlatform] = useState<
+        string | null
+    >(null);
+    const [disconnectingBrowserPlatform, setDisconnectingBrowserPlatform] =
+        useState<string | null>(null);
 
     const configByPlatform = useMemo(
         () => new Map(configs.map((config) => [config.platform, config])),
@@ -151,6 +213,14 @@ export function SettingsPage() {
     useEffect(() => {
         if (!activeTab && platforms.length) setActiveTab(platforms[0].id);
     }, [platforms, activeTab]);
+
+    useEffect(() => {
+        if (!activePlatform || activePlatform.setup?.connect !== 'browser') {
+            return;
+        }
+        refreshBrowserSessionStatus(activePlatform.id);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [activePlatform?.id]);
 
     useEffect(() => {
         Promise.all([loadPlatforms(), fetchPlatformConfigs()])
@@ -260,6 +330,41 @@ export function SettingsPage() {
         } catch (err: any) {
             toast(err.message, 'error');
             setConnectingThreads(false);
+        }
+    }
+
+    async function refreshBrowserSessionStatus(platform: string) {
+        try {
+            const status = await getBrowserSessionStatus(platform);
+            setBrowserSessionStatus((current) => ({
+                ...current,
+                [platform]: status,
+            }));
+        } catch (err: any) {
+            toast(err.message, 'error');
+        }
+    }
+
+    async function disconnectBrowserPlatform(
+        platform: string,
+        platformName: string,
+    ) {
+        if (
+            !confirm(
+                `Disconnect ${platformName}? You'll need to log in again to publish.`,
+            )
+        ) {
+            return;
+        }
+        setDisconnectingBrowserPlatform(platform);
+        try {
+            await disconnectBrowserSession(platform);
+            await refreshBrowserSessionStatus(platform);
+            toast(`${platformName} disconnected`, 'success');
+        } catch (err: any) {
+            toast(err.message, 'error');
+        } finally {
+            setDisconnectingBrowserPlatform(null);
         }
     }
 
@@ -468,8 +573,9 @@ export function SettingsPage() {
                                                         Save{' '}
                                                         {activePlatform.name}
                                                     </button>
-                                                    {activePlatform.id ===
-                                                        'threads' && (
+                                                    {activePlatform.setup
+                                                        .connect ===
+                                                        'oauth' && (
                                                         <button
                                                             type="button"
                                                             className="btn ghost"
@@ -480,7 +586,8 @@ export function SettingsPage() {
                                                                 connectThreads
                                                             }
                                                         >
-                                                            Connect Threads
+                                                            Connect{' '}
+                                                            {activePlatform.name}
                                                         </button>
                                                     )}
                                                 </div>
@@ -491,6 +598,36 @@ export function SettingsPage() {
                                                 This platform has no
                                                 user-configurable credentials.
                                             </p>
+                                        )}
+
+                                        {activePlatform.setup.connect ===
+                                            'browser' && (
+                                            <BrowserConnectPanel
+                                                platform={activePlatform.id}
+                                                platformName={
+                                                    activePlatform.name
+                                                }
+                                                status={
+                                                    browserSessionStatus[
+                                                        activePlatform.id
+                                                    ]
+                                                }
+                                                disconnecting={
+                                                    disconnectingBrowserPlatform ===
+                                                    activePlatform.id
+                                                }
+                                                onConnect={() =>
+                                                    setBrowserModalPlatform(
+                                                        activePlatform.id,
+                                                    )
+                                                }
+                                                onDisconnect={() =>
+                                                    disconnectBrowserPlatform(
+                                                        activePlatform.id,
+                                                        activePlatform.name,
+                                                    )
+                                                }
+                                            />
                                         )}
                                     </>
                                 ) : (
@@ -574,6 +711,24 @@ export function SettingsPage() {
                                     </div>
                                 </div>
                             </div>
+                        )}
+
+                        {browserModalPlatform && (
+                            <BrowserSessionModal
+                                platform={browserModalPlatform}
+                                platformName={
+                                    platforms.find(
+                                        (p) => p.id === browserModalPlatform,
+                                    )?.name ?? browserModalPlatform
+                                }
+                                onConnected={() => {
+                                    refreshBrowserSessionStatus(
+                                        browserModalPlatform,
+                                    );
+                                    setBrowserModalPlatform(null);
+                                }}
+                                onClose={() => setBrowserModalPlatform(null)}
+                            />
                         )}
                     </>
                 )}

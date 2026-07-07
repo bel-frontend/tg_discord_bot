@@ -10,6 +10,14 @@ ENV BUN_INSTALL_CACHE_DIR=/bun-cache
 COPY package.json bun.lockb ./
 RUN --mount=type=cache,target=/bun-cache bun install --frozen-lockfile
 
+# Chromium + Xvfb for the browser-session platforms (src/browserSessions/): a real,
+# headful-in-a-virtual-display browser drives the user's own login for platforms with
+# no usable official publish API (X, Reddit, ...). --with-deps installs the apt packages
+# Chromium needs (fonts, libnss3, etc); xvfb is the virtual display it renders into.
+RUN apt-get update && apt-get install -y --no-install-recommends xvfb \
+    && rm -rf /var/lib/apt/lists/*
+RUN bunx playwright install --with-deps chromium
+
 # Install frontend dependencies (cached separately from source)
 COPY frontend/package.json frontend/bun.lock ./frontend/
 RUN --mount=type=cache,target=/bun-cache cd frontend && bun install --frozen-lockfile
@@ -18,5 +26,7 @@ RUN --mount=type=cache,target=/bun-cache cd frontend && bun install --frozen-loc
 COPY . .
 RUN cd frontend && bun run build
 
-# The server serves the built frontend and the API on $PORT (default 3000)
-CMD ["bun", "run", "index.ts"]
+# The server serves the built frontend and the API on $PORT (default 3000). Runs under
+# Xvfb so the browser-session platforms can launch headful (not headless) Chromium —
+# headless is a known fingerprinting signal for the anti-automation checks X/Reddit run.
+CMD ["xvfb-run", "-a", "--server-args=-screen 0 1280x800x24", "bun", "run", "index.ts"]

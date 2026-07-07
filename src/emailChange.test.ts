@@ -79,6 +79,7 @@ mock.module('./db', () => ({
     platformConfigs: emptyCollection,
     publications: emptyCollection,
     scheduledPublications: emptyCollection,
+    browserSessions: emptyCollection,
 }));
 
 mock.module('./email', () => ({

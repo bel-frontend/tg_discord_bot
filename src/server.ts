@@ -65,6 +65,17 @@ import {
     createThreadsOAuthStart,
     threadsDataDeletionResponse,
 } from './threadsOAuth';
+import {
+    attachLiveView,
+    closeSession,
+    detachLiveView,
+    disconnectPlatform,
+    getBrowserSessionStatus,
+    getSession,
+    handleClientFrame,
+    startConnectSession,
+    type ClientFrame,
+} from './browserSessions';
 
 // The Next static export is copied here by frontend/scripts/copy-static-export.ts.
 const PUBLIC_DIR = join(import.meta.dir, '..', 'public');
@@ -396,6 +407,74 @@ export async function handleApi(req: Request, url: URL): Promise<Response> {
         }
     }
 
+    const browserSessionStartMatch = path.match(
+        /^\/api\/browser-sessions\/([^/]+)\/start$/,
+    );
+    if (browserSessionStartMatch && method === 'POST') {
+        try {
+            assertPermission(actor, 'canManageChannels');
+            const handle = await startConnectSession(
+                actor.accountId,
+                browserSessionStartMatch[1],
+            );
+            return json({
+                sessionId: handle.sessionId,
+                wsUrl: `/api/browser-sessions/${handle.sessionId}/live`,
+            });
+        } catch (err: any) {
+            if (err instanceof AuthError) return json({ error: err.message }, err.status);
+            return json(
+                { error: err?.message || 'Failed to start browser session' },
+                400,
+            );
+        }
+    }
+
+    const browserSessionStatusMatch = path.match(
+        /^\/api\/browser-sessions\/([^/]+)\/status$/,
+    );
+    if (browserSessionStatusMatch && method === 'GET') {
+        const status = await getBrowserSessionStatus(
+            actor.accountId,
+            browserSessionStatusMatch[1],
+        );
+        return json({
+            connected: status?.status === 'connected',
+            status: status?.status ?? 'not_connected',
+            lastVerifiedAt: status?.lastVerifiedAt?.toISOString(),
+        });
+    }
+
+    const browserSessionCloseMatch = path.match(
+        /^\/api\/browser-sessions\/([^/]+)\/close$/,
+    );
+    if (browserSessionCloseMatch && method === 'POST') {
+        const sessionId = browserSessionCloseMatch[1];
+        const session = getSession(sessionId);
+        if (session && session.accountId !== actor.accountId) {
+            return json({ error: 'Not found' }, 404);
+        }
+        await closeSession(sessionId);
+        return json({ ok: true });
+    }
+
+    const browserSessionDisconnectMatch = path.match(
+        /^\/api\/browser-sessions\/([^/]+)\/disconnect$/,
+    );
+    if (browserSessionDisconnectMatch && method === 'DELETE') {
+        try {
+            assertPermission(actor, 'canManageChannels');
+            await disconnectPlatform(
+                actor.accountId,
+                browserSessionDisconnectMatch[1],
+            );
+            return json({ ok: true });
+        } catch (err: any) {
+            if (err instanceof AuthError) return json({ error: err.message }, err.status);
+            return json({ error: err?.message || 'Failed to disconnect' }, 400);
+        }
+    }
+
     const platformConfigMatch = path.match(
         /^\/api\/platform-configs\/([^/]+)$/,
     );
@@ -670,12 +749,61 @@ export async function handleApi(req: Request, url: URL): Promise<Response> {
     return json({ error: 'Not found' }, 404);
 }
 
+interface LiveViewSocketData {
+    sessionId: string;
+}
+
+const liveViewMatch = /^\/api\/browser-sessions\/([^/]+)\/live$/;
+
+/** WebSocket handshakes can't set an Authorization header, so the token rides in the query string. */
+async function handleLiveViewUpgrade(
+    req: Request,
+    server: Bun.Server,
+    sessionId: string,
+): Promise<Response | undefined> {
+    const url = new URL(req.url);
+    let actor;
+    try {
+        actor = await requireAuth(req, {
+            tokenOverride: url.searchParams.get('token') || '',
+        });
+    } catch (error: any) {
+        if (error instanceof AuthError) {
+            return json({ error: error.message }, error.status);
+        }
+        return json({ error: error?.message || 'Authentication required' }, 401);
+    }
+
+    const session = getSession(sessionId);
+    if (!session || session.accountId !== actor.accountId) {
+        return json({ error: 'Not found' }, 404);
+    }
+
+    const upgraded = server.upgrade<LiveViewSocketData>(req, {
+        data: { sessionId },
+    });
+    if (upgraded) return undefined;
+    return json({ error: 'Upgrade failed' }, 400);
+}
+
 function createServer(port: number) {
     return Bun.serve({
         port,
         idleTimeout: 60,
-        async fetch(req) {
+        async fetch(req, server) {
             const url = new URL(req.url);
+            const liveMatch = url.pathname.match(liveViewMatch);
+            if (liveMatch) {
+                try {
+                    return await handleLiveViewUpgrade(req, server, liveMatch[1]);
+                } catch (error: any) {
+                    console.error('Live view upgrade error:', error);
+                    return json(
+                        { error: error?.message || 'Internal server error' },
+                        500,
+                    );
+                }
+            }
             if (url.pathname.startsWith('/api/')) {
                 try {
                     return await handleApi(req, url);
@@ -691,6 +819,32 @@ function createServer(port: number) {
                 }
             }
             return serveStatic(url.pathname);
+        },
+        websocket: {
+            open(ws: Bun.ServerWebSocket<LiveViewSocketData>) {
+                const { sessionId } = ws.data;
+                attachLiveView(sessionId, {
+                    send: (frame) => ws.send(JSON.stringify(frame)),
+                    close: () => ws.close(),
+                }).catch((error) => {
+                    console.error(
+                        `Failed to attach live view for session ${sessionId}:`,
+                        error,
+                    );
+                    ws.close();
+                });
+            },
+            message(ws: Bun.ServerWebSocket<LiveViewSocketData>, message) {
+                try {
+                    const frame = JSON.parse(String(message)) as ClientFrame;
+                    handleClientFrame(ws.data.sessionId, frame);
+                } catch {
+                    // Ignore malformed client frames rather than tearing down the socket.
+                }
+            },
+            close(ws: Bun.ServerWebSocket<LiveViewSocketData>) {
+                detachLiveView(ws.data.sessionId);
+            },
         },
     });
 }

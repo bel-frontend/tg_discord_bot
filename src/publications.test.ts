@@ -46,6 +46,7 @@ mock.module('./db', () => ({
     publications: () => fakeCollection,
     platformConfigs: () => platformConfigsCollection,
     scheduledPublications: emptyCollection,
+    browserSessions: emptyCollection,
 }));
 
 const updateTargetsMock = mock(async (_refs: unknown[], _content: unknown) => [

@@ -43,6 +43,7 @@ export class ThreadsPlatform implements Platform {
     readonly icon = 'T';
     readonly charLimit = THREADS_LIMIT;
     readonly setup = {
+        connect: 'oauth' as const,
         summary:
             'Publishes to a Threads profile through the official Threads Graph API.',
         configFields: [

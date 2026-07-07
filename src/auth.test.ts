@@ -52,6 +52,7 @@ mock.module('./db', () => ({
     platformConfigs: emptyCollection,
     publications: emptyCollection,
     scheduledPublications: emptyCollection,
+    browserSessions: emptyCollection,
 }));
 
 const { changePassword } = await import('./auth');
