@@ -15,9 +15,9 @@ Key areas:
   uploads, and publications.
 - `src/platforms/` contains platform adapters and the shared `Platform`
   contract.
-- `src/converters/` contains Markdown conversion logic for platform-specific
-  formats.
-- `frontend/src/` contains the React + Vite SPA.
+- `src/platforms/*/markdown.ts` contains Markdown conversion logic for
+  platform-specific formats.
+- `frontend/src/` contains the React UI, built through Next static export.
 - `shared/types.ts` contains only types that cross the frontend/backend
   boundary.
 
@@ -112,7 +112,7 @@ or `shared/`.
 
 ## Frontend
 
-- The frontend is React 18 + Vite. Components live in
+- The frontend is React 18 + Next static export. Components live in
   `frontend/src/components`, hooks in `frontend/src/hooks`, and utilities in
   `frontend/src/lib`.
 - API calls should go through the existing `frontend/src/api.ts` helper.

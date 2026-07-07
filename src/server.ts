@@ -44,6 +44,7 @@ import {
     listPlatformConfigs,
     upsertPlatformConfig,
 } from './platformConfigs';
+import { json } from './httpResponses';
 import { getUpload, saveUpload } from './uploads';
 import { validateMarkdown, previewContent } from './validation';
 import { parsePublishRequest, executePublish } from './publishRequest';
@@ -61,21 +62,15 @@ import {
     listScheduledPublications,
 } from './scheduledPublications';
 import {
-    completeThreadsOAuth,
-    createThreadsOAuthStart,
-    threadsDataDeletionResponse,
-} from './threadsOAuth';
-import {
-    attachLiveView,
-    closeSession,
-    detachLiveView,
-    disconnectPlatform,
-    getBrowserSessionStatus,
-    getSession,
-    handleClientFrame,
-    startConnectSession,
-    type ClientFrame,
-} from './browserSessions';
+    attachPlatformLiveView,
+    detachPlatformLiveView,
+    handleAuthenticatedPlatformConnectionRoute,
+    handleLiveViewUpgrade,
+    handlePlatformLiveViewMessage,
+    handlePublicPlatformConnectionRoute,
+    liveViewMatch,
+    type LiveViewSocketData,
+} from './platformConnectionRoutes';
 
 // The Next static export is copied here by frontend/scripts/copy-static-export.ts.
 const PUBLIC_DIR = join(import.meta.dir, '..', 'public');
@@ -85,33 +80,6 @@ const NOT_BUILT_HTML =
     '<h1>Frontend not built</h1><p>Run <code>bun run build</code> (or start the Next.js dev ' +
     'server with <code>cd frontend &amp;&amp; bun run dev</code>) to build the UI into ' +
     '<code>public/</code>.</p></body>';
-
-function json(data: unknown, status = 200): Response {
-    return new Response(JSON.stringify(data), {
-        status,
-        headers: { 'content-type': 'application/json' },
-    });
-}
-
-function html(body: string, status = 200): Response {
-    return new Response(body, {
-        status,
-        headers: { 'content-type': 'text/html; charset=utf-8' },
-    });
-}
-
-function empty(status = 200): Response {
-    return new Response(null, { status });
-}
-
-function escapeHtml(value: string): string {
-    return value
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
-}
 
 async function serveStatic(pathname: string): Promise<Response> {
     // Prevent path traversal; default to index.html for the SPA/static export.
@@ -218,49 +186,9 @@ export async function handleApi(req: Request, url: URL): Promise<Response> {
         return json(result);
     }
 
-    if (
-        method === 'HEAD' &&
-        (path === '/api/threads/oauth/callback' ||
-            path === '/api/threads/deauthorize' ||
-            path === '/api/threads/data-deletion')
-    ) {
-        return empty();
-    }
-
-    if (path === '/api/threads/oauth/callback' && method === 'GET') {
-        try {
-            const result = await completeThreadsOAuth(url);
-            const label = result.username || result.threadsUserId;
-            return html(
-                '<!doctype html><meta charset="utf-8">' +
-                    '<title>Threads connected</title>' +
-                    '<body style="font-family:sans-serif;padding:40px;max-width:640px;margin:auto">' +
-                    '<h1>Threads connected</h1>' +
-                    `<p>Connected Threads profile: <strong>${escapeHtml(label)}</strong>.</p>` +
-                    '<p><a href="/settings">Return to settings</a></p>' +
-                    '</body>',
-            );
-        } catch (err: any) {
-            return html(
-                '<!doctype html><meta charset="utf-8">' +
-                    '<title>Threads connection failed</title>' +
-                    '<body style="font-family:sans-serif;padding:40px;max-width:640px;margin:auto">' +
-                    '<h1>Threads connection failed</h1>' +
-                    `<p>${escapeHtml(err?.message || 'OAuth failed')}</p>` +
-                    '<p><a href="/settings">Return to settings</a></p>' +
-                    '</body>',
-                400,
-            );
-        }
-    }
-
-    if (path === '/api/threads/deauthorize' && method === 'POST') {
-        return json({ ok: true });
-    }
-
-    if (path === '/api/threads/data-deletion' && method === 'POST') {
-        return json(threadsDataDeletionResponse(url.origin));
-    }
+    const publicPlatformConnectionResponse =
+        await handlePublicPlatformConnectionRoute(req, url);
+    if (publicPlatformConnectionResponse) return publicPlatformConnectionResponse;
 
     // --- Everything below requires authentication ---
     const actor = await requireAuth(req);
@@ -394,85 +322,10 @@ export async function handleApi(req: Request, url: URL): Promise<Response> {
         return json({ configs: await listPlatformConfigs(actor.accountId) });
     }
 
-    if (path === '/api/threads/oauth/start' && method === 'POST') {
-        try {
-            assertPermission(actor, 'canManageChannels');
-            return json(await createThreadsOAuthStart(actor.accountId, url.origin));
-        } catch (err: any) {
-            if (err instanceof AuthError) return json({ error: err.message }, err.status);
-            return json(
-                { error: err?.message || 'Failed to start Threads OAuth' },
-                400,
-            );
-        }
-    }
-
-    const browserSessionStartMatch = path.match(
-        /^\/api\/browser-sessions\/([^/]+)\/start$/,
-    );
-    if (browserSessionStartMatch && method === 'POST') {
-        try {
-            assertPermission(actor, 'canManageChannels');
-            const handle = await startConnectSession(
-                actor.accountId,
-                browserSessionStartMatch[1],
-            );
-            return json({
-                sessionId: handle.sessionId,
-                wsUrl: `/api/browser-sessions/${handle.sessionId}/live`,
-            });
-        } catch (err: any) {
-            if (err instanceof AuthError) return json({ error: err.message }, err.status);
-            return json(
-                { error: err?.message || 'Failed to start browser session' },
-                400,
-            );
-        }
-    }
-
-    const browserSessionStatusMatch = path.match(
-        /^\/api\/browser-sessions\/([^/]+)\/status$/,
-    );
-    if (browserSessionStatusMatch && method === 'GET') {
-        const status = await getBrowserSessionStatus(
-            actor.accountId,
-            browserSessionStatusMatch[1],
-        );
-        return json({
-            connected: status?.status === 'connected',
-            status: status?.status ?? 'not_connected',
-            lastVerifiedAt: status?.lastVerifiedAt?.toISOString(),
-        });
-    }
-
-    const browserSessionCloseMatch = path.match(
-        /^\/api\/browser-sessions\/([^/]+)\/close$/,
-    );
-    if (browserSessionCloseMatch && method === 'POST') {
-        const sessionId = browserSessionCloseMatch[1];
-        const session = getSession(sessionId);
-        if (session && session.accountId !== actor.accountId) {
-            return json({ error: 'Not found' }, 404);
-        }
-        await closeSession(sessionId);
-        return json({ ok: true });
-    }
-
-    const browserSessionDisconnectMatch = path.match(
-        /^\/api\/browser-sessions\/([^/]+)\/disconnect$/,
-    );
-    if (browserSessionDisconnectMatch && method === 'DELETE') {
-        try {
-            assertPermission(actor, 'canManageChannels');
-            await disconnectPlatform(
-                actor.accountId,
-                browserSessionDisconnectMatch[1],
-            );
-            return json({ ok: true });
-        } catch (err: any) {
-            if (err instanceof AuthError) return json({ error: err.message }, err.status);
-            return json({ error: err?.message || 'Failed to disconnect' }, 400);
-        }
+    const authenticatedPlatformConnectionResponse =
+        await handleAuthenticatedPlatformConnectionRoute(actor, req, url);
+    if (authenticatedPlatformConnectionResponse) {
+        return authenticatedPlatformConnectionResponse;
     }
 
     const platformConfigMatch = path.match(
@@ -749,43 +602,6 @@ export async function handleApi(req: Request, url: URL): Promise<Response> {
     return json({ error: 'Not found' }, 404);
 }
 
-interface LiveViewSocketData {
-    sessionId: string;
-}
-
-const liveViewMatch = /^\/api\/browser-sessions\/([^/]+)\/live$/;
-
-/** WebSocket handshakes can't set an Authorization header, so the token rides in the query string. */
-async function handleLiveViewUpgrade(
-    req: Request,
-    server: Bun.Server,
-    sessionId: string,
-): Promise<Response | undefined> {
-    const url = new URL(req.url);
-    let actor;
-    try {
-        actor = await requireAuth(req, {
-            tokenOverride: url.searchParams.get('token') || '',
-        });
-    } catch (error: any) {
-        if (error instanceof AuthError) {
-            return json({ error: error.message }, error.status);
-        }
-        return json({ error: error?.message || 'Authentication required' }, 401);
-    }
-
-    const session = getSession(sessionId);
-    if (!session || session.accountId !== actor.accountId) {
-        return json({ error: 'Not found' }, 404);
-    }
-
-    const upgraded = server.upgrade<LiveViewSocketData>(req, {
-        data: { sessionId },
-    });
-    if (upgraded) return undefined;
-    return json({ error: 'Upgrade failed' }, 400);
-}
-
 function createServer(port: number) {
     return Bun.serve({
         port,
@@ -822,28 +638,13 @@ function createServer(port: number) {
         },
         websocket: {
             open(ws: Bun.ServerWebSocket<LiveViewSocketData>) {
-                const { sessionId } = ws.data;
-                attachLiveView(sessionId, {
-                    send: (frame) => ws.send(JSON.stringify(frame)),
-                    close: () => ws.close(),
-                }).catch((error) => {
-                    console.error(
-                        `Failed to attach live view for session ${sessionId}:`,
-                        error,
-                    );
-                    ws.close();
-                });
+                attachPlatformLiveView(ws);
             },
             message(ws: Bun.ServerWebSocket<LiveViewSocketData>, message) {
-                try {
-                    const frame = JSON.parse(String(message)) as ClientFrame;
-                    handleClientFrame(ws.data.sessionId, frame);
-                } catch {
-                    // Ignore malformed client frames rather than tearing down the socket.
-                }
+                handlePlatformLiveViewMessage(ws, message);
             },
             close(ws: Bun.ServerWebSocket<LiveViewSocketData>) {
-                detachLiveView(ws.data.sessionId);
+                detachPlatformLiveView(ws);
             },
         },
     });
