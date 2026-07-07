@@ -1,8 +1,10 @@
 import { describe, expect, test } from 'bun:test';
 import {
+    deleteTargets,
     listPlatformsMeta,
     publishToTargets,
     register,
+    updateTargets,
 } from './platforms/registry';
 import type {
     Channel,
@@ -86,6 +88,38 @@ describe('publishToTargets', () => {
                 ok: true,
                 messageIds: ['msg-1'],
                 link: 'https://example.test/chan-1/msg-1',
+            },
+        ]);
+    });
+});
+
+describe('platform operations without adapter support', () => {
+    test('returns stable errors for unsupported update/delete operations', async () => {
+        const refs = [
+            {
+                platform: 'unit-platform',
+                channelId: 'chan-1',
+                messageIds: ['msg-1'],
+            },
+        ];
+
+        const updates = await updateTargets(refs, { markdown: 'new' });
+        expect(updates[0]).toEqual({
+            platform: 'unit-platform',
+            channelId: 'chan-1',
+            ok: true,
+            messageIds: ['msg-1'],
+            link: 'https://example.test/chan-1/msg-1',
+        });
+
+        const deletes = await deleteTargets(refs);
+        expect(deletes).toEqual([
+            {
+                platform: 'unit-platform',
+                channelId: 'chan-1',
+                ok: false,
+                messageIds: ['msg-1'],
+                error: 'Unit Platform does not support deletes yet',
             },
         ]);
     });

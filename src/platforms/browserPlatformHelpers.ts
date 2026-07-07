@@ -20,11 +20,14 @@ export async function withAutomationPage<T>(
     platform: string,
     isLoggedOut: (page: Page) => Promise<boolean>,
     fn: (page: Page) => Promise<T>,
+    options: { markPublishedOnSuccess?: boolean } = {},
 ): Promise<T> {
     const { page, release } = await acquireAutomationContext(accountId, platform);
     try {
         const result = await fn(page);
-        await markPublished(accountId, platform);
+        if (options.markPublishedOnSuccess !== false) {
+            await markPublished(accountId, platform);
+        }
         return result;
     } catch (error) {
         if (error instanceof ReconnectRequiredError) throw error;

@@ -6,6 +6,7 @@ import {
     markReconnectRequired,
     TestReconnectRequiredError,
 } from './browserSessions/testSupport';
+import type { Platform } from './platforms/types';
 
 // Mocked via the shared test double (see its header comment) rather than a local factory,
 // since only one `mock.module('./browserSessions', ...)` registration actually takes effect
@@ -18,6 +19,7 @@ interface FakePageState {
     gotoUrls: string[];
     currentUrl: string;
     composeButtonCount: number;
+    clickedSelectors: string[];
     filledText: string[];
     uploadedFiles: any[];
     postedHref: string | null;
@@ -29,6 +31,7 @@ function makeLocator(selector: string, state: FakePageState) {
         count: mock(async () => state.composeButtonCount),
         first: () => ({
             click: mock(async () => {
+                state.clickedSelectors.push(selector);
                 if (state.throwOnClick?.has(selector)) {
                     throw new Error(`click failed: ${selector}`);
                 }
@@ -61,6 +64,7 @@ function newState(overrides: Partial<FakePageState> = {}): FakePageState {
         gotoUrls: [],
         currentUrl: 'https://x.com/home',
         composeButtonCount: 1,
+        clickedSelectors: [],
         filledText: [],
         uploadedFiles: [],
         postedHref: '/someone/status/111',
@@ -186,6 +190,41 @@ describe('XPlatform', () => {
         await expect(
             platform.publish(['me'], { markdown: '' }, { accountId: 'acct1' }),
         ).rejects.toThrow('Write something or add an image first');
+    });
+
+    test('does not expose update because X posts cannot be edited reliably', () => {
+        const platform: Platform = new XPlatform();
+        expect(platform.update).toBeUndefined();
+    });
+
+    test('deletes stored message ids from newest reply to root post', async () => {
+        const state = newState();
+        browserSessionsTestState.nextAcquire = async () => ({
+            page: fakePage(state),
+            release: mock(async () => {}),
+        });
+
+        const platform = new XPlatform();
+        const [result] = await platform.delete!(
+            [{ channelId: 'me', messageIds: ['111', '222'] }],
+            { accountId: 'acct1' },
+        );
+
+        expect(result).toEqual({
+            platform: 'x',
+            channelId: 'me',
+            ok: true,
+            messageIds: ['111', '222'],
+        });
+        expect(state.gotoUrls).toEqual([
+            'https://x.com/i/status/222',
+            'https://x.com/i/status/111',
+        ]);
+        expect(state.clickedSelectors).toContain('[data-testid="caret"]');
+        expect(state.clickedSelectors).toContain(
+            '[data-testid="confirmationSheetConfirm"]',
+        );
+        expect(markPublished).not.toHaveBeenCalled();
     });
 
     test('listChannels returns the connected account only when a session is connected', async () => {

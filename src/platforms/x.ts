@@ -3,6 +3,7 @@ import type {
     Channel,
     Platform,
     PlatformContext,
+    PublishedMessageRef,
     PublishContent,
     PublishResult,
 } from './types';
@@ -24,6 +25,12 @@ const FILE_INPUT_SELECTOR = 'input[data-testid="fileInput"]';
 const POST_BUTTON_SELECTOR =
     '[data-testid="tweetButtonInline"], [data-testid="tweetButton"]';
 const POSTED_LINK_SELECTOR = 'a[href*="/status/"]';
+const MORE_BUTTON_SELECTOR = '[data-testid="caret"]';
+const DELETE_MENU_ITEM_SELECTOR =
+    '[role="menuitem"]:has-text("Delete"), ' +
+    '[role="menuitem"]:has-text("Выдаліць"), ' +
+    '[role="menuitem"]:has-text("Удалить")';
+const CONFIRM_DELETE_SELECTOR = '[data-testid="confirmationSheetConfirm"]';
 const DEFAULT_ACTION_DELAY_MS = 900;
 const DEFAULT_POST_CONFIRM_TIMEOUT_MS = 30_000;
 
@@ -111,6 +118,28 @@ async function postChunk(
     const postedId = await readPostedId(page);
     if (!postedId) throw new Error('Could not confirm the post was published');
     return postedId;
+}
+
+async function deletePost(page: Page, messageId: string): Promise<void> {
+    await page.goto(`https://x.com/i/status/${messageId}`, {
+        waitUntil: 'domcontentloaded',
+    });
+    await actionDelay();
+
+    const moreButton = page.locator(MORE_BUTTON_SELECTOR).first();
+    await moreButton.waitFor({ state: 'visible', timeout: 30_000 });
+    await moreButton.click();
+    await actionDelay();
+
+    const deleteItem = page.locator(DELETE_MENU_ITEM_SELECTOR).first();
+    await deleteItem.waitFor({ state: 'visible', timeout: 30_000 });
+    await deleteItem.click();
+    await actionDelay();
+
+    const confirmButton = page.locator(CONFIRM_DELETE_SELECTOR).first();
+    await confirmButton.waitFor({ state: 'visible', timeout: 30_000 });
+    await confirmButton.click();
+    await actionDelay(2);
 }
 
 export class XPlatform implements Platform {
@@ -210,6 +239,52 @@ export class XPlatform implements Platform {
                     platform: this.id,
                     channelId,
                     ok: false,
+                    error: message,
+                });
+            }
+        }
+        return results;
+    }
+
+    async delete(
+        refs: PublishedMessageRef[],
+        context?: PlatformContext,
+    ): Promise<PublishResult[]> {
+        if (!context?.accountId) {
+            throw new Error('X deleting requires an account context');
+        }
+        const accountId = context.accountId;
+
+        const results: PublishResult[] = [];
+        for (const ref of refs) {
+            try {
+                await withAutomationPage(
+                    accountId,
+                    'x',
+                    (page) => xLoginDetector.isLoggedOut(page),
+                    async (page) => {
+                        for (const messageId of [...ref.messageIds].reverse()) {
+                            await deletePost(page, messageId);
+                        }
+                    },
+                    { markPublishedOnSuccess: false },
+                );
+                results.push({
+                    platform: this.id,
+                    channelId: ref.channelId,
+                    ok: true,
+                    messageIds: ref.messageIds,
+                });
+            } catch (error: any) {
+                const message =
+                    error instanceof ReconnectRequiredError
+                        ? error.message
+                        : error?.message || 'Delete failed';
+                results.push({
+                    platform: this.id,
+                    channelId: ref.channelId,
+                    ok: false,
+                    messageIds: ref.messageIds,
                     error: message,
                 });
             }
