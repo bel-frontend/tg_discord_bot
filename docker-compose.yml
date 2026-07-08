@@ -18,4 +18,5 @@ services:
       MONGODB_AUTH_SOURCE: admin
       MONGODB_REPLICA_SET: rs8
     ports:
-      - "3007:3000"
+      # Host port 3007 -> container port 3000.
+      - "${DOCKER_HOST_PORT:-3007}:3000"
