@@ -22,6 +22,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends xvfb xauth \
 # if this layer gets invalidated for an unrelated reason), then copy the result into a
 # normal path that does get committed to the image layer.
 ENV PLAYWRIGHT_BROWSERS_PATH=/playwright-browsers
+ENV DISPLAY=:99
 RUN --mount=type=cache,target=/playwright-cache,sharing=locked \
     PLAYWRIGHT_BROWSERS_PATH=/playwright-cache bunx playwright install --with-deps chromium \
     && mkdir -p /playwright-browsers \
@@ -35,7 +36,7 @@ RUN --mount=type=cache,target=/bun-cache cd frontend && bun install --frozen-loc
 COPY . .
 RUN cd frontend && bun run build
 
-# The server serves the built frontend and the API on $PORT (default 3000). Runs under
-# Xvfb so the browser-session platforms can launch headful (not headless) Chromium —
-# headless is a known fingerprinting signal for the anti-automation checks X/Reddit run.
-CMD ["xvfb-run", "-a", "--server-args=-screen 0 1280x800x24", "bun", "run", "index.ts"]
+# The server serves the built frontend and the API on $PORT (default 3000).
+# Xvfb runs in the background only to provide a display for browser-session
+# platforms; the HTTP server itself stays the main container process.
+CMD ["sh", "-c", "Xvfb :99 -screen 0 1280x800x24 >/tmp/xvfb.log 2>&1 & exec bun run index.ts"]

@@ -20,17 +20,30 @@ await connect();
 //    Platform interface (src/platforms/types.ts) and registering it here.
 register(new TelegramPlatform());
 register(new DiscordPlatform());
-// Browser-session platforms drive a real logged-in browser instead of an official API —
-// fail fast at boot if the encryption key they persist login sessions with is missing.
-assertBrowserSessionCryptoConfigured();
-register(new XPlatform());
-register(new ThreadsPlatform());
+// Browser-session platforms drive a real logged-in browser instead of an official API.
+// If their encryption key is missing on a deployment, keep the rest of the app online
+// and make the disabled feature obvious in logs instead of taking down the server.
+let browserSessionPlatformsEnabled = false;
+try {
+    assertBrowserSessionCryptoConfigured();
+    register(new XPlatform());
+    register(new ThreadsPlatform());
+    browserSessionPlatformsEnabled = true;
+} catch (error: any) {
+    console.warn(
+        `Browser-session platforms disabled: ${
+            error?.message || 'invalid browser session configuration'
+        }`,
+    );
+}
 
 // 3. Scheduled publication worker
 startScheduler();
 
 // 4. Browser session idle/timeout sweep (closes stale live-view and automation contexts)
-startBrowserSessionSweep();
+if (browserSessionPlatformsEnabled) {
+    startBrowserSessionSweep();
+}
 
 // 5. HTTP API + editor frontend
 startServer();

@@ -600,6 +600,8 @@ export async function handleApi(req: Request, url: URL): Promise<Response> {
 function createServer(port: number) {
     return Bun.serve({
         port,
+        // Docker publishes the container IP, not the container's loopback.
+        hostname: '0.0.0.0',
         idleTimeout: 60,
         async fetch(req, server) {
             const url = new URL(req.url);
