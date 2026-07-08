@@ -25,12 +25,21 @@ const FILE_INPUT_SELECTOR = 'input[data-testid="fileInput"]';
 const POST_BUTTON_SELECTOR =
     '[data-testid="tweetButtonInline"], [data-testid="tweetButton"]';
 const POSTED_LINK_SELECTOR = 'a[href*="/status/"]';
-const MORE_BUTTON_SELECTOR = '[data-testid="caret"]';
+const MORE_BUTTON_SELECTORS = [
+    '[data-testid="caret"]',
+    '[role="button"][aria-label="More"]',
+    '[role="button"][aria-label="More actions"]',
+    '[role="button"][aria-label="Ещё"]',
+    '[role="button"][aria-label="Еще"]',
+    '[role="button"][aria-label="Яшчэ"]',
+];
+const MORE_BUTTON_SELECTOR = MORE_BUTTON_SELECTORS.join(', ');
 const DELETE_MENU_ITEM_SELECTOR =
     '[role="menuitem"]:has-text("Delete"), ' +
     '[role="menuitem"]:has-text("Выдаліць"), ' +
     '[role="menuitem"]:has-text("Удалить")';
 const CONFIRM_DELETE_SELECTOR = '[data-testid="confirmationSheetConfirm"]';
+const DELETE_TEXTS = ['Delete', 'Выдаліць', 'Удалить'];
 const DEFAULT_ACTION_DELAY_MS = 900;
 const DEFAULT_POST_CONFIRM_TIMEOUT_MS = 30_000;
 
@@ -60,20 +69,32 @@ function postConfirmTimeoutMs(): number {
     );
 }
 
-async function readPostedId(
-    page: Page,
-    excludeId?: string,
-): Promise<string | null> {
-    // After posting, X shows a confirmation toast with a "View" link to the new post — but
-    // a reply's page also still shows the parent tweet's own link earlier in the DOM, so
-    // scan from the end and skip the id we just replied to.
+async function readStatusIds(page: Page): Promise<string[]> {
     const hrefs = await page
         .locator(POSTED_LINK_SELECTOR)
         .evaluateAll((anchors) => anchors.map((anchor) => (anchor as HTMLAnchorElement).href));
-    for (let i = hrefs.length - 1; i >= 0; i--) {
-        const match = hrefs[i]?.match(/status\/(\d+)/);
+    const ids: string[] = [];
+    for (const href of hrefs) {
+        const match = href?.match(/status\/(\d+)/);
         const id = match?.[1];
-        if (id && id !== excludeId) return id;
+        if (id) ids.push(id);
+    }
+    return ids;
+}
+
+async function waitForNewPostedId(
+    page: Page,
+    knownIds: Set<string>,
+    excludeId?: string,
+): Promise<string | null> {
+    const deadline = Date.now() + postConfirmTimeoutMs();
+    while (Date.now() < deadline) {
+        const ids = await readStatusIds(page);
+        for (let i = ids.length - 1; i >= 0; i--) {
+            const id = ids[i];
+            if (id && id !== excludeId && !knownIds.has(id)) return id;
+        }
+        await sleep(500);
     }
     return null;
 }
@@ -116,15 +137,116 @@ async function postChunk(
     const postButton = page.locator(POST_BUTTON_SELECTOR).first();
     await postButton.waitFor({ state: 'visible', timeout: 30_000 });
     await actionDelay();
+    const knownIds = new Set(await readStatusIds(page));
     await postButton.click();
-    await page.waitForSelector(POSTED_LINK_SELECTOR, {
-        timeout: postConfirmTimeoutMs(),
-    });
+    const postedId = await waitForNewPostedId(page, knownIds, replyToId);
     await actionDelay();
 
-    const postedId = await readPostedId(page, replyToId);
     if (!postedId) throw new Error('Could not confirm the post was published');
     return postedId;
+}
+
+function moreButtonSelectorForPost(messageId: string): string {
+    const articleSelector = `article:has(a[href*="/status/${messageId}"])`;
+    return MORE_BUTTON_SELECTORS.map(
+        (selector) => `${articleSelector} ${selector}`,
+    ).join(', ');
+}
+
+async function clickPostMoreMenu(page: Page, messageId: string): Promise<void> {
+    const moreButton = page.locator(moreButtonSelectorForPost(messageId)).first();
+    const clickedBySelector = await moreButton
+        .waitFor({ state: 'visible', timeout: 8_000 })
+        .then(async () => {
+            await moreButton.click();
+            return true;
+        })
+        .catch(() => false);
+    if (clickedBySelector) return;
+
+    const clickedByDom = await page.evaluate((targetId) => {
+        const roots = Array.from(document.querySelectorAll('article'));
+        const root =
+            roots.find((article) =>
+                Array.from(
+                    article.querySelectorAll<HTMLAnchorElement>(
+                        'a[href*="/status/"]',
+                    ),
+                ).some((anchor) => anchor.href.includes(`/status/${targetId}`)),
+            ) ?? roots[0];
+        if (!root) return false;
+
+        const buttons = Array.from(
+            root.querySelectorAll<HTMLElement>(
+                '[role="button"], button, [aria-haspopup="menu"]',
+            ),
+        )
+            .map((element) => {
+                const rect = element.getBoundingClientRect();
+                const ariaLabel = element.getAttribute('aria-label') || '';
+                const testId = element.getAttribute('data-testid') || '';
+                return {
+                    element,
+                    ariaLabel,
+                    testId,
+                    hasPopup: element.getAttribute('aria-haspopup') === 'menu',
+                    text: (element.textContent || '').trim(),
+                    x: rect.x,
+                    y: rect.y,
+                    visible: rect.width > 0 && rect.height > 0,
+                };
+            })
+            .filter((candidate) => candidate.visible);
+
+        const moreLabels = ['more', 'more actions', 'ещё', 'еще', 'яшчэ'];
+        const exactCaret = buttons.find((button) => button.testId === 'caret');
+        const labelledMore = buttons.find((button) => {
+            const label = button.ariaLabel.toLowerCase();
+            return moreLabels.some((text) => label.includes(text));
+        });
+        const menuCandidate = buttons
+            .filter((button) => button.hasPopup)
+            .sort((a, b) => b.x - a.x || a.y - b.y)[0];
+        const candidate = exactCaret ?? labelledMore ?? menuCandidate;
+        if (!candidate) return false;
+        candidate.element.click();
+        return true;
+    }, messageId);
+
+    if (!clickedByDom) {
+        throw new Error(`Could not find the X post menu for ${messageId}`);
+    }
+}
+
+async function clickByTextInDom(
+    page: Page,
+    rootSelector: string,
+    texts: string[],
+    description: string,
+): Promise<void> {
+    const deadline = Date.now() + 8_000;
+    while (Date.now() < deadline) {
+        const clicked = await page.evaluate(
+            ({ root, labels }) => {
+                const candidates = Array.from(
+                    document.querySelectorAll<HTMLElement>(root),
+                );
+                const element = candidates.find((candidate) => {
+                    const rect = candidate.getBoundingClientRect();
+                    if (rect.width === 0 || rect.height === 0) return false;
+                    const text = (candidate.textContent || '').trim();
+                    return labels.some((label) => text.includes(label));
+                });
+                if (!element) return false;
+                element.click();
+                return true;
+            },
+            { root: rootSelector, labels: texts },
+        );
+        if (clicked) return;
+        await sleep(250);
+    }
+    throw new Error(`Could not find ${description}`);
 }
 
 async function deletePost(page: Page, messageId: string): Promise<void> {
@@ -133,9 +255,7 @@ async function deletePost(page: Page, messageId: string): Promise<void> {
     });
     await actionDelay();
 
-    const moreButton = page.locator(MORE_BUTTON_SELECTOR).first();
-    await moreButton.waitFor({ state: 'visible', timeout: 30_000 });
-    await moreButton.click();
+    await clickPostMoreMenu(page, messageId);
     await actionDelay();
 
     const deleteItem = page.locator(DELETE_MENU_ITEM_SELECTOR).first();
@@ -144,8 +264,21 @@ async function deletePost(page: Page, messageId: string): Promise<void> {
     await actionDelay();
 
     const confirmButton = page.locator(CONFIRM_DELETE_SELECTOR).first();
-    await confirmButton.waitFor({ state: 'visible', timeout: 30_000 });
-    await confirmButton.click();
+    const confirmedBySelector = await confirmButton
+        .waitFor({ state: 'visible', timeout: 8_000 })
+        .then(async () => {
+            await confirmButton.click();
+            return true;
+        })
+        .catch(() => false);
+    if (!confirmedBySelector) {
+        await clickByTextInDom(
+            page,
+            '[role="dialog"] [role="button"], [role="alertdialog"] [role="button"], button',
+            DELETE_TEXTS,
+            'the X delete confirmation button',
+        );
+    }
     await actionDelay(2);
 }
 

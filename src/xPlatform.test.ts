@@ -21,7 +21,10 @@ interface FakePageState {
     filledText: string[];
     uploadedFiles: any[];
     postedHref: string | null;
+    visibleStatusHrefs: string[];
+    onPostClick?: () => void;
     throwOnClick?: Set<string>;
+    invisibleSelectors?: Set<string>;
 }
 
 function makeLocator(selector: string, state: FakePageState) {
@@ -30,6 +33,16 @@ function makeLocator(selector: string, state: FakePageState) {
         first: () => ({
             click: mock(async () => {
                 state.clickedSelectors.push(selector);
+                if (selector.includes('tweetButton')) {
+                    state.onPostClick?.();
+                }
+                if (
+                    selector.includes('tweetButton') &&
+                    state.postedHref &&
+                    !state.visibleStatusHrefs.includes(state.postedHref)
+                ) {
+                    state.visibleStatusHrefs.push(state.postedHref);
+                }
                 if (state.throwOnClick?.has(selector)) {
                     throw new Error(`click failed: ${selector}`);
                 }
@@ -41,9 +54,17 @@ function makeLocator(selector: string, state: FakePageState) {
                 state.uploadedFiles.push(files);
             }),
             getAttribute: mock(async () => state.postedHref),
-            waitFor: mock(async () => {}),
+            waitFor: mock(async () => {
+                if (
+                    [...(state.invisibleSelectors ?? [])].some((hidden) =>
+                        selector.includes(hidden),
+                    )
+                ) {
+                    throw new Error(`not visible: ${selector}`);
+                }
+            }),
         }),
-        evaluateAll: mock(async () => (state.postedHref ? [state.postedHref] : [])),
+        evaluateAll: mock(async () => state.visibleStatusHrefs),
     };
 }
 
@@ -54,7 +75,22 @@ function fakePage(state: FakePageState) {
         }),
         url: () => state.currentUrl,
         locator: mock((selector: string) => makeLocator(selector, state)),
-        waitForSelector: mock(async () => {}),
+        waitForSelector: mock(async () => {
+            if (
+                state.postedHref &&
+                !state.visibleStatusHrefs.includes(state.postedHref)
+            ) {
+                state.visibleStatusHrefs.push(state.postedHref);
+            }
+        }),
+        evaluate: mock(async (_fn: unknown, args?: any) => {
+            if (args?.root) {
+                state.clickedSelectors.push(args.root);
+                return true;
+            }
+            state.clickedSelectors.push(`dom:post-more-menu:${args}`);
+            return true;
+        }),
     };
 }
 
@@ -67,6 +103,7 @@ function newState(overrides: Partial<FakePageState> = {}): FakePageState {
         filledText: [],
         uploadedFiles: [],
         postedHref: '/someone/status/111',
+        visibleStatusHrefs: [],
         ...overrides,
     };
 }
@@ -78,6 +115,7 @@ function nextTick(): Promise<void> {
 beforeEach(() => {
     browserSessionsTestState.sessionStatus = null;
     process.env.X_ACTION_DELAY_MS = '0';
+    process.env.X_POST_CONFIRM_TIMEOUT_MS = '30000';
     process.env.BROWSER_PLATFORM_OPERATION_COOLDOWN_MS = '0';
     markPublished.mockClear();
     markReconnectRequired.mockClear();
@@ -110,17 +148,120 @@ describe('XPlatform', () => {
         expect(markPublished).toHaveBeenCalled();
     });
 
+    test('publishes an image-only post through the compose flow', async () => {
+        const state = newState();
+        browserSessionsTestState.nextAcquire = async () => ({
+            page: fakePage(state),
+            release: mock(async () => {}),
+        });
+
+        const platform = new XPlatform();
+        const [result] = await platform.publish(
+            ['me'],
+            {
+                markdown: '',
+                images: [
+                    {
+                        data: new Uint8Array([1, 2, 3]),
+                        filename: 'photo.png',
+                        contentType: 'image/png',
+                    },
+                ],
+            },
+            { accountId: 'acct1' },
+        );
+
+        expect(result.ok).toBe(true);
+        expect(result.messageIds).toEqual(['111']);
+        expect(state.filledText).toEqual(['']);
+        expect(state.uploadedFiles).toEqual([
+            [
+                {
+                    name: 'photo.png',
+                    mimeType: 'image/png',
+                    buffer: Buffer.from([1, 2, 3]),
+                },
+            ],
+        ]);
+    });
+
+    test('publishes text and an image in the same post', async () => {
+        const state = newState();
+        browserSessionsTestState.nextAcquire = async () => ({
+            page: fakePage(state),
+            release: mock(async () => {}),
+        });
+
+        const platform = new XPlatform();
+        const [result] = await platform.publish(
+            ['me'],
+            {
+                markdown: 'Caption text',
+                images: [
+                    {
+                        data: new Uint8Array([1, 2, 3]),
+                        filename: 'photo.png',
+                        contentType: 'image/png',
+                    },
+                ],
+            },
+            { accountId: 'acct1' },
+        );
+
+        expect(result.ok).toBe(true);
+        expect(result.messageIds).toEqual(['111']);
+        expect(state.filledText).toEqual(['Caption text']);
+        expect(state.uploadedFiles).toEqual([
+            [
+                {
+                    name: 'photo.png',
+                    mimeType: 'image/png',
+                    buffer: Buffer.from([1, 2, 3]),
+                },
+            ],
+        ]);
+    });
+
+    test('captures the new post id instead of pre-existing status links on the page', async () => {
+        const state = newState({
+            postedHref: '/me/status/333',
+            visibleStatusHrefs: [
+                '/other/status/111',
+                '/sidebar/status/999',
+            ],
+        });
+        browserSessionsTestState.nextAcquire = async () => ({
+            page: fakePage(state),
+            release: mock(async () => {}),
+        });
+
+        const platform = new XPlatform();
+        const [result] = await platform.publish(
+            ['me'],
+            { markdown: 'Fresh post' },
+            { accountId: 'acct1' },
+        );
+
+        expect(result).toMatchObject({
+            platform: 'x',
+            channelId: 'me',
+            ok: true,
+            messageIds: ['333'],
+            link: 'https://x.com/i/status/333',
+        });
+    });
+
     test('splits a post over the character limit into a self-reply thread', async () => {
-        const state = newState({ postedHref: '/someone/status/1' });
+        const state = newState({
+            postedHref: '/someone/status/0',
+            onPostClick: () => {
+                postCount++;
+                state.postedHref = `/someone/status/${postCount}`;
+            },
+        });
         let postCount = 0;
         browserSessionsTestState.nextAcquire = async () => ({
-            page: {
-                ...fakePage(state),
-                waitForSelector: mock(async () => {
-                    postCount++;
-                    state.postedHref = `/someone/status/${postCount}`;
-                }),
-            },
+            page: fakePage(state),
             release: mock(async () => {}),
         });
 
@@ -163,17 +304,14 @@ describe('XPlatform', () => {
     });
 
     test('maps a mid-publish logout to a reconnect-required failure', async () => {
+        process.env.X_POST_CONFIRM_TIMEOUT_MS = '10';
         const state = newState({
             composeButtonCount: 0,
             currentUrl: 'https://x.com/home',
+            postedHref: null,
         });
         browserSessionsTestState.nextAcquire = async () => ({
-            page: {
-                ...fakePage(state),
-                waitForSelector: mock(async () => {
-                    throw new Error('timed out waiting for post confirmation');
-                }),
-            },
+            page: fakePage(state),
             release: mock(async () => {}),
         });
 
@@ -223,7 +361,12 @@ describe('XPlatform', () => {
             'https://x.com/i/status/111',
             'https://x.com/compose/post',
         ]);
-        expect(state.clickedSelectors).toContain('[data-testid="caret"]');
+        expect(
+            state.clickedSelectors.some((selector) =>
+                selector.includes('article:has(a[href*="/status/222"])') &&
+                selector.includes('[data-testid="caret"]'),
+            ),
+        ).toBe(true);
         expect(state.clickedSelectors).toContain(
             '[data-testid="confirmationSheetConfirm"]',
         );
@@ -254,9 +397,41 @@ describe('XPlatform', () => {
             'https://x.com/i/status/222',
             'https://x.com/i/status/111',
         ]);
-        expect(state.clickedSelectors).toContain('[data-testid="caret"]');
+        expect(
+            state.clickedSelectors.some((selector) =>
+                selector.includes('article:has(a[href*="/status/222"])') &&
+                selector.includes('[data-testid="caret"]'),
+            ),
+        ).toBe(true);
         expect(state.clickedSelectors).toContain(
             '[data-testid="confirmationSheetConfirm"]',
+        );
+        expect(markPublished).not.toHaveBeenCalled();
+    });
+
+    test('deletes through DOM fallbacks when X changes menu and confirmation selectors', async () => {
+        const state = newState({
+            invisibleSelectors: new Set([
+                '[data-testid="caret"]',
+                '[data-testid="confirmationSheetConfirm"]',
+            ]),
+        });
+        browserSessionsTestState.nextAcquire = async () => ({
+            page: fakePage(state),
+            release: mock(async () => {}),
+        });
+
+        const platform = new XPlatform();
+        const [result] = await platform.delete!(
+            [{ channelId: 'me', messageIds: ['111'] }],
+            { accountId: 'acct1' },
+        );
+
+        expect(result.ok).toBe(true);
+        expect(state.gotoUrls).toEqual(['https://x.com/i/status/111']);
+        expect(state.clickedSelectors).toContain('dom:post-more-menu:111');
+        expect(state.clickedSelectors).toContain(
+            '[role="dialog"] [role="button"], [role="alertdialog"] [role="button"], button',
         );
         expect(markPublished).not.toHaveBeenCalled();
     });

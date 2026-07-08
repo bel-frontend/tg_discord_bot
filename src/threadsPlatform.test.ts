@@ -171,6 +171,46 @@ describe('ThreadsPlatform', () => {
         ]);
     });
 
+    test('publishes an image-only post through the compose flow', async () => {
+        const state = newState();
+        browserSessionsTestState.nextAcquire = async () => ({
+            page: fakePage(state),
+            release: mock(async () => {}),
+        });
+
+        const platform = new ThreadsPlatform();
+        const [result] = await platform.publish(
+            ['me'],
+            {
+                markdown: '',
+                images: [
+                    {
+                        data: new Uint8Array([1, 2, 3]),
+                        filename: 'photo.png',
+                        contentType: 'image/png',
+                    },
+                ],
+            },
+            { accountId: 'acct1' },
+        );
+
+        expect(result.ok).toBe(true);
+        expect(result.messageIds).toEqual(['111']);
+        expect(state.gotoUrls).toEqual(['https://www.threads.com/']);
+        expect(state.clickedSelectors).toContain(
+            '[aria-label="Create"], [aria-label="New thread"]',
+        );
+        expect(state.uploadedFiles).toEqual([
+            [
+                {
+                    name: 'photo.png',
+                    mimeType: 'image/png',
+                    buffer: Buffer.from([1, 2, 3]),
+                },
+            ],
+        ]);
+    });
+
     test('splits a post over the character limit into a threaded chain of replies', async () => {
         const state = newState({ postedHref: '/@someone/post/1' });
         let postCount = 0;
