@@ -3,8 +3,8 @@
 // Bun's `mock.module` binds to a resolved file path once and, in practice, the first
 // registration for a given path "wins" for every later real import of it — so two test
 // files independently mocking `./browserSessions` with two different local factories don't
-// each get their own view. Every test file that needs to fake this subsystem (server.test.ts,
-// xPlatform.test.ts) mocks it with *this* shared module instead, and controls behavior by
+// each get their own view. Every test file that needs to fake this subsystem (xPlatform.test.ts,
+// threadsPlatform.test.ts) mocks it with *this* shared module instead, and controls behavior by
 // importing and mutating `browserSessionsTestState` directly rather than re-registering the mock.
 import { mock } from 'bun:test';
 

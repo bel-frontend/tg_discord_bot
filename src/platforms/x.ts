@@ -60,15 +60,22 @@ function postConfirmTimeoutMs(): number {
     );
 }
 
-async function readPostedId(page: Page): Promise<string | null> {
-    // After posting, X shows a confirmation toast with a "View" link to the new post.
-    const href = await page
+async function readPostedId(
+    page: Page,
+    excludeId?: string,
+): Promise<string | null> {
+    // After posting, X shows a confirmation toast with a "View" link to the new post — but
+    // a reply's page also still shows the parent tweet's own link earlier in the DOM, so
+    // scan from the end and skip the id we just replied to.
+    const hrefs = await page
         .locator(POSTED_LINK_SELECTOR)
-        .first()
-        .getAttribute('href')
-        .catch(() => null);
-    const match = href?.match(/status\/(\d+)/);
-    return match?.[1] ?? null;
+        .evaluateAll((anchors) => anchors.map((anchor) => (anchor as HTMLAnchorElement).href));
+    for (let i = hrefs.length - 1; i >= 0; i--) {
+        const match = hrefs[i]?.match(/status\/(\d+)/);
+        const id = match?.[1];
+        if (id && id !== excludeId) return id;
+    }
+    return null;
 }
 
 async function postChunk(
@@ -115,7 +122,7 @@ async function postChunk(
     });
     await actionDelay();
 
-    const postedId = await readPostedId(page);
+    const postedId = await readPostedId(page, replyToId);
     if (!postedId) throw new Error('Could not confirm the post was published');
     return postedId;
 }
@@ -280,6 +287,75 @@ export class XPlatform implements Platform {
                     error instanceof ReconnectRequiredError
                         ? error.message
                         : error?.message || 'Delete failed';
+                results.push({
+                    platform: this.id,
+                    channelId: ref.channelId,
+                    ok: false,
+                    messageIds: ref.messageIds,
+                    error: message,
+                });
+            }
+        }
+        return results;
+    }
+
+    async update(
+        refs: PublishedMessageRef[],
+        content: PublishContent,
+        context?: PlatformContext,
+    ): Promise<PublishResult[]> {
+        if (!context?.accountId) {
+            throw new Error('X updating requires an account context');
+        }
+        const accountId = context.accountId;
+
+        const text = markdownToXText(content.markdown);
+        if (!text && !content.images?.length) {
+            throw new Error('Write something or add an image first');
+        }
+        const chunks = splitTextIntoChunks(text, X_LIMIT, true);
+
+        const results: PublishResult[] = [];
+        for (const ref of refs) {
+            try {
+                const messageIds = await withAutomationPage(
+                    accountId,
+                    'x',
+                    (page) => xLoginDetector.isLoggedOut(page),
+                    async (page) => {
+                        // X has no reliable edit UI to automate (real-name edit is
+                        // paid-tier only), so "update" deletes the old thread and
+                        // republishes fresh content in its place.
+                        for (const messageId of [...ref.messageIds].reverse()) {
+                            await deletePost(page, messageId);
+                        }
+                        const ids: string[] = [];
+                        let replyToId: string | undefined;
+                        for (let i = 0; i < chunks.length; i++) {
+                            const postedId = await postChunk(
+                                page,
+                                chunks[i],
+                                i === 0 ? content.images : undefined,
+                                replyToId,
+                            );
+                            ids.push(postedId);
+                            replyToId = postedId;
+                        }
+                        return ids;
+                    },
+                );
+                results.push({
+                    platform: this.id,
+                    channelId: ref.channelId,
+                    ok: true,
+                    messageIds,
+                    link: this.buildMessageLink(ref.channelId, messageIds[0]) ?? undefined,
+                });
+            } catch (error: any) {
+                const message =
+                    error instanceof ReconnectRequiredError
+                        ? error.message
+                        : error?.message || 'Update failed';
                 results.push({
                     platform: this.id,
                     channelId: ref.channelId,

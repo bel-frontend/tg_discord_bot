@@ -40,7 +40,8 @@ src/server.ts ── Bun.serve router
    └─ platforms/registry.ts ── fans a post out to selected {platform, channel} targets
          ├─ platforms/telegram.ts  (Markdown → Telegram HTML)
          ├─ platforms/discord.ts   (Markdown → native, live channel discovery)
-         └─ platforms/threads.ts   (Threads Graph API + OAuth token flow)
+         ├─ platforms/x.ts         (browser automation — no official API)
+         └─ platforms/threads.ts   (browser automation, mirrors platforms/x.ts)
 ```
 
 **Adding a new platform:** implement the `Platform` interface in
@@ -83,8 +84,10 @@ server-side environment variables or in the app's authenticated Settings/Resourc
 Without `RESEND_API_KEY` set, invite and verification emails are skipped (logged to the console
 instead of sent) — useful for local development.
 
-Configure Telegram, Discord, and Threads credentials in the authenticated Settings page. These
-settings are stored in MongoDB per user, not in `.env`.
+Configure Telegram and Discord credentials in the authenticated Settings page; these settings are
+stored in MongoDB per user, not in `.env`. X and Threads have no developer API credentials to
+configure — instead, click Connect on their Settings tab to log in through a real, live browser
+session (see `BROWSER_SESSION_ENC_KEY` and the other `BROWSER_*`/`X_*`/`THREADS_*` variables above).
 
 Add the channels, groups, servers, or profiles you want to publish to on the authenticated
 Resources page. They are stored in MongoDB per user. Telegram bots cannot enumerate the channels
@@ -110,22 +113,6 @@ A member can never grant permissions broader than their own when inviting someon
 requires the account owner's email to be verified first (see email verification above) so the
 invite flow can't be used to spam arbitrary addresses. A person is either the owner of their own
 workspace or a member of exactly one other workspace — not both.
-
-### Threads OAuth callbacks
-
-For Threads, create a Meta app, add the Threads API product/use case, then register these URLs
-in the Threads API settings. Replace the host with your production domain or HTTPS tunnel:
-
-```text
-OAuth redirect URL:
-https://YOUR-DOMAIN/api/threads/oauth/callback
-
-App removal callback URL:
-https://YOUR-DOMAIN/api/threads/deauthorize
-
-Data deletion callback URL:
-https://YOUR-DOMAIN/api/threads/data-deletion
-```
 
 In the app Settings page, save the Threads API app id and app secret, then click
 `Connect Threads`. The callback exchanges the OAuth code for a long-lived token and saves the

@@ -20,11 +20,11 @@ await connect();
 //    Platform interface (src/platforms/types.ts) and registering it here.
 register(new TelegramPlatform());
 register(new DiscordPlatform());
-register(new ThreadsPlatform());
 // Browser-session platforms drive a real logged-in browser instead of an official API —
 // fail fast at boot if the encryption key they persist login sessions with is missing.
 assertBrowserSessionCryptoConfigured();
 register(new XPlatform());
+register(new ThreadsPlatform());
 
 // 3. Scheduled publication worker
 startScheduler();

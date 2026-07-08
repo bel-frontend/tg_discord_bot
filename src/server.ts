@@ -67,7 +67,6 @@ import {
     handleAuthenticatedPlatformConnectionRoute,
     handleLiveViewUpgrade,
     handlePlatformLiveViewMessage,
-    handlePublicPlatformConnectionRoute,
     liveViewMatch,
     type LiveViewSocketData,
 } from './platformConnectionRoutes';
@@ -185,10 +184,6 @@ export async function handleApi(req: Request, url: URL): Promise<Response> {
         const result = await acceptInvite(inviteAcceptMatch[1], body.password);
         return json(result);
     }
-
-    const publicPlatformConnectionResponse =
-        await handlePublicPlatformConnectionRoute(req, url);
-    if (publicPlatformConnectionResponse) return publicPlatformConnectionResponse;
 
     // --- Everything below requires authentication ---
     const actor = await requireAuth(req);

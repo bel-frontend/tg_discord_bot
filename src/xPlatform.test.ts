@@ -6,8 +6,6 @@ import {
     markReconnectRequired,
     TestReconnectRequiredError,
 } from './browserSessions/testSupport';
-import type { Platform } from './platforms/types';
-
 // Mocked via the shared test double (see its header comment) rather than a local factory,
 // since only one `mock.module('./browserSessions', ...)` registration actually takes effect
 // process-wide — this file controls behavior by mutating `browserSessionsTestState` instead.
@@ -45,6 +43,7 @@ function makeLocator(selector: string, state: FakePageState) {
             getAttribute: mock(async () => state.postedHref),
             waitFor: mock(async () => {}),
         }),
+        evaluateAll: mock(async () => (state.postedHref ? [state.postedHref] : [])),
     };
 }
 
@@ -197,9 +196,39 @@ describe('XPlatform', () => {
         ).rejects.toThrow('Write something or add an image first');
     });
 
-    test('does not expose update because X posts cannot be edited reliably', () => {
-        const platform: Platform = new XPlatform();
-        expect(platform.update).toBeUndefined();
+    test('update deletes the old thread then republishes fresh content', async () => {
+        const state = newState({ postedHref: '/someone/status/999' });
+        browserSessionsTestState.nextAcquire = async () => ({
+            page: fakePage(state),
+            release: mock(async () => {}),
+        });
+
+        const platform = new XPlatform();
+        const [result] = await platform.update!(
+            [{ channelId: 'me', messageIds: ['111', '222'] }],
+            { markdown: 'Updated text' },
+            { accountId: 'acct1' },
+        );
+
+        expect(result).toEqual({
+            platform: 'x',
+            channelId: 'me',
+            ok: true,
+            messageIds: ['999'],
+            link: 'https://x.com/i/status/999',
+        });
+        // Old thread is deleted newest-first, then the fresh content is posted.
+        expect(state.gotoUrls).toEqual([
+            'https://x.com/i/status/222',
+            'https://x.com/i/status/111',
+            'https://x.com/compose/post',
+        ]);
+        expect(state.clickedSelectors).toContain('[data-testid="caret"]');
+        expect(state.clickedSelectors).toContain(
+            '[data-testid="confirmationSheetConfirm"]',
+        );
+        expect(state.filledText).toEqual(['Updated text']);
+        expect(markPublished).toHaveBeenCalled();
     });
 
     test('deletes stored message ids from newest reply to root post', async () => {

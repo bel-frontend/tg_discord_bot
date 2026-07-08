@@ -164,9 +164,17 @@ export async function startConnectSession(
     }
 
     const browser = await launchBrowser();
-    const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
-    const page = await context.newPage();
-    const cdp = await context.newCDPSession(page);
+    let context: BrowserContext;
+    let page: Page;
+    let cdp: CDPSession;
+    try {
+        context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+        page = await context.newPage();
+        cdp = await context.newCDPSession(page);
+    } catch (error) {
+        await browser.close().catch(() => {});
+        throw error;
+    }
 
     const sessionId = randomUUID();
     const handle: BrowserSessionHandle = {
@@ -277,6 +285,7 @@ export function handleClientFrame(sessionId: string, frame: ClientFrame): void {
 export async function acquireAutomationContext(
     accountId: string,
     platform: string,
+    options: { closeBrowserOnRelease?: boolean } = {},
 ): Promise<{ page: Page; release: () => Promise<void> }> {
     const key = idleKey(accountId, platform);
     let idle = idleContexts.get(key);
@@ -290,11 +299,25 @@ export async function acquireAutomationContext(
         if (countChromiumProcesses() >= maxConcurrentSessions()) {
             throw new Error('Too many active browser sessions, try again shortly');
         }
+        let storageState;
+        try {
+            storageState = JSON.parse(stateJson);
+        } catch {
+            throw new ReconnectRequiredError(
+                `${platform} session data is corrupted — reconnect in Settings`,
+            );
+        }
         const browser = await launchBrowser();
-        const context = await browser.newContext({
-            storageState: JSON.parse(stateJson),
-            viewport: { width: 1280, height: 800 },
-        });
+        let context: BrowserContext;
+        try {
+            context = await browser.newContext({
+                storageState,
+                viewport: { width: 1280, height: 800 },
+            });
+        } catch (error) {
+            await browser.close().catch(() => {});
+            throw error;
+        }
         idle = { browser, context, lastActivityAt: new Date() };
         idleContexts.set(key, idle);
     }
@@ -305,6 +328,14 @@ export async function acquireAutomationContext(
         page,
         release: async () => {
             await page.close().catch(() => {});
+            if (options.closeBrowserOnRelease) {
+                const stillIdle = idleContexts.get(key);
+                if (stillIdle === idle) {
+                    idleContexts.delete(key);
+                    await idle.browser.close().catch(() => {});
+                }
+                return;
+            }
             const stillIdle = idleContexts.get(key);
             if (stillIdle) stillIdle.lastActivityAt = new Date();
         },

@@ -60,12 +60,25 @@ function inlineText(tokens: any[]): string {
         .join('');
 }
 
+function stripResidualMarkdown(value: string): string {
+    return value
+        .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '$2')
+        .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '$1 $2')
+        .replace(/(\*\*|__)(\s*)([\s\S]*?)(\s*)\1/g, '$2$3$4')
+        .replace(/(\*|_)(\s*)([^\n*_][\s\S]*?)(\s*)\1/g, '$2$3$4')
+        .replace(/~~(\s*)([\s\S]*?)(\s*)~~/g, '$1$2$3')
+        .replace(/`([^`]+)`/g, '$1');
+}
+
 export function markdownToThreadsText(markdown: string): string {
-    return marked
-        .lexer(markdown)
-        .map(tokenText)
-        .join('\n\n')
-        .replace(/\n{3,}/g, '\n\n')
+    return stripResidualMarkdown(
+        marked
+            .lexer(markdown)
+            .map(tokenText)
+            .join('\n\n')
+            .replace(/[ \t]+\n/g, '\n')
+            .replace(/\n{3,}/g, '\n\n'),
+    )
         .trim();
 }
 

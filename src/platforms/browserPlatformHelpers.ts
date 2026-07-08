@@ -70,11 +70,16 @@ export async function withAutomationPage<T>(
     platform: string,
     isLoggedOut: (page: Page) => Promise<boolean>,
     fn: (page: Page) => Promise<T>,
-    options: { markPublishedOnSuccess?: boolean } = {},
+    options: {
+        markPublishedOnSuccess?: boolean;
+        closeBrowserOnRelease?: boolean;
+    } = {},
 ): Promise<T> {
     const key = `${accountId}:${platform}`;
     return runQueued(key, async () => {
-        const { page, release } = await acquireAutomationContext(accountId, platform);
+        const { page, release } = await acquireAutomationContext(accountId, platform, {
+            closeBrowserOnRelease: options.closeBrowserOnRelease,
+        });
         try {
             const result = await fn(page);
             if (options.markPublishedOnSuccess !== false) {

@@ -9,7 +9,6 @@ import {
     fetchPlatformConfigs,
     getBrowserSessionStatus,
     savePlatformConfig,
-    startThreadsOAuth,
 } from '../api';
 import { useToast } from '../toast';
 import { usePlatforms } from '../hooks/usePlatforms';
@@ -188,7 +187,6 @@ export function SettingsPage() {
     );
     const [saving, setSaving] = useState<string | null>(null);
     const [clearing, setClearing] = useState<string | null>(null);
-    const [connectingThreads, setConnectingThreads] = useState(false);
     const [editingFields, setEditingFields] = useState<Set<string>>(
         new Set(),
     );
@@ -319,17 +317,6 @@ export function SettingsPage() {
             toast(err.message, 'error');
         } finally {
             setClearing(null);
-        }
-    }
-
-    async function connectThreads() {
-        setConnectingThreads(true);
-        try {
-            const { authUrl } = await startThreadsOAuth();
-            window.location.href = authUrl;
-        } catch (err: any) {
-            toast(err.message, 'error');
-            setConnectingThreads(false);
         }
     }
 
@@ -573,23 +560,6 @@ export function SettingsPage() {
                                                         Save{' '}
                                                         {activePlatform.name}
                                                     </button>
-                                                    {activePlatform.setup
-                                                        .connect ===
-                                                        'oauth' && (
-                                                        <button
-                                                            type="button"
-                                                            className="btn ghost"
-                                                            disabled={
-                                                                connectingThreads
-                                                            }
-                                                            onClick={
-                                                                connectThreads
-                                                            }
-                                                        >
-                                                            Connect{' '}
-                                                            {activePlatform.name}
-                                                        </button>
-                                                    )}
                                                 </div>
                                                 </fieldset>
                                             </form>

@@ -28,12 +28,21 @@ function makeFakeContext() {
     };
 }
 
-function makeFakeBrowser() {
+interface FakeBrowser {
+    newContext: ReturnType<typeof mock>;
+    close: ReturnType<typeof mock>;
+}
+
+const launchedBrowsers: FakeBrowser[] = [];
+
+function makeFakeBrowser(): FakeBrowser {
     const context = makeFakeContext();
-    return {
+    const browser = {
         newContext: mock(async () => context),
         close: mock(async () => {}),
     };
+    launchedBrowsers.push(browser);
+    return browser;
 }
 
 mock.module('playwright-core', () => ({
@@ -134,6 +143,25 @@ describe('browser session manager', () => {
         expect(page).toBeDefined();
         await release();
         await disconnectPlatform('acct3', 'unit-reuse');
+    });
+
+    test('acquireAutomationContext can close its warm browser on release', async () => {
+        registerBrowserPlatform('unit-close-release', {
+            loginUrl: 'https://example.test/login',
+            detector: { isLoggedIn: async () => true, isLoggedOut: async () => false },
+        });
+        storedState = JSON.stringify({ cookies: [], origins: [] });
+        launchedBrowsers.length = 0;
+
+        const { release } = await acquireAutomationContext(
+            'acct4',
+            'unit-close-release',
+            { closeBrowserOnRelease: true },
+        );
+        await release();
+
+        expect(launchedBrowsers).toHaveLength(1);
+        expect(launchedBrowsers[0].close).toHaveBeenCalled();
     });
 
     test('sweepIdleSessions is a no-op when nothing is active', async () => {

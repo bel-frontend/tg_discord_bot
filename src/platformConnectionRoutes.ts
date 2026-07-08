@@ -1,11 +1,6 @@
 import { AuthError, requireAuth, type ActorContext } from './auth';
 import { assertPermission } from './permissions';
 import {
-    completeThreadsOAuth,
-    createThreadsOAuthStart,
-    threadsDataDeletionResponse,
-} from './threadsOAuth';
-import {
     attachLiveView,
     closeSession,
     detachLiveView,
@@ -16,71 +11,13 @@ import {
     startConnectSession,
     type ClientFrame,
 } from './browserSessions';
-import { empty, escapeHtml, html, json } from './httpResponses';
+import { json } from './httpResponses';
 
 export interface LiveViewSocketData {
     sessionId: string;
 }
 
 export const liveViewMatch = /^\/api\/browser-sessions\/([^/]+)\/live$/;
-
-export async function handlePublicPlatformConnectionRoute(
-    req: Request,
-    url: URL,
-): Promise<Response | undefined> {
-    const path = url.pathname;
-    const method = req.method;
-
-    if (
-        method === 'HEAD' &&
-        (path === '/api/threads/oauth/callback' ||
-            path === '/api/threads/deauthorize' ||
-            path === '/api/threads/data-deletion')
-    ) {
-        return empty();
-    }
-
-    if (path === '/api/threads/oauth/callback' && method === 'GET') {
-        try {
-            const result = await completeThreadsOAuth(url);
-            const label = result.username || result.threadsUserId;
-            return html(
-                '<!doctype html><meta charset="utf-8">' +
-                    '<title>Threads connected</title>' +
-                    '<body style="font-family:sans-serif;padding:40px;' +
-                    'max-width:640px;margin:auto">' +
-                    '<h1>Threads connected</h1>' +
-                    '<p>Connected Threads profile: <strong>' +
-                    `${escapeHtml(label)}</strong>.</p>` +
-                    '<p><a href="/settings">Return to settings</a></p>' +
-                    '</body>',
-            );
-        } catch (err: unknown) {
-            const message = err instanceof Error ? err.message : 'OAuth failed';
-            return html(
-                '<!doctype html><meta charset="utf-8">' +
-                    '<title>Threads connection failed</title>' +
-                    '<body style="font-family:sans-serif;padding:40px;' +
-                    'max-width:640px;margin:auto">' +
-                    '<h1>Threads connection failed</h1>' +
-                    `<p>${escapeHtml(message)}</p>` +
-                    '<p><a href="/settings">Return to settings</a></p>' +
-                    '</body>',
-                400,
-            );
-        }
-    }
-
-    if (path === '/api/threads/deauthorize' && method === 'POST') {
-        return json({ ok: true });
-    }
-
-    if (path === '/api/threads/data-deletion' && method === 'POST') {
-        return json(threadsDataDeletionResponse(url.origin));
-    }
-
-    return undefined;
-}
 
 export async function handleAuthenticatedPlatformConnectionRoute(
     actor: ActorContext,
@@ -89,30 +26,6 @@ export async function handleAuthenticatedPlatformConnectionRoute(
 ): Promise<Response | undefined> {
     const path = url.pathname;
     const method = req.method;
-
-    if (path === '/api/threads/oauth/start' && method === 'POST') {
-        try {
-            assertPermission(actor, 'canManageChannels');
-            const oauthStart = await createThreadsOAuthStart(
-                actor.accountId,
-                url.origin,
-            );
-            return json(oauthStart);
-        } catch (err: unknown) {
-            if (err instanceof AuthError) {
-                return json({ error: err.message }, err.status);
-            }
-            return json(
-                {
-                    error:
-                        err instanceof Error
-                            ? err.message
-                            : 'Failed to start Threads OAuth',
-                },
-                400,
-            );
-        }
-    }
 
     const browserSessionStartMatch = path.match(
         /^\/api\/browser-sessions\/([^/]+)\/start$/,
