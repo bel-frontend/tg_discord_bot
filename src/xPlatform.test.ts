@@ -22,6 +22,8 @@ interface FakePageState {
     uploadedFiles: any[];
     postedHref: string | null;
     visibleStatusHrefs: string[];
+    responseHandlers: Set<(response: any) => void | Promise<void>>;
+    createTweetPayload?: unknown;
     onPostClick?: () => void;
     throwOnClick?: Set<string>;
     invisibleSelectors?: Set<string>;
@@ -35,6 +37,17 @@ function makeLocator(selector: string, state: FakePageState) {
                 state.clickedSelectors.push(selector);
                 if (selector.includes('tweetButton')) {
                     state.onPostClick?.();
+                    if (state.createTweetPayload) {
+                        const response = {
+                            url: () => 'https://x.com/i/api/graphql/abc/CreateTweet',
+                            json: mock(async () => state.createTweetPayload),
+                        };
+                        await Promise.all(
+                            [...state.responseHandlers].map((handler) =>
+                                handler(response),
+                            ),
+                        );
+                    }
                 }
                 if (
                     selector.includes('tweetButton') &&
@@ -83,6 +96,12 @@ function fakePage(state: FakePageState) {
                 state.visibleStatusHrefs.push(state.postedHref);
             }
         }),
+        on: mock((event: string, handler: (response: any) => void) => {
+            if (event === 'response') state.responseHandlers.add(handler);
+        }),
+        off: mock((event: string, handler: (response: any) => void) => {
+            if (event === 'response') state.responseHandlers.delete(handler);
+        }),
         evaluate: mock(async (_fn: unknown, args?: any) => {
             if (args?.root) {
                 state.clickedSelectors.push(args.root);
@@ -104,6 +123,7 @@ function newState(overrides: Partial<FakePageState> = {}): FakePageState {
         uploadedFiles: [],
         postedHref: '/someone/status/111',
         visibleStatusHrefs: [],
+        responseHandlers: new Set(),
         ...overrides,
     };
 }
@@ -248,6 +268,41 @@ describe('XPlatform', () => {
             ok: true,
             messageIds: ['333'],
             link: 'https://x.com/i/status/333',
+        });
+    });
+
+    test('prefers the CreateTweet response id over DOM status links', async () => {
+        const state = newState({
+            postedHref: '/maybe/status/333',
+            visibleStatusHrefs: ['/sidebar/status/999'],
+            createTweetPayload: {
+                data: {
+                    create_tweet: {
+                        tweet_results: {
+                            result: {
+                                rest_id: '444',
+                            },
+                        },
+                    },
+                },
+            },
+        });
+        browserSessionsTestState.nextAcquire = async () => ({
+            page: fakePage(state),
+            release: mock(async () => {}),
+        });
+
+        const platform = new XPlatform();
+        const [result] = await platform.publish(
+            ['me'],
+            { markdown: 'Fresh post' },
+            { accountId: 'acct1' },
+        );
+
+        expect(result).toMatchObject({
+            ok: true,
+            messageIds: ['444'],
+            link: 'https://x.com/i/status/444',
         });
     });
 

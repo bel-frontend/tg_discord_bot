@@ -1,4 +1,4 @@
-import type { Page } from 'playwright-core';
+import type { Page, Response } from 'playwright-core';
 import type {
     Channel,
     Platform,
@@ -67,6 +67,84 @@ function postConfirmTimeoutMs(): number {
         'X_POST_CONFIRM_TIMEOUT_MS',
         DEFAULT_POST_CONFIRM_TIMEOUT_MS,
     );
+}
+
+function getRecord(value: unknown): Record<string, unknown> | null {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+    return value as Record<string, unknown>;
+}
+
+function getPath(value: unknown, path: string[]): unknown {
+    let current: unknown = value;
+    for (const key of path) {
+        const record = getRecord(current);
+        if (!record) return undefined;
+        current = record[key];
+    }
+    return current;
+}
+
+function stringId(value: unknown): string | null {
+    if (typeof value === 'string' && /^\d+$/.test(value)) return value;
+    return null;
+}
+
+function extractTweetIdFromCreateTweetPayload(payload: unknown): string | null {
+    const paths = [
+        ['data', 'create_tweet', 'tweet_results', 'result', 'rest_id'],
+        ['data', 'create_tweet', 'tweet_results', 'result', 'legacy', 'id_str'],
+        ['data', 'create_tweet', 'tweet_results', 'result', 'tweet', 'rest_id'],
+        [
+            'data',
+            'create_tweet',
+            'tweet_results',
+            'result',
+            'tweet',
+            'legacy',
+            'id_str',
+        ],
+    ];
+
+    for (const path of paths) {
+        const id = stringId(getPath(payload, path));
+        if (id) return id;
+    }
+    return null;
+}
+
+function startCreateTweetIdWatcher(
+    page: Page,
+    timeoutMs: number,
+): { promise: Promise<string | null>; cancel: () => void } {
+    let cancel = () => {};
+    const promise = new Promise<string | null>((resolve) => {
+        let settled = false;
+        const cleanup = () => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timer);
+            page.off('response', onResponse);
+        };
+        const finish = (id: string | null) => {
+            cleanup();
+            resolve(id);
+        };
+        cancel = () => finish(null);
+        const onResponse = async (response: Response) => {
+            if (!response.url().includes('CreateTweet')) return;
+            try {
+                const id = extractTweetIdFromCreateTweetPayload(
+                    await response.json(),
+                );
+                if (id) finish(id);
+            } catch {
+                // X internal response shape is unofficial; DOM confirmation remains fallback.
+            }
+        };
+        const timer = setTimeout(cleanup, timeoutMs);
+        page.on('response', onResponse);
+    });
+    return { promise, cancel };
 }
 
 async function readStatusIds(page: Page): Promise<string[]> {
@@ -138,8 +216,16 @@ async function postChunk(
     await postButton.waitFor({ state: 'visible', timeout: 30_000 });
     await actionDelay();
     const knownIds = new Set(await readStatusIds(page));
+    const networkPostedId = startCreateTweetIdWatcher(
+        page,
+        Math.min(5_000, postConfirmTimeoutMs()),
+    );
     await postButton.click();
-    const postedId = await waitForNewPostedId(page, knownIds, replyToId);
+    const postedId = await Promise.race([
+        networkPostedId.promise,
+        waitForNewPostedId(page, knownIds, replyToId),
+    ]);
+    networkPostedId.cancel();
     await actionDelay();
 
     if (!postedId) throw new Error('Could not confirm the post was published');
