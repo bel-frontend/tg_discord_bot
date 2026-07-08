@@ -850,6 +850,11 @@ tg-spoiler {
     display: flex;
     flex-direction: column;
     gap: 14px;
+    max-height: min(48vh, 460px);
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding-right: 4px;
 }
 .chan-group-head {
     display: flex;
@@ -882,6 +887,42 @@ tg-spoiler {
 }
 .chip input {
     accent-color: var(--accent);
+}
+.channel-chip {
+    padding: 0;
+    overflow: hidden;
+}
+.chip-check {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    padding: 6px 2px 6px 10px;
+    cursor: pointer;
+}
+.chip-check span {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+.chip-pin {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    border: 0;
+    border-left: 1px solid transparent;
+    background: transparent;
+    color: var(--text-dim);
+    cursor: pointer;
+}
+.chip-pin:hover {
+    color: var(--text);
+    background: var(--bg-elev);
+    border-left-color: var(--border);
+}
+.pinned-channels {
+    padding-bottom: 2px;
 }
 .field {
     display: flex;
@@ -917,6 +958,9 @@ tg-spoiler {
     display: flex;
     flex-direction: column;
     gap: 14px;
+    max-height: none;
+    overflow: visible;
+    padding-right: 0;
 }
 .channel-access .chan-items {
     display: flex;
