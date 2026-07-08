@@ -1,0 +1,168 @@
+.tree {
+    gap: 10px;
+}
+
+.newFolderBtn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.group {
+    border-radius: 10px;
+}
+
+.groupHead {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 4px;
+    font-weight: 600;
+    font-size: 13px;
+}
+
+.groupTitle {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+}
+
+.folderToggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+}
+
+.folderName {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.count {
+    font-weight: 400;
+    font-size: 12px;
+    color: var(--text-dim);
+}
+
+.headActions {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    flex: none;
+}
+
+.iconBtn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-dim);
+    cursor: pointer;
+    flex: none;
+
+    &:hover {
+        color: var(--text);
+        background: var(--bg-elev);
+    }
+}
+
+.children {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    margin-left: 7px;
+    padding-left: 10px;
+    border-left: 1px solid var(--border);
+}
+
+.row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 6px;
+    border-radius: 8px;
+    cursor: grab;
+
+    &:hover {
+        background: var(--bg-elev);
+
+        .grip {
+            opacity: 1;
+        }
+    }
+}
+
+.rowSelected {
+    background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+.rowLabel {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 1;
+    min-width: 0;
+    font-size: 13px;
+    cursor: pointer;
+
+    input {
+        accent-color: var(--accent);
+        flex: none;
+    }
+}
+
+.rowIcon {
+    flex: none;
+}
+
+.rowName {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.grip {
+    flex: none;
+    color: var(--text-dim);
+    opacity: 0.35;
+}
+
+.dragging {
+    opacity: 0.45;
+}
+
+.dropTarget {
+    outline: 1.5px dashed var(--accent);
+    outline-offset: 3px;
+}
+
+.dropHint {
+    margin: 0;
+    padding: 6px 8px;
+    border: 1px dashed var(--border);
+    border-radius: 8px;
+    font-size: 12px;
+    color: var(--text-dim);
+}
+
+.renameInput {
+    min-width: 0;
+    padding: 2px 6px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--bg-elev-2);
+    color: var(--text);
+    font: inherit;
+}
