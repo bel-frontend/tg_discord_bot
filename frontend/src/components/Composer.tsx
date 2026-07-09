@@ -73,6 +73,9 @@ export function Composer({
         setDrafts,
         loadDrafts,
         deleteDraft: deleteDraftFromList,
+        renameDraft,
+        moveDraft,
+        togglePinned,
     } = useDrafts();
     const draftEditor = useDraftEditor(editorRef, setDrafts);
     const autosave = useAutosave(
@@ -172,6 +175,22 @@ export function Composer({
         if (deleted && draftEditor.draftId === id) newDraft();
     }
 
+    function renameDraftFromRail(id: string, title: string) {
+        const trimmed = title.trim();
+        if (!trimmed) return;
+        renameDraft(id, trimmed);
+        // Keep the open editor (and its next autosave PUT) on the new title.
+        if (draftEditor.draftId === id) draftEditor.setTitle(trimmed);
+    }
+
+    function handleFolderDeleted(folderId: string) {
+        setDrafts((cur) =>
+            cur.map((d) =>
+                d.folderId === folderId ? { ...d, folderId: null } : d,
+            ),
+        );
+    }
+
     function publish() {
         publications.publish({
             editorRef,
@@ -259,6 +278,10 @@ export function Composer({
                         onNew={newDraft}
                         onOpen={openDraftFromRail}
                         onDelete={deleteDraft}
+                        onRename={renameDraftFromRail}
+                        onMove={moveDraft}
+                        onTogglePin={togglePinned}
+                        onFolderDeleted={handleFolderDeleted}
                     />
                 )}
 

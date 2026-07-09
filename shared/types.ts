@@ -105,8 +105,17 @@ export interface Draft {
     imageIds: string[];
     targets: Target[];
     silent?: boolean;
+    folderId?: string | null;
+    pinned?: boolean;
     createdAt: string;
     updatedAt: string;
+}
+
+export interface DraftFolder {
+    id: string;
+    name: string;
+    order: number;
+    createdAt: string;
 }
 
 export interface PublishResult {

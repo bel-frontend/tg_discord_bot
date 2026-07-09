@@ -32,8 +32,16 @@ import {
     deleteDraft,
     getDraft,
     listDrafts,
+    organizeDraft,
     updateDraft,
 } from './drafts';
+import {
+    createDraftFolder,
+    deleteDraftFolder,
+    listDraftFolders,
+    renameDraftFolder,
+    reorderDraftFolders,
+} from './draftFolders';
 import {
     createChannelResource,
     deleteChannelResource,
@@ -556,6 +564,41 @@ export async function handleApi(req: Request, url: URL): Promise<Response> {
         });
     }
 
+    // --- Draft folders (private per member, like the drafts they organize) ---
+    if (path === '/api/draft-folders' && method === 'GET') {
+        return json({ folders: await listDraftFolders(actor.userId) });
+    }
+    if (path === '/api/draft-folders' && method === 'POST') {
+        const body = await req.json().catch(() => ({}));
+        return json(
+            { folder: await createDraftFolder(actor.userId, body.name) },
+            201,
+        );
+    }
+    // Matched before the :id route — 'order' is not a folder id.
+    if (path === '/api/draft-folders/order' && method === 'PUT') {
+        const body = await req.json().catch(() => ({}));
+        return json({
+            folders: await reorderDraftFolders(actor.userId, body.ids),
+        });
+    }
+
+    const draftFolderMatch = path.match(/^\/api\/draft-folders\/([^/]+)$/);
+    if (draftFolderMatch) {
+        const id = draftFolderMatch[1];
+        if (method === 'PUT') {
+            const body = await req.json().catch(() => ({}));
+            const folder = await renameDraftFolder(actor.userId, id, body.name);
+            return folder
+                ? json({ folder })
+                : json({ error: 'Not found' }, 404);
+        }
+        if (method === 'DELETE') {
+            const ok = await deleteDraftFolder(actor.userId, id);
+            return ok ? json({ ok: true }) : json({ error: 'Not found' }, 404);
+        }
+    }
+
     // --- Drafts CRUD (private per member — not shared with the account) ---
     if (path === '/api/drafts' && method === 'GET') {
         return json({ drafts: await listDrafts(actor.userId) });
@@ -575,6 +618,11 @@ export async function handleApi(req: Request, url: URL): Promise<Response> {
         if (method === 'PUT') {
             const body = await req.json().catch(() => ({}));
             const draft = await updateDraft(actor.userId, id, body);
+            return draft ? json({ draft }) : json({ error: 'Not found' }, 404);
+        }
+        if (method === 'PATCH') {
+            const body = await req.json().catch(() => ({}));
+            const draft = await organizeDraft(actor.userId, id, body);
             return draft ? json({ draft }) : json({ error: 'Not found' }, 404);
         }
         if (method === 'DELETE') {

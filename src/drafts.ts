@@ -1,5 +1,5 @@
 import { ObjectId } from 'mongodb';
-import { drafts, type DraftDoc } from './db';
+import { draftFolders, drafts, type DraftDoc } from './db';
 import type { Draft, Target } from '../shared/types';
 
 export interface DraftInput {
@@ -20,6 +20,8 @@ function serialize(doc: DraftDoc): Draft {
         imageIds: doc.imageIds ?? [],
         targets: doc.targets,
         silent: doc.silent ?? false,
+        folderId: doc.folderId ?? null,
+        pinned: doc.pinned ?? false,
         createdAt: doc.createdAt.toISOString(),
         updatedAt: doc.updatedAt.toISOString(),
     };
@@ -90,6 +92,52 @@ export async function updateDraft(
     const result = await drafts().findOneAndUpdate(
         { _id: new ObjectId(id), userId },
         { $set: { ...sanitize(input), updatedAt: new Date() } },
+        { returnDocument: 'after' },
+    );
+    return result ? serialize(result) : null;
+}
+
+export interface DraftOrganizeInput {
+    title?: unknown;
+    folderId?: unknown;
+    pinned?: unknown;
+}
+
+/** Partial update for rename/move/pin from the drafts tree. Deliberately does
+ * NOT bump updatedAt — the list sorts by it, and organizing a draft must not
+ * reorder the list (unlike updateDraft, which also full-replaces content). */
+export async function organizeDraft(
+    userId: string,
+    id: string,
+    input: DraftOrganizeInput,
+) {
+    if (!ObjectId.isValid(id)) return null;
+
+    const $set: Partial<DraftDoc> = {};
+    if ('title' in input) {
+        const title = String(input.title ?? '').trim().slice(0, 200);
+        if (title) $set.title = title;
+    }
+    if ('folderId' in input) {
+        if (input.folderId === null) {
+            $set.folderId = null;
+        } else {
+            const folderId = String(input.folderId);
+            if (!ObjectId.isValid(folderId)) return null;
+            const folder = await draftFolders().findOne({
+                _id: new ObjectId(folderId),
+                userId,
+            });
+            if (!folder) return null;
+            $set.folderId = folderId;
+        }
+    }
+    if ('pinned' in input) $set.pinned = Boolean(input.pinned);
+    if (!Object.keys($set).length) return getDraft(userId, id);
+
+    const result = await drafts().findOneAndUpdate(
+        { _id: new ObjectId(id), userId },
+        { $set },
         { returnDocument: 'after' },
     );
     return result ? serialize(result) : null;

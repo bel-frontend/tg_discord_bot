@@ -75,8 +75,18 @@ export interface DraftDoc {
     imageIds: string[]; // ids of uploaded images (see UploadDoc)
     targets: Target[];
     silent: boolean;
+    folderId?: string | null; // DraftFolderDoc _id as string; null/absent = root
+    pinned?: boolean;
     createdAt: Date;
     updatedAt: Date;
+}
+
+export interface DraftFolderDoc {
+    _id?: ObjectId;
+    userId: string; // owner — folders are private per member, like drafts
+    name: string;
+    order: number; // ascending sort position in the rail
+    createdAt: Date;
 }
 
 export interface UploadDoc {
@@ -167,6 +177,7 @@ export interface ScheduledPublicationDoc {
 let client: MongoClient | null = null;
 let usersColl: Collection<UserDoc> | null = null;
 let draftsColl: Collection<DraftDoc> | null = null;
+let draftFoldersColl: Collection<DraftFolderDoc> | null = null;
 let uploadsColl: Collection<UploadDoc> | null = null;
 let channelResourcesColl: Collection<ChannelResourceDoc> | null = null;
 let platformConfigsColl: Collection<PlatformConfigDoc> | null = null;
@@ -225,6 +236,7 @@ export async function connect(): Promise<void> {
     const db = client.db(dbName);
     usersColl = db.collection<UserDoc>('users');
     draftsColl = db.collection<DraftDoc>('drafts');
+    draftFoldersColl = db.collection<DraftFolderDoc>('draftFolders');
     uploadsColl = db.collection<UploadDoc>('uploads');
     channelResourcesColl =
         db.collection<ChannelResourceDoc>('channelResources');
@@ -242,6 +254,7 @@ export async function connect(): Promise<void> {
 
     await usersColl.createIndex({ email: 1 }, { unique: true });
     await draftsColl.createIndex({ userId: 1, updatedAt: -1 });
+    await draftFoldersColl.createIndex({ userId: 1, order: 1 });
     await uploadsColl.createIndex({ userId: 1, createdAt: -1 });
     try {
         await channelResourcesColl.dropIndex('platform_1_channelId_1');
@@ -312,6 +325,13 @@ export function users(): Collection<UserDoc> {
 export function drafts(): Collection<DraftDoc> {
     if (!draftsColl) throw new Error('DB not connected — call connect() first');
     return draftsColl;
+}
+
+export function draftFolders(): Collection<DraftFolderDoc> {
+    if (!draftFoldersColl) {
+        throw new Error('DB not connected — call connect() first');
+    }
+    return draftFoldersColl;
 }
 
 export function uploads(): Collection<UploadDoc> {
