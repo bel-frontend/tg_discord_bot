@@ -149,7 +149,16 @@ export function App() {
     }
 
     function renderPage() {
-        if (view === 'resources') return <ResourcesPage />;
+        const search = new URLSearchParams(locationSearch);
+        if (view === 'resources') {
+            return (
+                <ResourcesPage
+                    onGoToSettings={(platformId) =>
+                        navigate('settings', { platform: platformId })
+                    }
+                />
+            );
+        }
         if (view === 'scheduled') {
             return (
                 <ScheduledPage
@@ -159,8 +168,13 @@ export function App() {
                 />
             );
         }
-        if (view === 'settings') return <SettingsPage />;
-        const search = new URLSearchParams(locationSearch);
+        if (view === 'settings') {
+            return (
+                <SettingsPage
+                    initialPlatformId={search.get('platform') ?? undefined}
+                />
+            );
+        }
         return (
             <ComposerPage
                 theme={theme}

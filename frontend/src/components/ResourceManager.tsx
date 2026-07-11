@@ -19,7 +19,11 @@ const PLATFORM_PLACEHOLDERS = [
     { id: 'other', name: 'Other' },
 ];
 
-export function ResourceManager() {
+interface ResourceManagerProps {
+    onGoToSettings?: (platformId: string) => void;
+}
+
+export function ResourceManager({ onGoToSettings }: ResourceManagerProps = {}) {
     const toast = useToast();
     const me = useMe();
     const canManageChannels =
@@ -134,39 +138,60 @@ export function ResourceManager() {
                     )}
 
                     <div className="resource-list">
-                        {channels.map((channel) => (
-                            <div
-                                className="resource-row"
-                                key={`${channel.platform}:${channel.id}`}
-                            >
-                                <div>
-                                    <div className="resource-name">
-                                        {platformIcon(
-                                            channel.platform,
-                                            platforms,
-                                        )}{' '}
-                                        {channel.name}
+                        {channels.map((channel) => {
+                            const isConnectedAccount =
+                                channel.source === 'config' &&
+                                platforms.find((p) => p.id === channel.platform)
+                                    ?.setup?.connect === 'browser';
+                            return (
+                                <div
+                                    className="resource-row"
+                                    key={`${channel.platform}:${channel.id}`}
+                                >
+                                    <div>
+                                        <div className="resource-name">
+                                            {platformIcon(
+                                                channel.platform,
+                                                platforms,
+                                            )}{' '}
+                                            {channel.name}
+                                        </div>
+                                        <div className="resource-meta">
+                                            {channel.platform} · {channel.id}
+                                            {channel.source === 'config' &&
+                                                (isConnectedAccount
+                                                    ? ' · connected account'
+                                                    : ' · server default')}
+                                        </div>
                                     </div>
-                                    <div className="resource-meta">
-                                        {channel.platform} · {channel.id}
-                                        {channel.source === 'config' &&
-                                            ' · server default'}
-                                    </div>
+                                    {channel.resourceId && canManageChannels ? (
+                                        <button
+                                            className="btn danger"
+                                            onClick={() => remove(channel)}
+                                        >
+                                            Delete
+                                        </button>
+                                    ) : isConnectedAccount ? (
+                                        <button
+                                            type="button"
+                                            className="resource-readonly"
+                                            title="This account is managed on the Settings page, where you can disconnect it."
+                                            onClick={() =>
+                                                onGoToSettings?.(
+                                                    channel.platform,
+                                                )
+                                            }
+                                        >
+                                            read-only · manage in Settings
+                                        </button>
+                                    ) : (
+                                        <span className="resource-readonly">
+                                            read-only
+                                        </span>
+                                    )}
                                 </div>
-                                {channel.resourceId && canManageChannels ? (
-                                    <button
-                                        className="btn danger"
-                                        onClick={() => remove(channel)}
-                                    >
-                                        Delete
-                                    </button>
-                                ) : (
-                                    <span className="resource-readonly">
-                                        read-only
-                                    </span>
-                                )}
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 </section>
         </PageLayout>

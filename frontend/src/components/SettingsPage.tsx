@@ -173,7 +173,11 @@ function BrowserConnectPanel({
     );
 }
 
-export function SettingsPage() {
+interface SettingsPageProps {
+    initialPlatformId?: string;
+}
+
+export function SettingsPage({ initialPlatformId }: SettingsPageProps = {}) {
     const toast = useToast();
     const me = useMe();
     const canManageChannels =
@@ -209,8 +213,14 @@ export function SettingsPage() {
     const activePlatform = platforms.find((p) => p.id === activeTab);
 
     useEffect(() => {
-        if (!activeTab && platforms.length) setActiveTab(platforms[0].id);
-    }, [platforms, activeTab]);
+        if (activeTab || !platforms.length) return;
+        const preferred =
+            initialPlatformId &&
+            platforms.some((p) => p.id === initialPlatformId)
+                ? initialPlatformId
+                : platforms[0].id;
+        setActiveTab(preferred);
+    }, [platforms, activeTab, initialPlatformId]);
 
     useEffect(() => {
         if (!activePlatform || activePlatform.setup?.connect !== 'browser') {
