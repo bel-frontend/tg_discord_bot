@@ -43,7 +43,14 @@ const DELETE_TEXTS = ['Delete', 'Выдаліць', 'Удалить'];
 const DEFAULT_ACTION_DELAY_MS = 900;
 const DEFAULT_POST_CONFIRM_TIMEOUT_MS = 30_000;
 
-registerBrowserPlatform('x', { loginUrl: LOGIN_URL, detector: xLoginDetector });
+registerBrowserPlatform('x', {
+    loginUrl: LOGIN_URL,
+    detector: xLoginDetector,
+    sessionCookies: {
+        domainSuffixes: ['x.com', 'twitter.com'],
+        names: ['auth_token'],
+    },
+});
 
 function envNumber(name: string, fallback: number): number {
     const raw = process.env[name];

@@ -5,7 +5,12 @@
 
 import { randomUUID } from 'node:crypto';
 import { chromium, type Browser, type BrowserContext, type CDPSession, type Page } from 'playwright-core';
-import type { BrowserSessionHandle, BrowserSessionPhase, LoginDetector } from './types';
+import type {
+    BrowserSessionHandle,
+    BrowserSessionPhase,
+    LoginDetector,
+    SessionCookieCheck,
+} from './types';
 import { ReconnectRequiredError } from './types';
 import type { ClientFrame, ServerFrame } from './protocol';
 import { startScreencast, type ScreencastHandle } from './screencast';
@@ -49,6 +54,8 @@ function idleCloseMs(): number {
 export interface BrowserPlatformConfig {
     loginUrl: string;
     detector: LoginDetector;
+    /** When set, imported storage states must contain one of these cookies. */
+    sessionCookies?: SessionCookieCheck;
 }
 
 const platformConfigs = new Map<string, BrowserPlatformConfig>();
@@ -59,6 +66,12 @@ export function registerBrowserPlatform(
     config: BrowserPlatformConfig,
 ): void {
     platformConfigs.set(platform, config);
+}
+
+export function getBrowserPlatformConfig(
+    platform: string,
+): BrowserPlatformConfig | undefined {
+    return platformConfigs.get(platform);
 }
 
 function requireConfig(platform: string): BrowserPlatformConfig {
@@ -107,11 +120,32 @@ async function launchBrowser(): Promise<Browser> {
     // at during login, and because headless Chromium is a known fingerprinting signal for
     // the anti-automation checks X/Reddit run. In Docker this renders into Xvfb (DISPLAY set
     // by the container entrypoint); set BROWSER_HEADLESS=true to force headless (e.g. CI).
-    return chromium.launch({
-        headless: process.env.BROWSER_HEADLESS === 'true',
-        executablePath: process.env.CHROME_EXECUTABLE_PATH || undefined,
-        args: ['--disable-blink-features=AutomationControlled'],
-    });
+    const headless = process.env.BROWSER_HEADLESS === 'true';
+    try {
+        return await chromium.launch({
+            headless,
+            executablePath: process.env.CHROME_EXECUTABLE_PATH || undefined,
+            args: ['--disable-blink-features=AutomationControlled'],
+        });
+    } catch (error) {
+        // Playwright's headed-launch failure is a multi-page call log; the part the
+        // operator needs ("no X server") drowns in it, and the whole thing ends up
+        // in the Connect modal. Replace it with something actionable. The container
+        // entrypoint (docker-entrypoint.sh) also warns about this at startup.
+        if (
+            !headless &&
+            error instanceof Error &&
+            /XServer|X server|\$DISPLAY|Missing X/i.test(error.message)
+        ) {
+            throw new Error(
+                'The server has no X display for the headful browser. Check the ' +
+                    'container logs for the Xvfb warning and rebuild/redeploy the ' +
+                    'Docker image (its entrypoint starts Xvfb), or set ' +
+                    'BROWSER_HEADLESS=true.',
+            );
+        }
+        throw error;
+    }
 }
 
 async function closeLiveSession(

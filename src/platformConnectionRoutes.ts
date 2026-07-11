@@ -8,6 +8,7 @@ import {
     getBrowserSessionStatus,
     getSession,
     handleClientFrame,
+    importBrowserSessionState,
     startConnectSession,
     type ClientFrame,
 } from './browserSessions';
@@ -51,6 +52,42 @@ export async function handleAuthenticatedPlatformConnectionRoute(
                         err instanceof Error
                             ? err.message
                             : 'Failed to start browser session',
+                },
+                400,
+            );
+        }
+    }
+
+    // Client-side login: scripts/connect-local.ts logs in with the operator's local
+    // Chrome and uploads the captured Playwright storageState here.
+    const browserSessionImportMatch = path.match(
+        /^\/api\/browser-sessions\/([^/]+)\/import$/,
+    );
+    if (browserSessionImportMatch && method === 'POST') {
+        try {
+            assertPermission(actor, 'canManageChannels');
+            const body = (await req.json().catch(() => null)) as {
+                storageState?: unknown;
+            } | null;
+            if (!body || typeof body !== 'object') {
+                return json({ error: 'Request body must be {"storageState": …}' }, 400);
+            }
+            await importBrowserSessionState(
+                actor.accountId,
+                browserSessionImportMatch[1],
+                body.storageState,
+            );
+            return json({ ok: true, status: 'connected' });
+        } catch (err: unknown) {
+            if (err instanceof AuthError) {
+                return json({ error: err.message }, err.status);
+            }
+            return json(
+                {
+                    error:
+                        err instanceof Error
+                            ? err.message
+                            : 'Failed to import session',
                 },
                 400,
             );

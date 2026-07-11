@@ -5,6 +5,7 @@
   "scripts": {
     "start": "bun run build && bun run index.ts",
     "dev": "bun run scripts/dev.ts",
+    "connect": "bun run scripts/connect-local.ts",
     "build": "cd frontend && bun install && bun run build",
     "test:x-connection": "bun run scripts/test-x-connection.ts",
     "test:x-post": "bun run scripts/test-x-post.ts",

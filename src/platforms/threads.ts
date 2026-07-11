@@ -43,7 +43,16 @@ const DELETE_TEXTS = ['Удалить', 'Выдаліць', 'Delete'];
 const DEFAULT_ACTION_DELAY_MS = 1_200;
 const DEFAULT_POST_CONFIRM_TIMEOUT_MS = 30_000;
 
-registerBrowserPlatform('threads', { loginUrl: LOGIN_URL, detector: threadsLoginDetector });
+registerBrowserPlatform('threads', {
+    loginUrl: LOGIN_URL,
+    detector: threadsLoginDetector,
+    sessionCookies: {
+        // Meta sets sessionid on .instagram.com or .threads.net/.threads.com
+        // depending on how the login redirects went.
+        domainSuffixes: ['threads.com', 'threads.net', 'instagram.com'],
+        names: ['sessionid'],
+    },
+});
 
 function envNumber(name: string, fallback: number): number {
     const raw = process.env[name];

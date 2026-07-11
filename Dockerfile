@@ -37,6 +37,7 @@ COPY . .
 RUN cd frontend && bun run build
 
 # The server serves the built frontend and the API on $PORT (default 3000).
-# Xvfb runs in the background only to provide a display for browser-session
-# platforms; the HTTP server itself stays the main container process.
-CMD ["sh", "-c", "Xvfb :99 -screen 0 1280x800x24 >/tmp/xvfb.log 2>&1 & exec bun run index.ts"]
+# The entrypoint starts Xvfb (the display for browser-session platforms), verifies
+# it is actually up, and execs the server as the main container process.
+RUN chmod +x docker-entrypoint.sh
+CMD ["./docker-entrypoint.sh"]

@@ -20,6 +20,18 @@ export interface BrowserSessionHandle {
     error?: string;
 }
 
+/**
+ * Which cookies mark a real logged-in session for a platform. Used to validate
+ * storageState JSON imported from a client-side login (scripts/connect-local.ts)
+ * before persisting it.
+ */
+export interface SessionCookieCheck {
+    /** Cookie domain suffixes to accept, e.g. ['threads.com', 'instagram.com']. */
+    domainSuffixes: string[];
+    /** Session cookie names, e.g. ['sessionid']. */
+    names: string[];
+}
+
 /** Per-platform predicate: is the live page past login? Polled during `awaiting_login`. */
 export interface LoginDetector {
     isLoggedIn(page: import('playwright-core').Page): Promise<boolean>;

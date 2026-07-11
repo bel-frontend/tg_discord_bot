@@ -40,3 +40,7 @@ export const handleClientFrame = mock(() => {});
 export const startConnectSession = mock(async () => {
     throw new Error('startConnectSession is not exercised by this test double');
 });
+
+export class TestInvalidSessionStateError extends Error {}
+export const InvalidSessionStateError = TestInvalidSessionStateError;
+export const importBrowserSessionState = mock(async () => {});
