@@ -5,7 +5,7 @@
 // consumes the same persisted JSON either way.
 
 import type { SessionCookieCheck } from './types';
-import { getBrowserPlatformConfig } from './manager';
+import { evictIdleAutomationContext, getBrowserPlatformConfig } from './manager';
 import { upsertBrowserSessionState } from './store';
 
 export class InvalidSessionStateError extends Error {}
@@ -94,4 +94,7 @@ export async function importBrowserSessionState(
     }
     const state = validateStorageState(raw, config.sessionCookies);
     await upsertBrowserSessionState(accountId, platform, JSON.stringify(state));
+    // Same reasoning as the hosted reconnect path in manager.ts's pollLogin: a stale
+    // warm context must not survive a fresh session import.
+    await evictIdleAutomationContext(accountId, platform);
 }

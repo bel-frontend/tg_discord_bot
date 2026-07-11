@@ -73,6 +73,7 @@ process.env.BROWSER_LOGIN_POLL_MS = '20';
 const {
     acquireAutomationContext,
     disconnectPlatform,
+    evictIdleAutomationContext,
     getSession,
     registerBrowserPlatform,
     startConnectSession,
@@ -166,5 +167,47 @@ describe('browser session manager', () => {
 
     test('sweepIdleSessions is a no-op when nothing is active', async () => {
         await expect(sweepIdleSessions()).resolves.toBeUndefined();
+    });
+
+    test('reconnecting evicts a stale warm automation context instead of leaving it cached', async () => {
+        registerBrowserPlatform('unit-evict-reconnect', {
+            loginUrl: 'https://example.test/login',
+            detector: { isLoggedIn: async () => true, isLoggedOut: async () => false },
+        });
+        storedState = JSON.stringify({ cookies: [], origins: [] });
+        launchedBrowsers.length = 0;
+
+        // Simulate an old, now-stale automation context sitting warm from a prior
+        // publish — this is the browser a mid-publish logout (or any lingering
+        // idle context) would leave behind.
+        const { release } = await acquireAutomationContext(
+            'acct5',
+            'unit-evict-reconnect',
+        );
+        await release();
+        expect(launchedBrowsers).toHaveLength(1);
+        const staleBrowser = launchedBrowsers[0];
+
+        // Reconnecting (startConnectSession -> pollLogin persisting a fresh session)
+        // must close that stale browser rather than let the next publish reuse it.
+        await startConnectSession('acct5', 'unit-evict-reconnect');
+        await new Promise((resolve) => setTimeout(resolve, 150));
+        expect(staleBrowser.close).toHaveBeenCalled();
+
+        // The next acquire must launch a brand-new browser, not reuse the stale one.
+        launchedBrowsers.length = 0;
+        const { release: release2 } = await acquireAutomationContext(
+            'acct5',
+            'unit-evict-reconnect',
+        );
+        expect(launchedBrowsers).toHaveLength(1);
+        expect(launchedBrowsers[0]).not.toBe(staleBrowser);
+        await release2();
+    });
+
+    test('evictIdleAutomationContext is a no-op when nothing is cached', async () => {
+        await expect(
+            evictIdleAutomationContext('acct-none', 'unit-evict-reconnect'),
+        ).resolves.toBeUndefined();
     });
 });

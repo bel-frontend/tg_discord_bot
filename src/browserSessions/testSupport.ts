@@ -26,6 +26,7 @@ export const acquireAutomationContext = mock(async () =>
 );
 export const markPublished = mock(async () => {});
 export const markReconnectRequired = mock(async () => {});
+export const evictIdleAutomationContext = mock(async () => {});
 export const getBrowserSessionStatus = mock(
     async () => browserSessionsTestState.sessionStatus,
 );

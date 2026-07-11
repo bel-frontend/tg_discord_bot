@@ -5,6 +5,7 @@ export {
     closeSession,
     detachLiveView,
     disconnectPlatform,
+    evictIdleAutomationContext,
     getSession,
     handleClientFrame,
     registerBrowserPlatform,

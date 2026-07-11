@@ -180,6 +180,10 @@ async function pollLogin(sessionId: string): Promise<void> {
         session.handle.platform,
         JSON.stringify(storageState),
     );
+    // A stale warm context from before this (re)connect must not outlive the new
+    // session — otherwise the next publish reuses a browser still stuck on a login
+    // page and immediately reports "session expired" again.
+    await evictIdleAutomationContext(session.handle.accountId, session.handle.platform);
     session.handle.phase = 'connected';
     session.handle.lastActivityAt = new Date();
     session.sink?.send({ type: 'connected' });
@@ -256,16 +260,29 @@ export async function closeSession(sessionId: string): Promise<void> {
     await closeLiveSession(sessionId, 'closed');
 }
 
-export async function disconnectPlatform(
+/**
+ * Discards any warm automation browser for (accountId, platform) so the next
+ * `acquireAutomationContext` call re-reads the persisted session instead of reusing a
+ * context that may be sitting on a login page. Must be called whenever the persisted
+ * session changes underneath it: after a fresh login (pollLogin), after a client-side
+ * import, on disconnect, and as soon as a publish discovers the session was logged out.
+ */
+export async function evictIdleAutomationContext(
     accountId: string,
     platform: string,
 ): Promise<void> {
     const key = idleKey(accountId, platform);
     const idle = idleContexts.get(key);
-    if (idle) {
-        idleContexts.delete(key);
-        await idle.browser.close().catch(() => {});
-    }
+    if (!idle) return;
+    idleContexts.delete(key);
+    await idle.browser.close().catch(() => {});
+}
+
+export async function disconnectPlatform(
+    accountId: string,
+    platform: string,
+): Promise<void> {
+    await evictIdleAutomationContext(accountId, platform);
     for (const [sessionId, session] of liveSessions) {
         if (session.handle.accountId === accountId && session.handle.platform === platform) {
             await closeSession(sessionId);

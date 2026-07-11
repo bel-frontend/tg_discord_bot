@@ -1,6 +1,7 @@
 import type { Page } from 'playwright-core';
 import {
     acquireAutomationContext,
+    evictIdleAutomationContext,
     markPublished,
     markReconnectRequired,
     ReconnectRequiredError,
@@ -90,6 +91,10 @@ export async function withAutomationPage<T>(
             if (error instanceof ReconnectRequiredError) throw error;
             if (await isLoggedOut(page).catch(() => false)) {
                 await markReconnectRequired(accountId, platform);
+                // The cached browser context is the one that just got logged out —
+                // leaving it warm would make the very next publish attempt (or a
+                // fresh reconnect) fail the same way until the idle sweep catches it.
+                await evictIdleAutomationContext(accountId, platform);
                 throw new ReconnectRequiredError(
                     `${platform} session expired — reconnect in Settings`,
                 );
