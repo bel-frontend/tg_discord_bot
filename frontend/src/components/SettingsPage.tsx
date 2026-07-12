@@ -5,11 +5,11 @@ import type {
 } from '../../../shared/types';
 import {
     clearPlatformConfigField,
+    createLocalPublisherPairing,
     disconnectBrowserSession,
     fetchPlatformConfigs,
     getBrowserSessionStatus,
     savePlatformConfig,
-    startPlatformOAuth,
 } from '../api';
 import { useToast } from '../toast';
 import { usePlatforms } from '../hooks/usePlatforms';
@@ -174,6 +174,105 @@ function BrowserConnectPanel({
     );
 }
 
+function DesktopThreadsPanel() {
+    const toast = useToast();
+    const [connected, setConnected] = useState(false);
+    const [paired, setPaired] = useState(false);
+    const [busy, setBusy] = useState(false);
+
+    useEffect(() => {
+        Promise.all([
+            window.composerDesktop!.agentStatus(),
+            window.composerDesktop!.threadsStatus(),
+        ])
+            .then(([agent, threads]) => {
+                setPaired(agent.paired);
+                setConnected(threads.connected);
+            })
+            .catch((error) => toast(error.message, 'error'));
+    }, [toast]);
+
+    async function run(action: 'connect' | 'disconnect') {
+        setBusy(true);
+        try {
+            const status =
+                action === 'connect'
+                    ? await window.composerDesktop!.connectThreads()
+                    : await window.composerDesktop!.disconnectThreads();
+            setConnected(status.connected);
+            toast(
+                status.connected ? 'Threads connected' : 'Threads disconnected',
+                'success',
+            );
+        } catch (error: any) {
+            toast(error.message || 'Threads connection failed', 'error');
+        } finally {
+            setBusy(false);
+        }
+    }
+
+    async function pairDesktop() {
+        setBusy(true);
+        try {
+            const pairing = await createLocalPublisherPairing();
+            const status = await window.composerDesktop!.pairAgent(pairing.code);
+            setPaired(status.paired);
+            toast('Desktop client paired', 'success');
+        } catch (error: any) {
+            toast(error.message || 'Desktop pairing failed', 'error');
+        } finally {
+            setBusy(false);
+        }
+    }
+
+    return (
+        <div className="settings-browser-connect">
+            <span
+                className={
+                    connected
+                        ? 'settings-pill settings-pill-ok'
+                        : 'settings-pill'
+                }
+            >
+                {connected ? 'Connected locally' : 'Not connected'}
+            </span>
+            <div className="settings-form-actions">
+                {!paired && (
+                    <button
+                        type="button"
+                        className="btn primary"
+                        disabled={busy}
+                        onClick={pairDesktop}
+                    >
+                        Pair this desktop
+                    </button>
+                )}
+                <button
+                    type="button"
+                    className="btn ghost"
+                    disabled={busy || !paired}
+                    onClick={() => run('connect')}
+                >
+                    {connected ? 'Reconnect' : 'Connect'} Threads
+                </button>
+                {connected && (
+                    <button
+                        type="button"
+                        className="btn ghost settings-field-action-danger"
+                        disabled={busy}
+                        onClick={() => run('disconnect')}
+                    >
+                        Disconnect
+                    </button>
+                )}
+            </div>
+            <small>
+                Login cookies stay in a dedicated Chrome profile on this computer.
+            </small>
+        </div>
+    );
+}
+
 interface SettingsPageProps {
     initialPlatformId?: string;
 }
@@ -192,9 +291,6 @@ export function SettingsPage({ initialPlatformId }: SettingsPageProps = {}) {
     );
     const [saving, setSaving] = useState<string | null>(null);
     const [clearing, setClearing] = useState<string | null>(null);
-    const [connectingPlatform, setConnectingPlatform] = useState<string | null>(
-        null,
-    );
     const [editingFields, setEditingFields] = useState<Set<string>>(
         new Set(),
     );
@@ -215,6 +311,8 @@ export function SettingsPage({ initialPlatformId }: SettingsPageProps = {}) {
     );
 
     const activePlatform = platforms.find((p) => p.id === activeTab);
+    const usesDesktopThreads =
+        activePlatform?.id === 'threads' && Boolean(window.composerDesktop);
 
     useEffect(() => {
         if (activeTab || !platforms.length) return;
@@ -346,17 +444,6 @@ export function SettingsPage({ initialPlatformId }: SettingsPageProps = {}) {
         }
     }
 
-    async function connectOAuthPlatform(platform: string) {
-        setConnectingPlatform(platform);
-        try {
-            const { authUrl } = await startPlatformOAuth(platform);
-            window.location.assign(authUrl);
-        } catch (err: any) {
-            toast(err.message, 'error');
-            setConnectingPlatform(null);
-        }
-    }
-
     async function disconnectBrowserPlatform(
         platform: string,
         platformName: string,
@@ -457,7 +544,8 @@ export function SettingsPage({ initialPlatformId }: SettingsPageProps = {}) {
                                                 {activePlatform.charLimit} chars
                                             </span>
                                         )}
-                                        {activePlatform.setup && (
+                                        {activePlatform.setup &&
+                                            !usesDesktopThreads && (
                                             <button
                                                 type="button"
                                                 className="settings-howto-btn"
@@ -474,7 +562,9 @@ export function SettingsPage({ initialPlatformId }: SettingsPageProps = {}) {
                                 {activePlatform.setup ? (
                                     <>
                                         <p className="muted">
-                                            {activePlatform.setup.summary}
+                                            {usesDesktopThreads
+                                                ? 'Publishes through a dedicated Chrome profile on this computer.'
+                                                : activePlatform.setup.summary}
                                         </p>
 
                                         {!canManageChannels && (
@@ -485,7 +575,7 @@ export function SettingsPage({ initialPlatformId }: SettingsPageProps = {}) {
                                             </p>
                                         )}
 
-                                        {activePlatform.setup.configFields
+                                        {!usesDesktopThreads && activePlatform.setup.configFields
                                             ?.length ? (
                                             <form
                                                 className="settings-form"
@@ -585,26 +675,6 @@ export function SettingsPage({ initialPlatformId }: SettingsPageProps = {}) {
                                                         Save{' '}
                                                         {activePlatform.name}
                                                     </button>
-                                                    {activePlatform.setup
-                                                        .connect ===
-                                                        'oauth' && (
-                                                        <button
-                                                            type="button"
-                                                            className="btn ghost"
-                                                            disabled={
-                                                                connectingPlatform ===
-                                                                activePlatform.id
-                                                            }
-                                                            onClick={() =>
-                                                                connectOAuthPlatform(
-                                                                    activePlatform.id,
-                                                                )
-                                                            }
-                                                        >
-                                                            Connect{' '}
-                                                            {activePlatform.name}
-                                                        </button>
-                                                    )}
                                                 </div>
                                                 </fieldset>
                                             </form>
@@ -644,6 +714,7 @@ export function SettingsPage({ initialPlatformId }: SettingsPageProps = {}) {
                                                 }
                                             />
                                         )}
+                                        {usesDesktopThreads && <DesktopThreadsPanel />}
                                     </>
                                 ) : (
                                     <p className="muted">

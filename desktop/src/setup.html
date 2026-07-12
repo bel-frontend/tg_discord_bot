@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta
+            name="viewport"
+            content="width=device-width,initial-scale=1"
+        />
+        <title>Connect Composer</title>
+        <style>
+            :root { color-scheme: dark; font-family: system-ui, sans-serif; }
+            body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #111827; color: #f9fafb; }
+            form { width: min(440px, calc(100vw - 48px)); padding: 32px; border: 1px solid #374151; border-radius: 16px; background: #1f2937; }
+            h1 { margin-top: 0; }
+            p { color: #cbd5e1; }
+            input, button { box-sizing: border-box; width: 100%; padding: 12px; border-radius: 8px; font: inherit; }
+            input { border: 1px solid #4b5563; background: #111827; color: inherit; }
+            button { margin-top: 16px; border: 0; background: #2563eb; color: white; cursor: pointer; }
+            #error { color: #fca5a5; min-height: 20px; }
+        </style>
+    </head>
+    <body>
+        <form id="setup">
+            <h1>Connect Composer</h1>
+            <p>Enter the HTTPS address supplied by your Composer workspace.</p>
+            <input id="server" type="url" placeholder="https://composer.example.com" required autofocus />
+            <button>Continue</button>
+            <p id="error"></p>
+        </form>
+        <script>
+            document.querySelector('#setup').addEventListener('submit', async (event) => {
+                event.preventDefault();
+                const error = document.querySelector('#error');
+                error.textContent = '';
+                const server = document.querySelector('#server').value;
+                window.location.href = `composer-setup://configure?server=${encodeURIComponent(server)}`;
+            });
+            const initialError = new URLSearchParams(window.location.search).get('error');
+            if (initialError) document.querySelector('#error').textContent = initialError;
+        </script>
+    </body>
+</html>

@@ -21,11 +21,12 @@ export const clearToken = () => localStorage.removeItem('token');
 interface ApiOptions {
     method?: string;
     body?: unknown;
+    handleUnauthorized?: boolean;
 }
 
 export async function api<T = any>(
     path: string,
-    { method = 'GET', body }: ApiOptions = {},
+    { method = 'GET', body, handleUnauthorized = true }: ApiOptions = {},
 ): Promise<T> {
     const res = await fetch(path, {
         method,
@@ -36,13 +37,14 @@ export async function api<T = any>(
         body: body ? JSON.stringify(body) : undefined,
     });
 
-    if (res.status === 401) {
+    const data = await res.json().catch(() => ({}));
+
+    if (res.status === 401 && handleUnauthorized) {
         clearToken();
         onUnauthorized?.();
         throw new Error('Session expired — please log in again');
     }
 
-    const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error((data as any).error || 'Request failed');
     return data as T;
 }
@@ -121,13 +123,11 @@ export async function clearPlatformConfigField(
     return config;
 }
 
-export async function startPlatformOAuth(platform: string): Promise<{
-    authUrl: string;
-    redirectUri: string;
+export async function createLocalPublisherPairing(): Promise<{
+    code: string;
+    expiresAt: string;
 }> {
-    return api(`/api/platform-connections/${platform}/oauth/start`, {
-        method: 'POST',
-    });
+    return api('/api/local-publishers/pairing', { method: 'POST' });
 }
 
 export async function startBrowserSession(

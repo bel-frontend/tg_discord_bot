@@ -137,6 +137,34 @@ export interface BrowserSessionDoc {
     updatedAt: Date;
 }
 
+export interface LocalPublisherAgentDoc {
+    _id?: ObjectId;
+    accountId: string;
+    name: string;
+    tokenHash: string;
+    status: 'active' | 'revoked';
+    platforms: string[];
+    lastSeenAt?: Date;
+    createdAt: Date;
+    updatedAt: Date;
+}
+
+export interface LocalPublisherJobDoc {
+    _id?: ObjectId;
+    accountId: string;
+    platform: 'threads' | 'x';
+    operation: 'publish' | 'delete';
+    payload: Record<string, unknown>;
+    status: 'queued' | 'leased' | 'completed' | 'failed';
+    agentId?: string;
+    leaseTokenHash?: string;
+    leaseExpiresAt?: Date;
+    result?: Record<string, unknown>;
+    error?: string;
+    createdAt: Date;
+    updatedAt: Date;
+}
+
 export interface PublicationTargetDoc {
     platform: string;
     channelId: string;
@@ -182,6 +210,8 @@ let uploadsColl: Collection<UploadDoc> | null = null;
 let channelResourcesColl: Collection<ChannelResourceDoc> | null = null;
 let platformConfigsColl: Collection<PlatformConfigDoc> | null = null;
 let browserSessionsColl: Collection<BrowserSessionDoc> | null = null;
+let localPublisherAgentsColl: Collection<LocalPublisherAgentDoc> | null = null;
+let localPublisherJobsColl: Collection<LocalPublisherJobDoc> | null = null;
 let publicationsColl: Collection<PublicationDoc> | null = null;
 let scheduledPublicationsColl: Collection<ScheduledPublicationDoc> | null = null;
 let accountMembersColl: Collection<AccountMemberDoc> | null = null;
@@ -243,6 +273,10 @@ export async function connect(): Promise<void> {
     platformConfigsColl = db.collection<PlatformConfigDoc>('platformConfigs');
     browserSessionsColl =
         db.collection<BrowserSessionDoc>('browserSessions');
+    localPublisherAgentsColl =
+        db.collection<LocalPublisherAgentDoc>('localPublisherAgents');
+    localPublisherJobsColl =
+        db.collection<LocalPublisherJobDoc>('localPublisherJobs');
     publicationsColl = db.collection<PublicationDoc>('publications');
     scheduledPublicationsColl =
         db.collection<ScheduledPublicationDoc>('scheduledPublications');
@@ -273,6 +307,14 @@ export async function connect(): Promise<void> {
         { accountId: 1, platform: 1 },
         { unique: true },
     );
+    await localPublisherAgentsColl.createIndex({ tokenHash: 1 }, { unique: true });
+    await localPublisherAgentsColl.createIndex({ accountId: 1, status: 1 });
+    await localPublisherJobsColl.createIndex({
+        accountId: 1,
+        status: 1,
+        createdAt: 1,
+    });
+    await localPublisherJobsColl.createIndex({ leaseExpiresAt: 1 });
     await publicationsColl.createIndex({ userId: 1, draftId: 1, updatedAt: -1 });
     await scheduledPublicationsColl.createIndex({
         status: 1,
@@ -358,6 +400,20 @@ export function browserSessions(): Collection<BrowserSessionDoc> {
         throw new Error('DB not connected — call connect() first');
     }
     return browserSessionsColl;
+}
+
+export function localPublisherAgents(): Collection<LocalPublisherAgentDoc> {
+    if (!localPublisherAgentsColl) {
+        throw new Error('DB not connected — call connect() first');
+    }
+    return localPublisherAgentsColl;
+}
+
+export function localPublisherJobs(): Collection<LocalPublisherJobDoc> {
+    if (!localPublisherJobsColl) {
+        throw new Error('DB not connected — call connect() first');
+    }
+    return localPublisherJobsColl;
 }
 
 export function publications(): Collection<PublicationDoc> {

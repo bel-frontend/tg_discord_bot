@@ -28,7 +28,11 @@ export function Auth({ onAuthenticated }: Props) {
                 mode === 'login' ? '/api/auth/login' : '/api/auth/register';
             const { token, user } = await api<{ token: string; user: User }>(
                 path,
-                { method: 'POST', body: { email, password } },
+                {
+                    method: 'POST',
+                    body: { email, password },
+                    handleUnauthorized: false,
+                },
             );
             setToken(token);
             onAuthenticated(user);

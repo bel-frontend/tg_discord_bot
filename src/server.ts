@@ -54,6 +54,17 @@ import {
 } from './platformConfigs';
 import { json } from './httpResponses';
 import { getUpload, saveUpload } from './uploads';
+import {
+    createPairingCode,
+    heartbeatLocalPublisher,
+    listLocalPublishers,
+    pairLocalPublisher,
+    revokeLocalPublisher,
+} from './localPublisherAgents';
+import {
+    claimLocalPublisherJob,
+    completeLocalPublisherJob,
+} from './localPublisherJobs';
 import { validateMarkdown, previewContent } from './validation';
 import { parsePublishRequest, executePublish } from './publishRequest';
 import {
@@ -73,7 +84,6 @@ import {
     attachPlatformLiveView,
     detachPlatformLiveView,
     handleAuthenticatedPlatformConnectionRoute,
-    handlePublicPlatformConnectionRoute,
     handleLiveViewUpgrade,
     handlePlatformLiveViewMessage,
     liveViewMatch,
@@ -128,13 +138,65 @@ export async function handleApi(req: Request, url: URL): Promise<Response> {
     const path = url.pathname;
     const method = req.method;
 
-    const publicPlatformConnectionResponse =
-        await handlePublicPlatformConnectionRoute(req, url);
-    if (publicPlatformConnectionResponse) {
-        return publicPlatformConnectionResponse;
+    // --- Public auth routes ---
+    if (path === '/api/local-publishers/pair' && method === 'POST') {
+        const body = await req.json().catch(() => ({}));
+        try {
+            return json(await pairLocalPublisher(body), 201);
+        } catch (error: unknown) {
+            return json(
+                {
+                    error:
+                        error instanceof Error
+                            ? error.message
+                            : 'Pairing failed',
+                },
+                400,
+            );
+        }
     }
 
-    // --- Public auth routes ---
+    if (path === '/api/local-publishers/heartbeat' && method === 'POST') {
+        const body = await req.json().catch(() => ({}));
+        try {
+            return json(
+                await heartbeatLocalPublisher(
+                    req.headers.get('x-local-publisher-token') || '',
+                    body.platforms,
+                ),
+            );
+        } catch {
+            return json({ error: 'Local publisher authentication failed' }, 401);
+        }
+    }
+
+    if (path === '/api/local-publishers/jobs/claim' && method === 'POST') {
+        try {
+            return json({
+                job: await claimLocalPublisherJob(
+                    req.headers.get('x-local-publisher-token') || '',
+                ),
+            });
+        } catch {
+            return json({ error: 'Local publisher authentication failed' }, 401);
+        }
+    }
+
+    const localJobCompleteMatch = path.match(
+        /^\/api\/local-publishers\/jobs\/([^/]+)\/complete$/,
+    );
+    if (localJobCompleteMatch && method === 'POST') {
+        const body = await req.json().catch(() => ({}));
+        const completed = await completeLocalPublisherJob(
+            req.headers.get('x-local-publisher-token') || '',
+            localJobCompleteMatch[1],
+            body,
+        );
+        return completed
+            ? json({ ok: true })
+            : json({ error: 'Job lease is invalid or expired' }, 409);
+    }
+
     if (path === '/api/auth/register' && method === 'POST') {
         const body = await req.json().catch(() => ({}));
         const result = await registerUser(body.email, body.password);
@@ -330,6 +392,29 @@ export async function handleApi(req: Request, url: URL): Promise<Response> {
 
     if (path === '/api/platform-configs' && method === 'GET') {
         return json({ configs: await listPlatformConfigs(actor.accountId) });
+    }
+
+    if (path === '/api/local-publishers' && method === 'GET') {
+        return json({ agents: await listLocalPublishers(actor.accountId) });
+    }
+
+    if (path === '/api/local-publishers/pairing' && method === 'POST') {
+        assertPermission(actor, 'canManageChannels');
+        return json(createPairingCode(actor.accountId), 201);
+    }
+
+    const localPublisherMatch = path.match(
+        /^\/api\/local-publishers\/([^/]+)$/,
+    );
+    if (localPublisherMatch && method === 'DELETE') {
+        assertPermission(actor, 'canManageChannels');
+        const revoked = await revokeLocalPublisher(
+            actor.accountId,
+            localPublisherMatch[1],
+        );
+        return revoked
+            ? json({ ok: true })
+            : json({ error: 'Not found' }, 404);
     }
 
     const authenticatedPlatformConnectionResponse =
