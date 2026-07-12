@@ -3,7 +3,7 @@ import { describe, expect, mock, test } from 'bun:test';
 const publishToTargetsMock = mock(async () => [
     { platform: 'telegram', channelId: 'chan1', ok: true, messageIds: ['1'] },
 ]);
-const createPublicationMock = mock(async (userId: string, input: any) => ({
+const createPublicationMock = mock(async (_userId: string, input: any) => ({
     id: 'pub1',
     ...input,
     targets: [],

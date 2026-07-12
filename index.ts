@@ -20,6 +20,7 @@ await connect();
 //    Platform interface (src/platforms/types.ts) and registering it here.
 register(new TelegramPlatform());
 register(new DiscordPlatform());
+register(new ThreadsPlatform());
 // Browser-session platforms drive a real logged-in browser instead of an official API.
 // If their encryption key is missing on a deployment, keep the rest of the app online
 // and make the disabled feature obvious in logs instead of taking down the server.
@@ -27,7 +28,6 @@ let browserSessionPlatformsEnabled = false;
 try {
     assertBrowserSessionCryptoConfigured();
     register(new XPlatform());
-    register(new ThreadsPlatform());
     browserSessionPlatformsEnabled = true;
 } catch (error: any) {
     console.warn(

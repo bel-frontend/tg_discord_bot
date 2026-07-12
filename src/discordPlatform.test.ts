@@ -39,7 +39,7 @@ function makeFakeChannel(existingIds: string[]) {
         messages: {
             fetch: mock(async (id: string) => messages.get(id)),
         },
-        send: mock(async (payload: { content: string }) => {
+        send: mock(async (_payload: { content: string }) => {
             const id = `new-${nextId++}`;
             const message: FakeMessage = {
                 id,

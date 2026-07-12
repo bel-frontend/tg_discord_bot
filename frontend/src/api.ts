@@ -121,6 +121,15 @@ export async function clearPlatformConfigField(
     return config;
 }
 
+export async function startPlatformOAuth(platform: string): Promise<{
+    authUrl: string;
+    redirectUri: string;
+}> {
+    return api(`/api/platform-connections/${platform}/oauth/start`, {
+        method: 'POST',
+    });
+}
+
 export async function startBrowserSession(
     platform: string,
 ): Promise<{ sessionId: string; wsUrl: string }> {

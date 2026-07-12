@@ -41,11 +41,11 @@ const stubDetector = {
     isLoggedOut: async () => false,
 };
 
-registerBrowserPlatform('threads', {
-    loginUrl: 'https://www.threads.com/login',
+registerBrowserPlatform('browser-test', {
+    loginUrl: 'https://example.test/login',
     detector: stubDetector,
     sessionCookies: {
-        domainSuffixes: ['threads.com', 'threads.net', 'instagram.com'],
+        domainSuffixes: ['example.test'],
         names: ['sessionid'],
     },
 });
@@ -56,8 +56,8 @@ registerBrowserPlatform('nochecks', {
 
 const FUTURE = Date.now() / 1000 + 3600;
 const PAST = Date.now() / 1000 - 3600;
-const THREADS_CHECK = {
-    domainSuffixes: ['threads.com', 'threads.net', 'instagram.com'],
+const COOKIE_CHECK = {
+    domainSuffixes: ['example.test', 'accounts.example.test'],
     names: ['sessionid'],
 };
 
@@ -65,7 +65,7 @@ function sessionCookie(overrides: Record<string, unknown> = {}) {
     return {
         name: 'sessionid',
         value: 'abc123',
-        domain: '.threads.net',
+        domain: '.example.test',
         expires: FUTURE,
         ...overrides,
     };
@@ -76,12 +76,16 @@ describe('validateStorageState', () => {
         const state = validateStorageState(
             {
                 cookies: [
-                    { name: 'csrftoken', value: 'x', domain: '.instagram.com' },
+                    {
+                        name: 'csrftoken',
+                        value: 'x',
+                        domain: '.accounts.example.test',
+                    },
                     sessionCookie(),
                 ],
-                origins: [{ origin: 'https://www.threads.net', localStorage: [] }],
+                origins: [{ origin: 'https://example.test', localStorage: [] }],
             },
-            THREADS_CHECK,
+            COOKIE_CHECK,
         );
         expect(state.cookies).toHaveLength(2);
     });
@@ -90,7 +94,7 @@ describe('validateStorageState', () => {
         expect(() =>
             validateStorageState(
                 { cookies: [sessionCookie({ expires: -1 })], origins: [] },
-                THREADS_CHECK,
+                COOKIE_CHECK,
             ),
         ).not.toThrow();
     });
@@ -120,10 +124,16 @@ describe('validateStorageState', () => {
         expect(() =>
             validateStorageState(
                 {
-                    cookies: [{ name: 'csrftoken', value: 'x', domain: '.threads.net' }],
+                    cookies: [
+                        {
+                            name: 'csrftoken',
+                            value: 'x',
+                            domain: '.example.test',
+                        },
+                    ],
                     origins: [],
                 },
-                THREADS_CHECK,
+                COOKIE_CHECK,
             ),
         ).toThrow(/session cookie/);
     });
@@ -135,7 +145,10 @@ describe('validateStorageState', () => {
             sessionCookie({ value: '' }),
         ]) {
             expect(() =>
-                validateStorageState({ cookies: [cookie], origins: [] }, THREADS_CHECK),
+                validateStorageState(
+                    { cookies: [cookie], origins: [] },
+                    COOKIE_CHECK,
+                ),
             ).toThrow(InvalidSessionStateError);
         }
     });
@@ -156,16 +169,19 @@ describe('importBrowserSessionState', () => {
 
     test('persists a valid state and marks the session connected', async () => {
         stored = null;
-        await importBrowserSessionState('acct1', 'threads', {
+        await importBrowserSessionState('acct1', 'browser-test', {
             cookies: [sessionCookie()],
             origins: [],
         });
 
-        const status = await getBrowserSessionStatus('acct1', 'threads');
+        const status = await getBrowserSessionStatus('acct1', 'browser-test');
         expect(status?.status).toBe('connected');
         expect(status?.lastVerifiedAt).toBeInstanceOf(Date);
 
-        const roundTripped = await getBrowserSessionState('acct1', 'threads');
+        const roundTripped = await getBrowserSessionState(
+            'acct1',
+            'browser-test',
+        );
         expect(JSON.parse(roundTripped!).cookies[0].name).toBe('sessionid');
     });
 

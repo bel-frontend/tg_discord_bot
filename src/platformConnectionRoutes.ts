@@ -1,6 +1,11 @@
 import { AuthError, requireAuth, type ActorContext } from './auth';
 import { assertPermission } from './permissions';
 import {
+    completeThreadsOAuth,
+    createThreadsOAuthStart,
+    threadsDataDeletionResponse,
+} from './threadsOAuth';
+import {
     attachLiveView,
     closeSession,
     detachLiveView,
@@ -12,13 +17,66 @@ import {
     startConnectSession,
     type ClientFrame,
 } from './browserSessions';
-import { json } from './httpResponses';
+import { empty, escapeHtml, html, json } from './httpResponses';
 
 export interface LiveViewSocketData {
     sessionId: string;
 }
 
 export const liveViewMatch = /^\/api\/browser-sessions\/([^/]+)\/live$/;
+
+export async function handlePublicPlatformConnectionRoute(
+    req: Request,
+    url: URL,
+): Promise<Response | undefined> {
+    const path = url.pathname;
+    const method = req.method;
+    const threadsPublicPaths = new Set([
+        '/api/threads/oauth/callback',
+        '/api/threads/deauthorize',
+        '/api/threads/data-deletion',
+    ]);
+    if (method === 'HEAD' && threadsPublicPaths.has(path)) return empty();
+
+    if (path === '/api/threads/oauth/callback' && method === 'GET') {
+        try {
+            const profile = await completeThreadsOAuth(url);
+            const label = profile.username || profile.threadsUserId;
+            return html(
+                '<!doctype html><meta charset="utf-8">' +
+                    '<title>Threads connected</title>' +
+                    '<body style="font-family:sans-serif;padding:40px;' +
+                    'max-width:640px;margin:auto">' +
+                    '<h1>Threads connected</h1>' +
+                    `<p>Connected profile: <strong>${escapeHtml(label)}</strong>.</p>` +
+                    '<p><a href="/settings?platform=threads">Return to settings</a></p>' +
+                    '</body>',
+            );
+        } catch (error: unknown) {
+            const message =
+                error instanceof Error ? error.message : 'Threads OAuth failed';
+            return html(
+                '<!doctype html><meta charset="utf-8">' +
+                    '<title>Threads connection failed</title>' +
+                    '<body style="font-family:sans-serif;padding:40px;' +
+                    'max-width:640px;margin:auto">' +
+                    '<h1>Threads connection failed</h1>' +
+                    `<p>${escapeHtml(message)}</p>` +
+                    '<p><a href="/settings?platform=threads">Return to settings</a></p>' +
+                    '</body>',
+                400,
+            );
+        }
+    }
+
+    if (path === '/api/threads/deauthorize' && method === 'POST') {
+        return json({ ok: true });
+    }
+    if (path === '/api/threads/data-deletion' && method === 'POST') {
+        return json(threadsDataDeletionResponse(url.origin));
+    }
+    return undefined;
+}
 
 export async function handleAuthenticatedPlatformConnectionRoute(
     actor: ActorContext,
@@ -27,6 +85,34 @@ export async function handleAuthenticatedPlatformConnectionRoute(
 ): Promise<Response | undefined> {
     const path = url.pathname;
     const method = req.method;
+
+    const oauthStartMatch = path.match(
+        /^\/api\/platform-connections\/([^/]+)\/oauth\/start$/,
+    );
+    if (oauthStartMatch && method === 'POST') {
+        try {
+            assertPermission(actor, 'canManageChannels');
+            if (oauthStartMatch[1] !== 'threads') {
+                return json({ error: 'OAuth is not supported for this platform' }, 400);
+            }
+            return json(
+                await createThreadsOAuthStart(actor.accountId, url.origin),
+            );
+        } catch (error: unknown) {
+            if (error instanceof AuthError) {
+                return json({ error: error.message }, error.status);
+            }
+            return json(
+                {
+                    error:
+                        error instanceof Error
+                            ? error.message
+                            : 'Failed to start Threads OAuth',
+                },
+                400,
+            );
+        }
+    }
 
     const browserSessionStartMatch = path.match(
         /^\/api\/browser-sessions\/([^/]+)\/start$/,

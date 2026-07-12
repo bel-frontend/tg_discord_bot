@@ -9,6 +9,7 @@ import {
     fetchPlatformConfigs,
     getBrowserSessionStatus,
     savePlatformConfig,
+    startPlatformOAuth,
 } from '../api';
 import { useToast } from '../toast';
 import { usePlatforms } from '../hooks/usePlatforms';
@@ -191,6 +192,9 @@ export function SettingsPage({ initialPlatformId }: SettingsPageProps = {}) {
     );
     const [saving, setSaving] = useState<string | null>(null);
     const [clearing, setClearing] = useState<string | null>(null);
+    const [connectingPlatform, setConnectingPlatform] = useState<string | null>(
+        null,
+    );
     const [editingFields, setEditingFields] = useState<Set<string>>(
         new Set(),
     );
@@ -339,6 +343,17 @@ export function SettingsPage({ initialPlatformId }: SettingsPageProps = {}) {
             }));
         } catch (err: any) {
             toast(err.message, 'error');
+        }
+    }
+
+    async function connectOAuthPlatform(platform: string) {
+        setConnectingPlatform(platform);
+        try {
+            const { authUrl } = await startPlatformOAuth(platform);
+            window.location.assign(authUrl);
+        } catch (err: any) {
+            toast(err.message, 'error');
+            setConnectingPlatform(null);
         }
     }
 
@@ -570,6 +585,26 @@ export function SettingsPage({ initialPlatformId }: SettingsPageProps = {}) {
                                                         Save{' '}
                                                         {activePlatform.name}
                                                     </button>
+                                                    {activePlatform.setup
+                                                        .connect ===
+                                                        'oauth' && (
+                                                        <button
+                                                            type="button"
+                                                            className="btn ghost"
+                                                            disabled={
+                                                                connectingPlatform ===
+                                                                activePlatform.id
+                                                            }
+                                                            onClick={() =>
+                                                                connectOAuthPlatform(
+                                                                    activePlatform.id,
+                                                                )
+                                                            }
+                                                        >
+                                                            Connect{' '}
+                                                            {activePlatform.name}
+                                                        </button>
+                                                    )}
                                                 </div>
                                                 </fieldset>
                                             </form>

@@ -69,7 +69,7 @@ export interface PlatformSetup {
     summary: string;
     configFields?: PlatformConfigField[];
     // How the Settings page's connect button behaves: 'oauth' redirects to a consent
-    // screen (e.g. Threads); 'browser' opens a live browser-session modal (e.g. X, Reddit).
+    // screen (e.g. Threads); 'browser' opens a live browser-session modal (e.g. X).
     // Omitted entirely for platforms with no connect flow (Telegram, Discord).
     connect?: 'oauth' | 'browser';
     // Steps/notes may embed a link as "[label](https://...)"; the UI renders it inline

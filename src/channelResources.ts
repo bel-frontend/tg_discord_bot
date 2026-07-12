@@ -63,12 +63,6 @@ export async function createChannelResource(
 ): Promise<ChannelResource> {
     const now = new Date();
     const sanitized = sanitize(input);
-    const doc: ChannelResourceDoc = {
-        ...sanitized,
-        createdBy: accountId,
-        createdAt: now,
-        updatedAt: now,
-    };
 
     try {
         const existing = await channelResources().findOneAndUpdate(

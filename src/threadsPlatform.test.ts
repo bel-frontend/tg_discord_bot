@@ -1,426 +1,186 @@
-import { beforeEach, describe, expect, mock, test } from 'bun:test';
-import * as browserSessionsTestDouble from './browserSessions/testSupport';
-import {
-    browserSessionsTestState,
-    markPublished,
-    markReconnectRequired,
-    TestReconnectRequiredError,
-} from './browserSessions/testSupport';
+import { afterEach, describe, expect, test } from 'bun:test';
+import { ThreadsPlatform } from './platforms/threads';
 
-// Mocked via the shared test double (see its header comment) rather than a local factory,
-// since only one `mock.module('./browserSessions', ...)` registration actually takes effect
-// process-wide — this file controls behavior by mutating `browserSessionsTestState` instead.
-mock.module('./browserSessions', () => browserSessionsTestDouble);
+const originalFetch = globalThis.fetch;
 
-const { ThreadsPlatform } = await import('./platforms/threads');
-
-interface FakePageState {
-    gotoUrls: string[];
-    currentUrl: string;
-    passwordInputCount: number;
-    clickedSelectors: string[];
-    filledText: string[];
-    uploadedFiles: any[];
-    postedHref: string | null;
-    profileHref: string | null;
-    throwOnClick?: Set<string>;
+function mockFetch(
+    fn: (
+        url: URL | RequestInfo,
+        init?: RequestInit,
+    ) => Response | Promise<Response>,
+): void {
+    globalThis.fetch = Object.assign(fn, {
+        preconnect: originalFetch.preconnect,
+    }) as typeof fetch;
 }
 
-function makeLocator(selector: string, state: FakePageState) {
-    const locatorActions = {
-        click: mock(async () => {
-            state.clickedSelectors.push(selector);
-            if (state.throwOnClick?.has(selector)) {
-                throw new Error(`click failed: ${selector}`);
-            }
-        }),
-        fill: mock(async (text: string) => {
-            state.filledText.push(text);
-        }),
-        setInputFiles: mock(async (files: any) => {
-            state.uploadedFiles.push(files);
-        }),
-        getAttribute: mock(async () =>
-            selector.includes('has-text("Profile")') ||
-            selector.includes('has-text("Profil")') ||
-            selector.includes('has-text("Профиль")') ||
-            selector.includes('has-text("Профіль")')
-                ? state.profileHref
-                : state.postedHref,
-        ),
-        waitFor: mock(async () => {}),
-    };
-    return {
-        count: mock(async () => state.passwordInputCount),
-        first: () => locatorActions,
-        nth: () => locatorActions,
-    };
-}
-
-function fakePage(state: FakePageState) {
-    return {
-        goto: mock(async (url: string) => {
-            state.gotoUrls.push(url);
-        }),
-        url: () => state.currentUrl,
-        locator: mock((selector: string) => makeLocator(selector, state)),
-        waitForSelector: mock(async () => {}),
-        evaluate: mock(async (_fn: unknown, args?: any) => {
-            if (args?.root) {
-                state.clickedSelectors.push(args.root);
-                return true;
-            }
-            if (typeof args === 'string') {
-                const profilePath = args;
-                return state.postedHref?.startsWith(`${profilePath}/post/`)
-                    ? [state.postedHref]
-                    : [];
-            }
-            return state.gotoUrls.at(-1)?.includes('/t/') ? 0 : state.profileHref;
-        }),
-    };
-}
-
-function newState(overrides: Partial<FakePageState> = {}): FakePageState {
-    return {
-        gotoUrls: [],
-        currentUrl: 'https://www.threads.net/',
-        passwordInputCount: 0,
-        clickedSelectors: [],
-        filledText: [],
-        uploadedFiles: [],
-        postedHref: '/@someone/post/111',
-        profileHref: '/@someone',
-        ...overrides,
-    };
-}
-
-function nextTick(): Promise<void> {
-    return new Promise((resolve) => setTimeout(resolve, 0));
-}
-
-beforeEach(() => {
-    browserSessionsTestState.sessionStatus = null;
-    process.env.THREADS_ACTION_DELAY_MS = '0';
-    process.env.BROWSER_PLATFORM_OPERATION_COOLDOWN_MS = '0';
-    markPublished.mockClear();
-    markReconnectRequired.mockClear();
+afterEach(() => {
+    globalThis.fetch = originalFetch;
 });
 
-describe('ThreadsPlatform', () => {
-    test('publishes a short post through the compose flow and captures the posted id', async () => {
-        const state = newState();
-        browserSessionsTestState.nextAcquire = async () => ({
-            page: fakePage(state),
-            release: mock(async () => {}),
-        });
-
+describe('ThreadsPlatform official API adapter', () => {
+    test('exposes OAuth setup instead of browser connection setup', () => {
         const platform = new ThreadsPlatform();
-        const [result] = await platform.publish(
-            ['me'],
-            { markdown: 'Hello world' },
-            { accountId: 'acct1' },
-        );
-
-        expect(result).toEqual({
-            platform: 'threads',
-            channelId: 'me',
-            ok: true,
-            messageIds: ['111'],
-            link: 'https://www.threads.com/t/111',
-        });
-        expect(state.filledText).toEqual([]);
-        expect(state.gotoUrls).toEqual([
-            'https://www.threads.com/intent/post?text=Hello%20world',
+        expect(platform.setup.connect).toBe('oauth');
+        expect(platform.setup.configFields.map((field) => field.name)).toEqual([
+            'THREADS_APP_ID',
+            'THREADS_APP_SECRET',
+            'THREADS_ACCESS_TOKEN',
+            'THREADS_USER_ID',
         ]);
-        expect(markPublished).toHaveBeenCalled();
     });
 
-    test('uploads raw image bytes via the file input instead of rejecting them', async () => {
-        const state = newState();
-        browserSessionsTestState.nextAcquire = async () => ({
-            page: fakePage(state),
-            release: mock(async () => {}),
+    test('publishes text through container and publish endpoints', async () => {
+        const calls: Array<{ url: string; body: URLSearchParams }> = [];
+        mockFetch(async (url, init) => {
+            calls.push({
+                url: String(url),
+                body: init?.body as URLSearchParams,
+            });
+            return Response.json({ id: calls.length === 1 ? 'c1' : 'p1' });
         });
 
-        const platform = new ThreadsPlatform();
-        const [result] = await platform.publish(
-            ['me'],
+        const platform = new ThreadsPlatform(
+            'token',
+            'user-1',
+            'https://threads.test/v1.0',
+        );
+        const results = await platform.publish(['user-1'], {
+            markdown: '**Hello** [site](https://example.com)',
+        });
+
+        expect(results).toEqual([
             {
-                markdown: 'With a photo',
-                images: [
-                    {
-                        data: new Uint8Array([1, 2, 3]),
-                        filename: 'photo.png',
-                        contentType: 'image/png',
-                    },
-                ],
+                platform: 'threads',
+                channelId: 'user-1',
+                ok: true,
+                messageIds: ['p1'],
             },
-            { accountId: 'acct1' },
-        );
-
-        expect(result.ok).toBe(true);
-        expect(state.uploadedFiles).toEqual([
-            [
-                {
-                    name: 'photo.png',
-                    mimeType: 'image/png',
-                    buffer: Buffer.from([1, 2, 3]),
-                },
-            ],
         ]);
+        expect(calls.map((call) => call.url)).toEqual([
+            'https://threads.test/v1.0/user-1/threads',
+            'https://threads.test/v1.0/user-1/threads_publish',
+        ]);
+        expect(calls[0].body.get('media_type')).toBe('TEXT');
+        expect(calls[0].body.get('text')).toBe(
+            'Hello site https://example.com',
+        );
+        expect(calls[1].body.get('creation_id')).toBe('c1');
     });
 
-    test('publishes an image-only post through the compose flow', async () => {
-        const state = newState();
-        browserSessionsTestState.nextAcquire = async () => ({
-            page: fakePage(state),
-            release: mock(async () => {}),
+    test('creates a reply chain for text over 500 characters', async () => {
+        const containers: URLSearchParams[] = [];
+        let published = 0;
+        mockFetch(async (url, init) => {
+            if (String(url).endsWith('/threads_publish')) {
+                published++;
+                return Response.json({ id: `post-${published}` });
+            }
+            containers.push(init?.body as URLSearchParams);
+            return Response.json({ id: `container-${containers.length}` });
         });
 
-        const platform = new ThreadsPlatform();
-        const [result] = await platform.publish(
-            ['me'],
-            {
-                markdown: '',
-                images: [
-                    {
-                        data: new Uint8Array([1, 2, 3]),
-                        filename: 'photo.png',
-                        contentType: 'image/png',
-                    },
-                ],
-            },
-            { accountId: 'acct1' },
+        const platform = new ThreadsPlatform(
+            'token',
+            'user-1',
+            'https://threads.test/v1.0',
         );
-
-        expect(result.ok).toBe(true);
-        expect(result.messageIds).toEqual(['111']);
-        expect(state.gotoUrls).toEqual(['https://www.threads.com/']);
-        expect(state.clickedSelectors).toContain(
-            '[aria-label="Create"], [aria-label="New thread"]',
-        );
-        expect(state.uploadedFiles).toEqual([
-            [
-                {
-                    name: 'photo.png',
-                    mimeType: 'image/png',
-                    buffer: Buffer.from([1, 2, 3]),
-                },
-            ],
-        ]);
-    });
-
-    test('splits a post over the character limit into a threaded chain of replies', async () => {
-        const state = newState({ postedHref: '/@someone/post/1' });
-        let postCount = 0;
-        browserSessionsTestState.nextAcquire = async () => ({
-            page: {
-                ...fakePage(state),
-                waitForSelector: mock(async () => {
-                    postCount++;
-                    state.postedHref = `/@someone/post/${postCount}`;
-                }),
-            },
-            release: mock(async () => {}),
+        const [result] = await platform.publish(['user-1'], {
+            markdown: 'word '.repeat(200).trim(),
         });
-
-        const platform = new ThreadsPlatform();
-        const longText = 'word '.repeat(150).trim();
-        const [result] = await platform.publish(
-            ['me'],
-            { markdown: longText },
-            { accountId: 'acct1' },
-        );
 
         expect(result.ok).toBe(true);
         expect(result.messageIds!.length).toBeGreaterThan(1);
-        // Each publish step confirms the id from the user's profile before the next reply.
-        expect(
-            state.gotoUrls[0].startsWith(
-                'https://www.threads.com/intent/post?text=',
-            ),
-        ).toBe(true);
-        expect(state.gotoUrls).toContain(
-            `https://www.threads.com/t/${result.messageIds![0]}`,
-        );
-    });
-
-    test('reports a reconnect-required error when there is no connected session', async () => {
-        browserSessionsTestState.nextAcquire = async () => {
-            throw new TestReconnectRequiredError(
-                'threads session expired — reconnect in Settings',
+        expect(containers[0].get('reply_to_id')).toBeNull();
+        for (let i = 1; i < containers.length; i++) {
+            expect(containers[i].get('reply_to_id')).toBe(
+                result.messageIds![i - 1],
             );
-        };
-
-        const platform = new ThreadsPlatform();
-        const [result] = await platform.publish(
-            ['me'],
-            { markdown: 'hi' },
-            { accountId: 'acct1' },
-        );
-
-        expect(result.ok).toBe(false);
-        expect(result.error).toContain('reconnect');
-        expect(markReconnectRequired).not.toHaveBeenCalled();
+        }
     });
 
-    test('maps a mid-publish logout to a reconnect-required failure', async () => {
-        // Simulates getting bounced back to the login page mid-publish (session expired).
-        const state = newState({
-            currentUrl: 'https://www.threads.net/login',
+    test('passes a public image URL to the first container', async () => {
+        const bodies: URLSearchParams[] = [];
+        mockFetch(async (_url, init) => {
+            bodies.push(init?.body as URLSearchParams);
+            return Response.json({ id: bodies.length === 1 ? 'c1' : 'p1' });
         });
-        browserSessionsTestState.nextAcquire = async () => ({
-            page: {
-                ...fakePage(state),
-                waitForSelector: mock(async () => {
-                    throw new Error('timed out waiting for post confirmation');
-                }),
-            },
-            release: mock(async () => {}),
-        });
-
-        const platform = new ThreadsPlatform();
-        const [result] = await platform.publish(
-            ['me'],
-            { markdown: 'hi' },
-            { accountId: 'acct1' },
+        const platform = new ThreadsPlatform(
+            'token',
+            'user-1',
+            'https://threads.test/v1.0',
         );
 
-        expect(result.ok).toBe(false);
-        expect(result.error).toContain('reconnect');
-        expect(markReconnectRequired).toHaveBeenCalled();
+        await platform.publish(['user-1'], {
+            markdown: 'Caption',
+            imageUrls: ['https://cdn.example/photo.jpg'],
+        });
+
+        expect(bodies[0].get('media_type')).toBe('IMAGE');
+        expect(bodies[0].get('image_url')).toBe(
+            'https://cdn.example/photo.jpg',
+        );
     });
 
-    test('rejects an empty post with no text and no images', async () => {
-        const platform = new ThreadsPlatform();
+    test('reports Graph API errors without hiding the platform message', async () => {
+        mockFetch(async () =>
+            Response.json(
+                { error: { message: 'Invalid OAuth access token' } },
+                { status: 401 },
+            ),
+        );
+        const platform = new ThreadsPlatform(
+            'token',
+            'user-1',
+            'https://threads.test/v1.0',
+        );
+
+        const [result] = await platform.publish(['user-1'], {
+            markdown: 'Hello',
+        });
+
+        expect(result.ok).toBe(false);
+        expect(result.error).toBe('Invalid OAuth access token');
+    });
+
+    test('deletes a thread from its last reply to its first post', async () => {
+        const calls: Array<{ url: string; method?: string }> = [];
+        mockFetch(async (url, init) => {
+            calls.push({ url: String(url), method: init?.method });
+            return Response.json({ success: true });
+        });
+        const platform = new ThreadsPlatform(
+            'token',
+            'user-1',
+            'https://threads.test/v1.0',
+        );
+
+        const [result] = await platform.delete([
+            { channelId: 'user-1', messageIds: ['p1', 'p2'] },
+        ]);
+
+        expect(result.ok).toBe(true);
+        expect(calls).toEqual([
+            { url: 'https://threads.test/v1.0/p2', method: 'DELETE' },
+            { url: 'https://threads.test/v1.0/p1', method: 'DELETE' },
+        ]);
+    });
+
+    test('rejects local uploads because Meta needs a public URL', async () => {
+        const platform = new ThreadsPlatform('token', 'user-1');
         await expect(
-            platform.publish(['me'], { markdown: '' }, { accountId: 'acct1' }),
-        ).rejects.toThrow('Write something or add an image first');
-    });
-
-    test('deletes stored message ids from newest reply to root post', async () => {
-        const state = newState();
-        browserSessionsTestState.nextAcquire = async () => ({
-            page: fakePage(state),
-            release: mock(async () => {}),
-        });
-
-        const platform = new ThreadsPlatform();
-        const [result] = await platform.delete!(
-            [{ channelId: 'me', messageIds: ['111', '222'] }],
-            { accountId: 'acct1' },
+            platform.publish(['user-1'], {
+                markdown: 'caption',
+                images: [
+                    {
+                        data: new Uint8Array([1]),
+                        filename: 'photo.png',
+                        contentType: 'image/png',
+                    },
+                ],
+            }),
+        ).rejects.toThrow(
+            'Threads requires public image URLs; uploaded files are not supported yet',
         );
-
-        expect(result).toEqual({
-            platform: 'threads',
-            channelId: 'me',
-            ok: true,
-            messageIds: ['111', '222'],
-        });
-        expect(state.gotoUrls).toEqual([
-            'https://www.threads.com/t/222',
-            'https://www.threads.com/t/111',
-        ]);
-        expect(state.clickedSelectors).toContain(
-            'div[role="button"][aria-haspopup="menu"]',
-        );
-        expect(state.clickedSelectors).toContain(
-            '[role="dialog"] div[role="button"]',
-        );
-        expect(markPublished).not.toHaveBeenCalled();
-    });
-
-    test('update deletes the old thread then republishes fresh content', async () => {
-        const state = newState({ postedHref: '/@someone/post/999' });
-        browserSessionsTestState.nextAcquire = async () => ({
-            page: fakePage(state),
-            release: mock(async () => {}),
-        });
-
-        const platform = new ThreadsPlatform();
-        const [result] = await platform.update!(
-            [{ channelId: 'me', messageIds: ['111', '222'] }],
-            { markdown: 'Updated text' },
-            { accountId: 'acct1' },
-        );
-
-        expect(result).toEqual({
-            platform: 'threads',
-            channelId: 'me',
-            ok: true,
-            messageIds: ['999'],
-            link: 'https://www.threads.com/t/999',
-        });
-        // Old thread is deleted newest-first, then the fresh content is posted.
-        expect(state.gotoUrls).toEqual([
-            'https://www.threads.com/t/222',
-            'https://www.threads.com/t/111',
-            'https://www.threads.com/intent/post?text=Updated%20text',
-        ]);
-        expect(state.clickedSelectors).toContain(
-            'div[role="button"][aria-haspopup="menu"]',
-        );
-        expect(state.clickedSelectors).toContain(
-            '[role="dialog"] div[role="button"]',
-        );
-        expect(state.filledText).toEqual([]);
-        expect(markPublished).toHaveBeenCalled();
-    });
-
-    test('serializes browser operations for the same account', async () => {
-        const events: string[] = [];
-        let releaseFirst!: () => void;
-
-        browserSessionsTestState.nextAcquire = async () => {
-            const index = events.filter((event) => event === 'acquire').length + 1;
-            events.push('acquire');
-            if (index === 1) {
-                await new Promise<void>((resolve) => {
-                    releaseFirst = resolve;
-                });
-            }
-            return {
-                page: fakePage(newState({ postedHref: `/@someone/post/${index}` })),
-                release: mock(async () => {
-                    events.push(`release-${index}`);
-                }),
-            };
-        };
-
-        const platform = new ThreadsPlatform();
-        const first = platform.publish(
-            ['me'],
-            { markdown: 'first' },
-            { accountId: 'acct1' },
-        );
-        await nextTick();
-        const second = platform.publish(
-            ['me'],
-            { markdown: 'second' },
-            { accountId: 'acct1' },
-        );
-
-        await nextTick();
-        expect(events).toEqual(['acquire']);
-
-        releaseFirst();
-        const [firstResult, secondResult] = await Promise.all([first, second]);
-
-        expect(firstResult[0].ok).toBe(true);
-        expect(secondResult[0].ok).toBe(true);
-        expect(events).toEqual(['acquire', 'release-1', 'acquire', 'release-2']);
-    });
-
-    test('listChannels returns the connected account only when a session is connected', async () => {
-        const platform = new ThreadsPlatform();
-
-        browserSessionsTestState.sessionStatus = null;
-        expect(await platform.listChannels({ accountId: 'acct1' })).toEqual([]);
-
-        browserSessionsTestState.sessionStatus = { status: 'connected' };
-        expect(await platform.listChannels({ accountId: 'acct1' })).toEqual([
-            { id: 'me', name: 'Connected Threads account' },
-        ]);
     });
 });

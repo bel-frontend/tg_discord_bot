@@ -33,7 +33,6 @@ const MORE_BUTTON_SELECTORS = [
     '[role="button"][aria-label="Еще"]',
     '[role="button"][aria-label="Яшчэ"]',
 ];
-const MORE_BUTTON_SELECTOR = MORE_BUTTON_SELECTORS.join(', ');
 const DELETE_MENU_ITEM_SELECTOR =
     '[role="menuitem"]:has-text("Delete"), ' +
     '[role="menuitem"]:has-text("Выдаліць"), ' +

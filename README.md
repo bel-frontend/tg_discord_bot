@@ -41,7 +41,7 @@ src/server.ts ── Bun.serve router
          ├─ platforms/telegram.ts  (Markdown → Telegram HTML)
          ├─ platforms/discord.ts   (Markdown → native, live channel discovery)
          ├─ platforms/x.ts         (browser automation — no official API)
-         └─ platforms/threads.ts   (browser automation, mirrors platforms/x.ts)
+         └─ platforms/threads.ts   (official Threads Graph API)
 ```
 
 **Adding a new platform:** implement the `Platform` interface in
@@ -84,10 +84,10 @@ server-side environment variables or in the app's authenticated Settings/Resourc
 Without `RESEND_API_KEY` set, invite and verification emails are skipped (logged to the console
 instead of sent) — useful for local development.
 
-Configure Telegram and Discord credentials in the authenticated Settings page; these settings are
-stored in MongoDB per user, not in `.env`. X and Threads have no developer API credentials to
-configure — instead, click Connect on their Settings tab to log in through a real, live browser
-session (see `BROWSER_SESSION_ENC_KEY` and the other `BROWSER_*`/`X_*`/`THREADS_*` variables above).
+Configure Telegram, Discord, and Threads credentials in the authenticated Settings page; these
+settings are stored in MongoDB per workspace, not in `.env`. Threads connects through the official
+Meta OAuth flow. X still uses a real browser session configured from its Settings tab (see
+`BROWSER_SESSION_ENC_KEY` and the other `BROWSER_*`/`X_*` variables in `.env.example`).
 
 Add the channels, groups, servers, or profiles you want to publish to on the authenticated
 Resources page. They are stored in MongoDB per user. Telegram bots cannot enumerate the channels
@@ -114,9 +114,41 @@ requires the account owner's email to be verified first (see email verification 
 invite flow can't be used to spam arbitrary addresses. A person is either the owner of their own
 workspace or a member of exactly one other workspace — not both.
 
-In the app Settings page, save the Threads API app id and app secret, then click
-`Connect Threads`. The callback exchanges the OAuth code for a long-lived token and saves the
-Threads user id automatically.
+### Connect Threads through the official API
+
+1. Set `PUBLIC_BASE_URL` to Composer's externally reachable HTTPS origin, for example
+   `https://composer.example.com`, and restart Composer.
+2. In [Meta for Developers](https://developers.facebook.com/apps/), create or select an app and
+   add the Threads API use case.
+3. In the app's Threads API settings, configure these exact URLs, replacing the example domain:
+
+   ```text
+   OAuth Redirect Callback URL:
+   https://composer.example.com/api/threads/oauth/callback
+
+   Deauthorize Callback URL:
+   https://composer.example.com/api/threads/deauthorize
+
+   Data Deletion Request URL:
+   https://composer.example.com/api/threads/data-deletion
+   ```
+
+4. Enable `threads_basic` and `threads_content_publish`. While the Meta app is in development
+   mode, add the posting Threads account as an app role/tester and accept the invitation. To
+   connect unrelated production accounts, complete any Meta App Review requirements and switch
+   the app to Live mode.
+5. In Composer, open **Settings → Threads**, enter the Threads App ID and Threads App Secret, and
+   click **Save Threads**.
+6. Click **Connect Threads**, approve access, and follow the link back to Settings. The Access
+   token should show as configured and the Threads user id should be filled automatically.
+
+Composer exchanges the authorization code for a short-lived token, then exchanges that for a
+long-lived token and reads the connected profile through `/me`. Meta currently issues long-lived
+tokens for approximately 60 days. Automatic refresh is not implemented yet, so reconnect Threads
+before the token expires.
+
+The Threads API requires media to be available at a public URL that Meta can fetch. Remote image
+URLs work; files uploaded only to Composer are not attached to Threads yet.
 
 ---
 

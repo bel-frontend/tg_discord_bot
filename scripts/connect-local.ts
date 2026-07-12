@@ -4,7 +4,7 @@
 // server can't run a headed browser (no X server / Xvfb).
 //
 // Usage:
-//   bun scripts/connect-local.ts <threads|x> [--server URL] [--token JWT]
+//   bun scripts/connect-local.ts x [--server URL] [--token JWT]
 //
 // Env fallbacks:
 //   COMPOSER_SERVER_URL      server base URL (default http://localhost:3000)
@@ -15,7 +15,6 @@
 //   CHROME_EXECUTABLE_PATH   explicit Chrome binary (default: installed Google Chrome)
 
 import { chromium } from 'playwright-core';
-import { threadsLoginDetector } from '../src/platforms/threads/loginDetector';
 import { xLoginDetector } from '../src/platforms/x/loginDetector';
 import type { LoginDetector } from '../src/browserSessions/types';
 
@@ -23,10 +22,6 @@ const DEFAULT_TIMEOUT_MS = 10 * 60_000;
 const POLL_MS = 1000;
 
 const PLATFORMS: Record<string, { loginUrl: string; detector: LoginDetector }> = {
-    threads: {
-        loginUrl: 'https://www.threads.com/login',
-        detector: threadsLoginDetector,
-    },
     x: {
         loginUrl: 'https://x.com/login',
         detector: xLoginDetector,

@@ -73,6 +73,7 @@ import {
     attachPlatformLiveView,
     detachPlatformLiveView,
     handleAuthenticatedPlatformConnectionRoute,
+    handlePublicPlatformConnectionRoute,
     handleLiveViewUpgrade,
     handlePlatformLiveViewMessage,
     liveViewMatch,
@@ -126,6 +127,12 @@ async function buildResourceIdMap(accountId: string): Promise<Map<string, string
 export async function handleApi(req: Request, url: URL): Promise<Response> {
     const path = url.pathname;
     const method = req.method;
+
+    const publicPlatformConnectionResponse =
+        await handlePublicPlatformConnectionRoute(req, url);
+    if (publicPlatformConnectionResponse) {
+        return publicPlatformConnectionResponse;
+    }
 
     // --- Public auth routes ---
     if (path === '/api/auth/register' && method === 'POST') {
