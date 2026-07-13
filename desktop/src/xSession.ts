@@ -1,6 +1,7 @@
 import type { BrowserWindow } from 'electron';
 import {
     BrowserPublisherSession,
+    humanDelay,
     waitForJavaScript,
 } from './browserPublisherSession';
 
@@ -117,6 +118,7 @@ export async function publishXText(
                 ? `https://x.com/i/status/${replyToId}`
                 : 'https://x.com/compose/post',
         );
+        await humanDelay();
         if (replyToId) {
             await waitForJavaScript<boolean>(
                 window,
@@ -127,6 +129,7 @@ export async function publishXText(
                     return true;
                 })()`,
             );
+            await humanDelay();
         }
 
         await waitForJavaScript<boolean>(
@@ -140,7 +143,9 @@ export async function publishXText(
                 return true;
             })()`,
         );
+        await humanDelay();
         await window.webContents.insertText(text);
+        await humanDelay();
         const knownIds = new Set(await readStatusIds(window));
         watcher = await watchCreatedPostId(window);
         await waitForJavaScript<boolean>(

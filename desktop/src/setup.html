@@ -6,39 +6,98 @@
             name="viewport"
             content="width=device-width,initial-scale=1"
         />
-        <title>Connect Composer</title>
+        <title>Composer environments</title>
         <style>
             :root { color-scheme: dark; font-family: system-ui, sans-serif; }
-            body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #111827; color: #f9fafb; }
-            form { width: min(440px, calc(100vw - 48px)); padding: 32px; border: 1px solid #374151; border-radius: 16px; background: #1f2937; }
-            h1 { margin-top: 0; }
-            p { color: #cbd5e1; }
-            input, button { box-sizing: border-box; width: 100%; padding: 12px; border-radius: 8px; font: inherit; }
-            input { border: 1px solid #4b5563; background: #111827; color: inherit; }
-            button { margin-top: 16px; border: 0; background: #2563eb; color: white; cursor: pointer; }
-            #error { color: #fca5a5; min-height: 20px; }
+            body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #111827; color: #f9fafb; padding: 24px; }
+            main { width: min(480px, calc(100vw - 48px)); }
+            h1 { margin: 0 0 4px; font-size: 20px; }
+            p.hint { color: #9ca3af; margin: 0 0 20px; font-size: 14px; }
+            ul { list-style: none; margin: 0 0 20px; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+            li { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border: 1px solid #374151; border-radius: 10px; background: #1f2937; }
+            li .info { flex: 1; min-width: 0; }
+            li .name { font-weight: 600; }
+            li .name .badge { font-weight: 500; font-size: 11px; color: #34d399; margin-left: 8px; }
+            li .url { font-size: 12px; color: #9ca3af; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+            li button { flex: none; width: auto; padding: 6px 10px; font-size: 12px; border-radius: 6px; border: 1px solid #4b5563; background: #111827; color: inherit; cursor: pointer; }
+            li button.switch { border-color: #2563eb; color: #93c5fd; }
+            li button.remove { border-color: #7f1d1d; color: #fca5a5; }
+            form { padding: 16px; border: 1px solid #374151; border-radius: 10px; background: #1f2937; }
+            form h2 { margin: 0 0 12px; font-size: 14px; color: #d1d5db; }
+            input { box-sizing: border-box; width: 100%; padding: 10px; margin-bottom: 8px; border-radius: 8px; border: 1px solid #4b5563; background: #111827; color: inherit; font: inherit; }
+            form button { width: 100%; padding: 10px; border-radius: 8px; border: 0; background: #2563eb; color: white; cursor: pointer; font: inherit; }
+            #error { color: #fca5a5; min-height: 20px; font-size: 13px; }
         </style>
     </head>
     <body>
-        <form id="setup">
-            <h1>Connect Composer</h1>
-            <p>Enter the HTTPS address supplied by your Composer workspace.</p>
-            <input id="server" type="url" placeholder="https://composer.example.com" required autofocus />
-            <button>Continue</button>
+        <main>
+            <h1>Composer environments</h1>
+            <p class="hint">Switch between saved Composer servers, or add a new one.</p>
+            <ul id="environments"></ul>
+            <form id="add">
+                <h2>Add environment</h2>
+                <input id="name" placeholder="Name (e.g. Production)" autocomplete="off" />
+                <input id="server" type="url" placeholder="https://composer.example.com" required autocomplete="off" />
+                <button>Add and switch</button>
+            </form>
             <p id="error"></p>
-        </form>
+        </main>
         <script>
-            document.querySelector('#setup').addEventListener('submit', async (event) => {
-                event.preventDefault();
-                const error = document.querySelector('#error');
-                error.textContent = '';
-                const server = document.querySelector('#server').value;
-                window.location.href = `composer-setup://configure?server=${encodeURIComponent(server)}`;
-            });
-            const initialError = new URLSearchParams(window.location.search).get('error');
+            const params = new URLSearchParams(window.location.search);
+            const environments = JSON.parse(params.get('environments') || '[]');
+            const activeId = params.get('activeId') || '';
+            const initialError = params.get('error');
             if (initialError) document.querySelector('#error').textContent = initialError;
-            const initialServer = new URLSearchParams(window.location.search).get('server');
-            if (initialServer) document.querySelector('#server').value = initialServer;
+
+            const list = document.querySelector('#environments');
+            for (const env of environments) {
+                const item = document.createElement('li');
+                const isActive = env.id === activeId;
+
+                const info = document.createElement('div');
+                info.className = 'info';
+                const name = document.createElement('div');
+                name.className = 'name';
+                name.textContent = env.name;
+                if (isActive) {
+                    const badge = document.createElement('span');
+                    badge.className = 'badge';
+                    badge.textContent = 'ACTIVE';
+                    name.appendChild(badge);
+                }
+                const url = document.createElement('div');
+                url.className = 'url';
+                url.textContent = env.serverUrl;
+                info.append(name, url);
+                item.append(info);
+
+                if (!isActive) {
+                    const switchButton = document.createElement('button');
+                    switchButton.className = 'switch';
+                    switchButton.textContent = 'Switch';
+                    switchButton.addEventListener('click', () => {
+                        window.location.href = `composer-setup://switch?id=${encodeURIComponent(env.id)}`;
+                    });
+                    item.append(switchButton);
+                }
+
+                const removeButton = document.createElement('button');
+                removeButton.className = 'remove';
+                removeButton.textContent = 'Remove';
+                removeButton.addEventListener('click', () => {
+                    window.location.href = `composer-setup://remove?id=${encodeURIComponent(env.id)}`;
+                });
+                item.append(removeButton);
+
+                list.append(item);
+            }
+
+            document.querySelector('#add').addEventListener('submit', (event) => {
+                event.preventDefault();
+                const name = document.querySelector('#name').value;
+                const server = document.querySelector('#server').value;
+                window.location.href = `composer-setup://add?name=${encodeURIComponent(name)}&server=${encodeURIComponent(server)}`;
+            });
         </script>
     </body>
 </html>

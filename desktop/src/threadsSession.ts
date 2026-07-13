@@ -1,5 +1,6 @@
 import {
     BrowserPublisherSession,
+    humanDelay,
     waitForJavaScript,
 } from './browserPublisherSession';
 
@@ -36,6 +37,7 @@ export async function publishThreadsText(text: string): Promise<{
         await window.loadURL(
             `${THREADS_HOME}intent/post?text=${encodeURIComponent(text)}`,
         );
+        await humanDelay();
         await waitForJavaScript<boolean>(
             window,
             `Boolean(document.querySelector(
@@ -50,6 +52,7 @@ export async function publishThreadsText(text: string): Promise<{
                 true,
             ),
         );
+        await humanDelay();
         await waitForJavaScript<boolean>(
             window,
             `(() => {

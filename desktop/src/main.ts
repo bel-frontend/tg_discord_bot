@@ -11,6 +11,7 @@ import {
 } from 'electron';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { randomUUID } from 'node:crypto';
 import {
     connectThreads,
     disconnectThreads,
@@ -24,10 +25,17 @@ import {
     publishXText,
 } from './xSession';
 
-interface DesktopConfig {
-    serverUrl?: string;
+interface EnvironmentConfig {
+    id: string;
+    name: string;
+    serverUrl: string;
     agentToken?: string;
     agentId?: string;
+}
+
+interface DesktopConfig {
+    environments: EnvironmentConfig[];
+    activeEnvironmentId?: string;
 }
 
 let mainWindow: BrowserWindow | null = null;
@@ -39,11 +47,14 @@ function configPath(): string {
 }
 
 function readConfig(): DesktopConfig {
-    if (!existsSync(configPath())) return {};
+    if (!existsSync(configPath())) return { environments: [] };
     try {
-        return JSON.parse(readFileSync(configPath(), 'utf8')) as DesktopConfig;
+        const parsed = JSON.parse(readFileSync(configPath(), 'utf8'));
+        return Array.isArray(parsed.environments)
+            ? (parsed as DesktopConfig)
+            : { environments: [] };
     } catch {
-        return {};
+        return { environments: [] };
     }
 }
 
@@ -51,18 +62,35 @@ function writeConfig(config: DesktopConfig): void {
     writeFileSync(configPath(), JSON.stringify(config, null, 2));
 }
 
-function activeServerUrl(): string | undefined {
-    if (!app.isPackaged && process.env.COMPOSER_DESKTOP_DEV_URL) {
-        return normalizeServerUrl(process.env.COMPOSER_DESKTOP_DEV_URL);
+// When running unpackaged with COMPOSER_DESKTOP_DEV_URL set, force-select a
+// matching environment entry so it behaves like any other saved environment
+// (same pairing/token round-trip) instead of a separate code path.
+function applyDevEnvironmentOverride(): void {
+    if (app.isPackaged || !process.env.COMPOSER_DESKTOP_DEV_URL) return;
+    const serverUrl = normalizeServerUrl(process.env.COMPOSER_DESKTOP_DEV_URL);
+    const config = readConfig();
+    let env = config.environments.find((e) => e.serverUrl === serverUrl);
+    if (!env) {
+        env = { id: randomUUID(), name: 'Dev (env var)', serverUrl };
+        config.environments.push(env);
     }
-    return readConfig().serverUrl;
+    config.activeEnvironmentId = env.id;
+    writeConfig(config);
+}
+
+function activeEnvironment(): EnvironmentConfig | undefined {
+    const config = readConfig();
+    return config.environments.find(
+        (e) => e.id === config.activeEnvironmentId,
+    );
+}
+
+function activeServerUrl(): string | undefined {
+    return activeEnvironment()?.serverUrl;
 }
 
 function activeAgentToken(): string | undefined {
-    const config = readConfig();
-    return config.serverUrl === activeServerUrl()
-        ? config.agentToken
-        : undefined;
+    return activeEnvironment()?.agentToken;
 }
 
 async function agentRequest(
@@ -110,13 +138,33 @@ function setupPagePath(): string {
     return join(app.getAppPath(), 'src', 'setup.html');
 }
 
+function environmentManagerQuery(
+    extra: Record<string, string> = {},
+): Record<string, string> {
+    const config = readConfig();
+    return {
+        environments: JSON.stringify(config.environments),
+        activeId: config.activeEnvironmentId ?? '',
+        ...extra,
+    };
+}
+
+async function showEnvironmentManagerPage(
+    window: BrowserWindow,
+    extra: Record<string, string> = {},
+): Promise<void> {
+    await window.loadFile(setupPagePath(), {
+        query: environmentManagerQuery(extra),
+    });
+}
+
 async function loadConfiguredPage(window: BrowserWindow): Promise<void> {
     const serverUrl = activeServerUrl();
     if (serverUrl) {
         await loadServerPage(window, serverUrl);
         return;
     }
-    await window.loadFile(setupPagePath());
+    await showEnvironmentManagerPage(window);
 }
 
 async function loadServerPage(
@@ -126,11 +174,8 @@ async function loadServerPage(
     try {
         await window.loadURL(serverUrl);
     } catch {
-        await window.loadFile(setupPagePath(), {
-            query: {
-                server: serverUrl,
-                error: `Cannot reach Composer at ${serverUrl}. Start the server or choose another address.`,
-            },
+        await showEnvironmentManagerPage(window, {
+            error: `Cannot reach Composer at ${serverUrl}. Start the server or choose another address.`,
         });
     }
 }
@@ -203,17 +248,42 @@ function createWindow(): BrowserWindow {
         event.preventDefault();
         if (!window.webContents.getURL().startsWith('file:')) return;
         try {
-            const serverUrl = normalizeServerUrl(
-                url.searchParams.get('server') ?? '',
-            );
-            writeConfig({ serverUrl });
-            void loadServerPage(window, serverUrl);
+            const config = readConfig();
+            if (url.hostname === 'add') {
+                const name = (url.searchParams.get('name') ?? '').trim();
+                const serverUrl = normalizeServerUrl(
+                    url.searchParams.get('server') ?? '',
+                );
+                const id = randomUUID();
+                config.environments.push({
+                    id,
+                    name: name || serverUrl,
+                    serverUrl,
+                });
+                config.activeEnvironmentId = id;
+            } else if (url.hostname === 'switch') {
+                const id = url.searchParams.get('id') ?? '';
+                if (!config.environments.some((e) => e.id === id)) {
+                    throw new Error('Unknown environment');
+                }
+                config.activeEnvironmentId = id;
+            } else if (url.hostname === 'remove') {
+                const id = url.searchParams.get('id') ?? '';
+                config.environments = config.environments.filter(
+                    (e) => e.id !== id,
+                );
+                if (config.activeEnvironmentId === id) {
+                    config.activeEnvironmentId = undefined;
+                }
+            } else {
+                return;
+            }
+            writeConfig(config);
+            void loadConfiguredPage(window);
         } catch (error) {
             const message =
-                error instanceof Error ? error.message : 'Invalid server URL';
-            void window.loadFile(setupPagePath(), {
-                query: { error: message },
-            });
+                error instanceof Error ? error.message : 'Invalid environment';
+            void showEnvironmentManagerPage(window, { error: message });
         }
     });
     void loadConfiguredPage(window);
@@ -242,13 +312,10 @@ function assertTrustedRenderer(event: Electron.IpcMainInvokeEvent): void {
 function registerPublisherIpc(): void {
     ipcMain.handle('desktop:agent-status', async (event) => {
         assertTrustedRenderer(event);
-        const config = readConfig();
+        const env = activeEnvironment();
         return {
-            paired: Boolean(activeAgentToken()),
-            agentId:
-                config.serverUrl === activeServerUrl()
-                    ? config.agentId
-                    : undefined,
+            paired: Boolean(env?.agentToken),
+            agentId: env?.agentId,
         };
     });
     ipcMain.handle('desktop:agent-pair', async (event, rawCode: unknown) => {
@@ -260,11 +327,15 @@ function registerPublisherIpc(): void {
                 name: `${process.platform} desktop`,
             }),
         });
-        writeConfig({
-            serverUrl: activeServerUrl(),
-            agentToken: String(result.token),
-            agentId: String(result.agentId),
-        });
+        const config = readConfig();
+        const env = config.environments.find(
+            (e) => e.id === config.activeEnvironmentId,
+        );
+        if (env) {
+            env.agentToken = String(result.token);
+            env.agentId = String(result.agentId);
+            writeConfig(config);
+        }
         await sendHeartbeat();
         return { paired: true, agentId: result.agentId };
     });
@@ -392,7 +463,17 @@ function createTray(): void {
     tray.setContextMenu(
         Menu.buildFromTemplate([
             { label: 'Open Composer', click: () => mainWindow?.show() },
-            { label: 'Change Composer Server…', click: showServerSetup },
+            { label: 'Switch Environment…', click: showEnvironmentManager },
+            { type: 'separator' },
+            {
+                label: 'Clear Threads session',
+                click: () => clearPlatformSession('Threads', disconnectThreads),
+            },
+            {
+                label: 'Clear X session',
+                click: () => clearPlatformSession('X', disconnectX),
+            },
+            { type: 'separator' },
             {
                 label: 'Quit',
                 click: () => {
@@ -404,10 +485,31 @@ function createTray(): void {
     );
 }
 
-function showServerSetup(): void {
-    writeConfig({});
-    void mainWindow?.loadFile(setupPagePath());
-    mainWindow?.show();
+async function clearPlatformSession(
+    name: string,
+    clear: () => Promise<void>,
+): Promise<void> {
+    try {
+        await clear();
+        await dialog.showMessageBox({
+            type: 'info',
+            message: `${name} session cleared`,
+            detail: 'Cookies, cache and stored login were wiped from this computer. You can connect again from a clean state.',
+        });
+    } catch (error) {
+        await dialog.showMessageBox({
+            type: 'error',
+            message: `Could not clear ${name} session`,
+            detail:
+                error instanceof Error ? error.message : 'Clearing failed',
+        });
+    }
+}
+
+function showEnvironmentManager(): void {
+    if (!mainWindow) return;
+    void showEnvironmentManagerPage(mainWindow);
+    mainWindow.show();
 }
 
 function createApplicationMenu(): void {
@@ -417,7 +519,10 @@ function createApplicationMenu(): void {
                 label: 'Composer',
                 submenu: [
                     { label: 'Open Composer', click: () => mainWindow?.show() },
-                    { label: 'Change Composer Server…', click: showServerSetup },
+                    {
+                        label: 'Switch Environment…',
+                        click: showEnvironmentManager,
+                    },
                     { type: 'separator' },
                     { role: 'quit' },
                 ],
@@ -543,6 +648,7 @@ app.on('second-instance', () => {
 });
 
 void app.whenReady().then(() => {
+    applyDevEnvironmentOverride();
     markDesktopRequests();
     registerPublisherIpc();
     mainWindow = createWindow();

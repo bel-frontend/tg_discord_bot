@@ -169,10 +169,14 @@ function DesktopBrowserPlatformPanel({
                   : desktop.disconnectX());
             setConnected(status.connected);
             toast(
-                `${platformName} ${
-                    status.connected ? 'connected' : 'disconnected'
-                }`,
-                'success',
+                action === 'disconnect'
+                    ? `${platformName} session data cleared`
+                    : `${platformName} ${
+                          status.connected ? 'connected' : 'not connected yet'
+                      }`,
+                action === 'disconnect' || status.connected
+                    ? 'success'
+                    : 'info',
             );
         } catch (error: any) {
             toast(
@@ -230,16 +234,14 @@ function DesktopBrowserPlatformPanel({
                 >
                     {connected ? 'Reconnect' : 'Connect'} {platformName}
                 </button>
-                {connected && (
-                    <button
-                        type="button"
-                        className="btn ghost settings-field-action-danger"
-                        disabled={busy}
-                        onClick={() => run('disconnect')}
-                    >
-                        Disconnect
-                    </button>
-                )}
+                <button
+                    type="button"
+                    className="btn ghost settings-field-action-danger"
+                    disabled={busy}
+                    onClick={() => run('disconnect')}
+                >
+                    {connected ? 'Disconnect' : 'Clear session data'}
+                </button>
             </div>
             <small>
                 Login cookies stay in a private Electron session on this computer.
