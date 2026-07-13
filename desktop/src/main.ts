@@ -24,6 +24,7 @@ import {
     getXConnectionStatus,
     publishXText,
 } from './xSession';
+import { applyPublisherConnectionChange } from './publisherConnection';
 
 interface EnvironmentConfig {
     id: string;
@@ -345,13 +346,19 @@ function registerPublisherIpc(): void {
     });
     ipcMain.handle('desktop:threads-connect', async (event) => {
         assertTrustedRenderer(event);
-        await connectThreads();
-        return getThreadsConnectionStatus();
+        return applyPublisherConnectionChange(
+            connectThreads,
+            sendHeartbeat,
+            getThreadsConnectionStatus,
+        );
     });
     ipcMain.handle('desktop:threads-disconnect', async (event) => {
         assertTrustedRenderer(event);
-        await disconnectThreads();
-        return getThreadsConnectionStatus();
+        return applyPublisherConnectionChange(
+            disconnectThreads,
+            sendHeartbeat,
+            getThreadsConnectionStatus,
+        );
     });
     ipcMain.handle('desktop:x-status', async (event) => {
         assertTrustedRenderer(event);
@@ -359,13 +366,19 @@ function registerPublisherIpc(): void {
     });
     ipcMain.handle('desktop:x-connect', async (event) => {
         assertTrustedRenderer(event);
-        await connectX();
-        return getXConnectionStatus();
+        return applyPublisherConnectionChange(
+            connectX,
+            sendHeartbeat,
+            getXConnectionStatus,
+        );
     });
     ipcMain.handle('desktop:x-disconnect', async (event) => {
         assertTrustedRenderer(event);
-        await disconnectX();
-        return getXConnectionStatus();
+        return applyPublisherConnectionChange(
+            disconnectX,
+            sendHeartbeat,
+            getXConnectionStatus,
+        );
     });
 }
 

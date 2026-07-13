@@ -1,4 +1,15 @@
-import { BrowserWindow, session, type Session } from 'electron';
+import { app, BrowserWindow, session, type Session } from 'electron';
+import {
+    existsSync,
+    mkdirSync,
+    rmSync,
+    writeFileSync,
+} from 'node:fs';
+import { join } from 'node:path';
+import {
+    hasMatchingSessionCookie,
+    isConnectedPageUrl,
+} from './browserPublisherSessionState';
 
 const LOGIN_TIMEOUT_MS = 10 * 60_000;
 const CHROME_USER_AGENT =
@@ -41,6 +52,29 @@ export class BrowserPublisherSession {
         return session.fromPartition(this.partition);
     }
 
+    private verifiedMarkerPath(): string {
+        const directory = join(app.getPath('userData'), 'publisher-sessions');
+        mkdirSync(directory, { recursive: true });
+        return join(directory, `${this.options.id}.verified`);
+    }
+
+    private async hasSessionCookie(): Promise<boolean> {
+        const cookies = await this.session.cookies.get({});
+        return hasMatchingSessionCookie(
+            cookies,
+            this.options.cookieNames,
+            this.options.cookieDomains,
+        );
+    }
+
+    private isConnectedPage(window: BrowserWindow): boolean {
+        return isConnectedPageUrl(
+            window.webContents.getURL(),
+            this.options.homeUrl,
+            this.options.loginUrl,
+        );
+    }
+
     private async createWindow(show: boolean): Promise<BrowserWindow> {
         const window = new BrowserWindow({
             width: 1100,
@@ -52,6 +86,9 @@ export class BrowserPublisherSession {
             webPreferences: browserPreferences(this.partition),
         });
         window.webContents.setUserAgent(CHROME_USER_AGENT);
+        window.webContents.on('did-create-window', (child) => {
+            child.webContents.setUserAgent(CHROME_USER_AGENT);
+        });
         window.webContents.setWindowOpenHandler(() => ({
             action: 'allow',
             overrideBrowserWindowOptions: {
@@ -64,14 +101,9 @@ export class BrowserPublisherSession {
     }
 
     async isConnected(): Promise<boolean> {
-        const cookies = await this.session.cookies.get({});
-        return cookies.some(
-            (cookie) =>
-                this.options.cookieNames.includes(cookie.name) &&
-                Boolean(cookie.value) &&
-                this.options.cookieDomains.some((domain) =>
-                    (cookie.domain ?? '').replace(/^\./, '').endsWith(domain),
-                ),
+        return (
+            existsSync(this.verifiedMarkerPath()) &&
+            (await this.hasSessionCookie())
         );
     }
 
@@ -97,8 +129,14 @@ export class BrowserPublisherSession {
                         `${this.options.name} login window was closed`,
                     );
                 }
-                if (await this.isConnected()) {
-                    await window.loadURL(this.options.homeUrl);
+                if (
+                    (await this.hasSessionCookie()) &&
+                    this.isConnectedPage(window)
+                ) {
+                    writeFileSync(
+                        this.verifiedMarkerPath(),
+                        new Date().toISOString(),
+                    );
                     return;
                 }
                 await new Promise((resolve) => setTimeout(resolve, 1_000));
@@ -123,6 +161,7 @@ export class BrowserPublisherSession {
         await this.session.clearStorageData();
         await this.session.clearCache();
         await this.session.clearAuthCache();
+        rmSync(this.verifiedMarkerPath(), { force: true });
     }
 
     async createAutomationWindow(): Promise<BrowserWindow> {
