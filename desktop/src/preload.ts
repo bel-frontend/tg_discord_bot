@@ -6,4 +6,7 @@ contextBridge.exposeInMainWorld('composerDesktop', {
     threadsStatus: () => ipcRenderer.invoke('desktop:threads-status'),
     connectThreads: () => ipcRenderer.invoke('desktop:threads-connect'),
     disconnectThreads: () => ipcRenderer.invoke('desktop:threads-disconnect'),
+    xStatus: () => ipcRenderer.invoke('desktop:x-status'),
+    connectX: () => ipcRenderer.invoke('desktop:x-connect'),
+    disconnectX: () => ipcRenderer.invoke('desktop:x-disconnect'),
 });

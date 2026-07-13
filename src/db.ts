@@ -118,25 +118,6 @@ export interface PlatformConfigDoc {
     updatedAt: Date;
 }
 
-// Kept separate from PlatformConfigDoc: this holds an encrypted browser login
-// session (cookies/local storage), a strictly more sensitive artifact than the
-// plaintext credential bag above — a leaked session is full account takeover.
-export interface BrowserSessionDoc {
-    _id?: ObjectId;
-    accountId: string; // workspace whose browser session this is
-    platform: string; // 'x' | 'reddit' | ...
-    encryptedState: {
-        ciphertext: string;
-        iv: string;
-        authTag: string;
-    };
-    status: 'connected' | 'reconnect_required';
-    lastPublishedAt?: Date;
-    lastVerifiedAt?: Date;
-    createdAt: Date;
-    updatedAt: Date;
-}
-
 export interface LocalPublisherAgentDoc {
     _id?: ObjectId;
     accountId: string;
@@ -209,7 +190,6 @@ let draftFoldersColl: Collection<DraftFolderDoc> | null = null;
 let uploadsColl: Collection<UploadDoc> | null = null;
 let channelResourcesColl: Collection<ChannelResourceDoc> | null = null;
 let platformConfigsColl: Collection<PlatformConfigDoc> | null = null;
-let browserSessionsColl: Collection<BrowserSessionDoc> | null = null;
 let localPublisherAgentsColl: Collection<LocalPublisherAgentDoc> | null = null;
 let localPublisherJobsColl: Collection<LocalPublisherJobDoc> | null = null;
 let publicationsColl: Collection<PublicationDoc> | null = null;
@@ -271,8 +251,6 @@ export async function connect(): Promise<void> {
     channelResourcesColl =
         db.collection<ChannelResourceDoc>('channelResources');
     platformConfigsColl = db.collection<PlatformConfigDoc>('platformConfigs');
-    browserSessionsColl =
-        db.collection<BrowserSessionDoc>('browserSessions');
     localPublisherAgentsColl =
         db.collection<LocalPublisherAgentDoc>('localPublisherAgents');
     localPublisherJobsColl =
@@ -301,10 +279,6 @@ export async function connect(): Promise<void> {
     );
     await platformConfigsColl.createIndex(
         { userId: 1, platform: 1 },
-        { unique: true },
-    );
-    await browserSessionsColl.createIndex(
-        { accountId: 1, platform: 1 },
         { unique: true },
     );
     await localPublisherAgentsColl.createIndex({ tokenHash: 1 }, { unique: true });
@@ -393,13 +367,6 @@ export function platformConfigs(): Collection<PlatformConfigDoc> {
         throw new Error('DB not connected — call connect() first');
     }
     return platformConfigsColl;
-}
-
-export function browserSessions(): Collection<BrowserSessionDoc> {
-    if (!browserSessionsColl) {
-        throw new Error('DB not connected — call connect() first');
-    }
-    return browserSessionsColl;
 }
 
 export function localPublisherAgents(): Collection<LocalPublisherAgentDoc> {

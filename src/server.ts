@@ -23,6 +23,7 @@ import { assertChannelAccess, assertPermission } from './permissions';
 import { users } from './db';
 import { ObjectId } from 'mongodb';
 import {
+    isDesktopOnlyPlatform,
     listAllChannels,
     listPlatforms,
     listPlatformsMeta,
@@ -80,15 +81,6 @@ import {
     deleteScheduledPublicationsForDraft,
     listScheduledPublications,
 } from './scheduledPublications';
-import {
-    attachPlatformLiveView,
-    detachPlatformLiveView,
-    handleAuthenticatedPlatformConnectionRoute,
-    handleLiveViewUpgrade,
-    handlePlatformLiveViewMessage,
-    liveViewMatch,
-    type LiveViewSocketData,
-} from './platformConnectionRoutes';
 
 // The Next static export is copied here by frontend/scripts/copy-static-export.ts.
 const PUBLIC_DIR = join(import.meta.dir, '..', 'public');
@@ -98,6 +90,23 @@ const NOT_BUILT_HTML =
     '<h1>Frontend not built</h1><p>Run <code>bun run build</code> (or start the Next.js dev ' +
     'server with <code>cd frontend &amp;&amp; bun run dev</code>) to build the UI into ' +
     '<code>public/</code>.</p></body>';
+
+function isDesktopClient(req: Request): boolean {
+    return (
+        req.headers.get('x-composer-client') === 'desktop' ||
+        req.headers.get('user-agent')?.includes('ComposerDesktop/') === true
+    );
+}
+
+function assertPlatformAvailableToClient(
+    req: Request,
+    platformIds: Iterable<string>,
+): void {
+    if (isDesktopClient(req)) return;
+    if ([...platformIds].some(isDesktopOnlyPlatform)) {
+        throw new Error('Threads and X are available only in Composer Desktop');
+    }
+}
 
 async function serveStatic(pathname: string): Promise<Response> {
     // Prevent path traversal; default to index.html for the SPA/static export.
@@ -372,7 +381,10 @@ export async function handleApi(req: Request, url: URL): Promise<Response> {
     }
 
     if (path === '/api/channels' && method === 'GET') {
-        const channels = await listAllChannels(actor.accountId);
+        const channels = await listAllChannels(
+            actor.accountId,
+            isDesktopClient(req),
+        );
         const access = actor.permissions.channelAccess;
         const visible =
             actor.role === 'owner' || access === 'all'
@@ -387,11 +399,18 @@ export async function handleApi(req: Request, url: URL): Promise<Response> {
     }
 
     if (path === '/api/platforms' && method === 'GET') {
-        return json({ platforms: listPlatformsMeta() });
+        return json({ platforms: listPlatformsMeta(isDesktopClient(req)) });
     }
 
     if (path === '/api/platform-configs' && method === 'GET') {
-        return json({ configs: await listPlatformConfigs(actor.accountId) });
+        const configs = await listPlatformConfigs(actor.accountId);
+        return json({
+            configs: isDesktopClient(req)
+                ? configs
+                : configs.filter(
+                      (config) => !isDesktopOnlyPlatform(config.platform),
+                  ),
+        });
     }
 
     if (path === '/api/local-publishers' && method === 'GET') {
@@ -417,12 +436,6 @@ export async function handleApi(req: Request, url: URL): Promise<Response> {
             : json({ error: 'Not found' }, 404);
     }
 
-    const authenticatedPlatformConnectionResponse =
-        await handleAuthenticatedPlatformConnectionRoute(actor, req, url);
-    if (authenticatedPlatformConnectionResponse) {
-        return authenticatedPlatformConnectionResponse;
-    }
-
     const platformConfigMatch = path.match(
         /^\/api\/platform-configs\/([^/]+)$/,
     );
@@ -430,6 +443,7 @@ export async function handleApi(req: Request, url: URL): Promise<Response> {
         const body = await req.json().catch(() => ({}));
         try {
             assertPermission(actor, 'canManageChannels');
+            assertPlatformAvailableToClient(req, [platformConfigMatch[1]]);
             const config = await upsertPlatformConfig(
                 actor.accountId,
                 platformConfigMatch[1],
@@ -453,7 +467,8 @@ export async function handleApi(req: Request, url: URL): Promise<Response> {
             Array.isArray(body.platforms) ? body.platforms.map(String) : [],
         );
         const targetPlatforms = listPlatforms().filter((platform) =>
-            targetIds.has(platform.id),
+            targetIds.has(platform.id) &&
+            (isDesktopClient(req) || !platform.desktopOnly),
         );
         return json(
             validateMarkdown(String(body.markdown ?? ''), targetPlatforms),
@@ -463,7 +478,13 @@ export async function handleApi(req: Request, url: URL): Promise<Response> {
     if (path === '/api/preview' && method === 'POST') {
         const body = await req.json().catch(() => ({}));
         return json(
-            previewContent(String(body.markdown ?? ''), listPlatforms()),
+            previewContent(
+                String(body.markdown ?? ''),
+                listPlatforms().filter(
+                    (platform) =>
+                        isDesktopClient(req) || !platform.desktopOnly,
+                ),
+            ),
         );
     }
 
@@ -471,6 +492,7 @@ export async function handleApi(req: Request, url: URL): Promise<Response> {
         const body = await req.json().catch(() => ({}));
         try {
             assertPermission(actor, 'canManageChannels');
+            assertPlatformAvailableToClient(req, [String(body.platform ?? '')]);
             const channel = await createChannelResource(actor.accountId, body);
             return json({ channel }, 201);
         } catch (err: any) {
@@ -538,6 +560,10 @@ export async function handleApi(req: Request, url: URL): Promise<Response> {
             const draftId = String(body.draftId ?? '');
             const draft = await getDraft(actor.userId, draftId);
             if (draft?.targets.length) {
+                assertPlatformAvailableToClient(
+                    req,
+                    draft.targets.map((target) => target.platform),
+                );
                 const resourceMap = await buildResourceIdMap(actor.accountId);
                 assertChannelAccess(actor, draft.targets, resourceMap);
             }
@@ -609,6 +635,10 @@ export async function handleApi(req: Request, url: URL): Promise<Response> {
     if (path === '/api/publish' && method === 'POST') {
         try {
             const parsed = await parsePublishRequest(req, actor.userId);
+            assertPlatformAvailableToClient(
+                req,
+                parsed.targets.map((target) => target.platform),
+            );
             assertPermission(actor, 'canPublish');
             const resourceMap = await buildResourceIdMap(actor.accountId);
             assertChannelAccess(actor, parsed.targets, resourceMap);
@@ -743,20 +773,8 @@ function createServer(port: number) {
         // Docker publishes the container IP, not the container's loopback.
         hostname: '0.0.0.0',
         idleTimeout: 60,
-        async fetch(req, server) {
+        async fetch(req) {
             const url = new URL(req.url);
-            const liveMatch = url.pathname.match(liveViewMatch);
-            if (liveMatch) {
-                try {
-                    return await handleLiveViewUpgrade(req, server, liveMatch[1]);
-                } catch (error: any) {
-                    console.error('Live view upgrade error:', error);
-                    return json(
-                        { error: error?.message || 'Internal server error' },
-                        500,
-                    );
-                }
-            }
             if (url.pathname.startsWith('/api/')) {
                 try {
                     return await handleApi(req, url);
@@ -772,17 +790,6 @@ function createServer(port: number) {
                 }
             }
             return serveStatic(url.pathname);
-        },
-        websocket: {
-            open(ws: Bun.ServerWebSocket<LiveViewSocketData>) {
-                attachPlatformLiveView(ws);
-            },
-            message(ws: Bun.ServerWebSocket<LiveViewSocketData>, message) {
-                handlePlatformLiveViewMessage(ws, message);
-            },
-            close(ws: Bun.ServerWebSocket<LiveViewSocketData>) {
-                detachPlatformLiveView(ws);
-            },
         },
     });
 }

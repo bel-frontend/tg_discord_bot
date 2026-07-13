@@ -18,6 +18,12 @@ export const getToken = () => localStorage.getItem('token');
 export const setToken = (t: string) => localStorage.setItem('token', t);
 export const clearToken = () => localStorage.removeItem('token');
 
+function clientHeaders(): Record<string, string> {
+    return typeof window !== 'undefined' && window.composerDesktop
+        ? { 'x-composer-client': 'desktop' }
+        : {};
+}
+
 interface ApiOptions {
     method?: string;
     body?: unknown;
@@ -33,6 +39,7 @@ export async function api<T = any>(
         headers: {
             ...(body ? { 'content-type': 'application/json' } : {}),
             ...(getToken() ? { authorization: `Bearer ${getToken()}` } : {}),
+            ...clientHeaders(),
         },
         body: body ? JSON.stringify(body) : undefined,
     });
@@ -130,39 +137,6 @@ export async function createLocalPublisherPairing(): Promise<{
     return api('/api/local-publishers/pairing', { method: 'POST' });
 }
 
-export async function startBrowserSession(
-    platform: string,
-): Promise<{ sessionId: string; wsUrl: string }> {
-    return api(`/api/browser-sessions/${platform}/start`, { method: 'POST' });
-}
-
-export async function getBrowserSessionStatus(platform: string): Promise<{
-    connected: boolean;
-    status: 'connected' | 'reconnect_required' | 'not_connected';
-    lastVerifiedAt?: string;
-}> {
-    return api(`/api/browser-sessions/${platform}/status`);
-}
-
-export async function closeBrowserSession(sessionId: string): Promise<{ ok: true }> {
-    return api(`/api/browser-sessions/${sessionId}/close`, { method: 'POST' });
-}
-
-export async function disconnectBrowserSession(
-    platform: string,
-): Promise<{ ok: true }> {
-    return api(`/api/browser-sessions/${platform}/disconnect`, {
-        method: 'DELETE',
-    });
-}
-
-/** Builds the live-view WebSocket URL for a started browser session, token in the query string. */
-export function browserSessionLiveViewUrl(wsUrl: string): string {
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const token = getToken() ?? '';
-    return `${protocol}//${window.location.host}${wsUrl}?token=${encodeURIComponent(token)}`;
-}
-
 export async function fetchScheduledPublications(): Promise<
     ScheduledPublication[]
 > {
@@ -223,7 +197,10 @@ export async function cancelScheduledPublication(
 }
 
 function authHeaders(): Record<string, string> {
-    return getToken() ? { authorization: `Bearer ${getToken()}` } : {};
+    return {
+        ...(getToken() ? { authorization: `Bearer ${getToken()}` } : {}),
+        ...clientHeaders(),
+    };
 }
 
 export async function uploadImage(

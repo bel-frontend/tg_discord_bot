@@ -5,6 +5,7 @@ import {
     ipcMain,
     Menu,
     nativeImage,
+    session,
     shell,
     Tray,
 } from 'electron';
@@ -16,6 +17,12 @@ import {
     getThreadsConnectionStatus,
     publishThreadsText,
 } from './threadsSession';
+import {
+    connectX,
+    disconnectX,
+    getXConnectionStatus,
+    publishXText,
+} from './xSession';
 
 interface DesktopConfig {
     serverUrl?: string;
@@ -44,18 +51,33 @@ function writeConfig(config: DesktopConfig): void {
     writeFileSync(configPath(), JSON.stringify(config, null, 2));
 }
 
+function activeServerUrl(): string | undefined {
+    if (!app.isPackaged && process.env.COMPOSER_DESKTOP_DEV_URL) {
+        return normalizeServerUrl(process.env.COMPOSER_DESKTOP_DEV_URL);
+    }
+    return readConfig().serverUrl;
+}
+
+function activeAgentToken(): string | undefined {
+    const config = readConfig();
+    return config.serverUrl === activeServerUrl()
+        ? config.agentToken
+        : undefined;
+}
+
 async function agentRequest(
     path: string,
     init: RequestInit = {},
 ): Promise<Record<string, unknown>> {
-    const config = readConfig();
-    if (!config.serverUrl) throw new Error('Composer server is not configured');
-    const response = await fetch(`${config.serverUrl}${path}`, {
+    const serverUrl = activeServerUrl();
+    if (!serverUrl) throw new Error('Composer server is not configured');
+    const agentToken = activeAgentToken();
+    const response = await fetch(`${serverUrl}${path}`, {
         ...init,
         headers: {
             'content-type': 'application/json',
-            ...(config.agentToken
-                ? { 'x-local-publisher-token': config.agentToken }
+            ...(agentToken
+                ? { 'x-local-publisher-token': agentToken }
                 : {}),
             ...init.headers,
         },
@@ -85,19 +107,36 @@ function normalizeServerUrl(raw: string): string {
 }
 
 function setupPagePath(): string {
-    return join(__dirname, '..', 'src', 'setup.html');
+    return join(app.getAppPath(), 'src', 'setup.html');
 }
 
 async function loadConfiguredPage(window: BrowserWindow): Promise<void> {
-    const serverUrl = readConfig().serverUrl;
+    const serverUrl = activeServerUrl();
     if (serverUrl) {
-        await window.loadURL(serverUrl);
+        await loadServerPage(window, serverUrl);
         return;
     }
     await window.loadFile(setupPagePath());
 }
 
+async function loadServerPage(
+    window: BrowserWindow,
+    serverUrl: string,
+): Promise<void> {
+    try {
+        await window.loadURL(serverUrl);
+    } catch {
+        await window.loadFile(setupPagePath(), {
+            query: {
+                server: serverUrl,
+                error: `Cannot reach Composer at ${serverUrl}. Start the server or choose another address.`,
+            },
+        });
+    }
+}
+
 function createWindow(): BrowserWindow {
+    const preload = join(app.getAppPath(), 'dist', 'preload.js');
     const window = new BrowserWindow({
         width: 1280,
         height: 820,
@@ -106,12 +145,35 @@ function createWindow(): BrowserWindow {
         show: false,
         title: 'Composer',
         webPreferences: {
-            preload: join(__dirname, 'preload.js'),
+            preload,
             contextIsolation: true,
             nodeIntegration: false,
-            sandbox: true,
+            // The renderer still has no Node access. Keeping the preload outside
+            // Chromium's sandbox makes the narrow contextBridge reliable in
+            // packaged and development builds alike.
+            sandbox: false,
         },
     });
+    window.webContents.on('preload-error', (_event, failedPath, error) => {
+        console.error(`Failed to load Electron preload ${failedPath}:`, error);
+    });
+    window.webContents.on('did-finish-load', () => {
+        void window.webContents
+            .executeJavaScript(
+                `typeof window.composerDesktop === 'object'`,
+                true,
+            )
+            .then((available) => {
+                console.log(
+                    available
+                        ? 'Electron desktop bridge ready'
+                        : 'Electron desktop bridge unavailable',
+                );
+            });
+    });
+    window.webContents.setUserAgent(
+        `${window.webContents.getUserAgent()} ComposerDesktop/${app.getVersion()}`,
+    );
     window.once('ready-to-show', () => window.show());
     window.on('close', (event) => {
         if (quitting) return;
@@ -145,7 +207,7 @@ function createWindow(): BrowserWindow {
                 url.searchParams.get('server') ?? '',
             );
             writeConfig({ serverUrl });
-            void window.loadURL(serverUrl);
+            void loadServerPage(window, serverUrl);
         } catch (error) {
             const message =
                 error instanceof Error ? error.message : 'Invalid server URL';
@@ -158,8 +220,20 @@ function createWindow(): BrowserWindow {
     return window;
 }
 
+function markDesktopRequests(): void {
+    session.defaultSession.webRequest.onBeforeSendHeaders(
+        (details, callback) => {
+            const serverUrl = activeServerUrl();
+            if (serverUrl && details.url.startsWith(`${serverUrl}/`)) {
+                details.requestHeaders['X-Composer-Client'] = 'desktop';
+            }
+            callback({ requestHeaders: details.requestHeaders });
+        },
+    );
+}
+
 function assertTrustedRenderer(event: Electron.IpcMainInvokeEvent): void {
-    const serverUrl = readConfig().serverUrl;
+    const serverUrl = activeServerUrl();
     if (!serverUrl || !event.sender.getURL().startsWith(`${serverUrl}/`)) {
         throw new Error('Untrusted Composer window');
     }
@@ -169,7 +243,13 @@ function registerPublisherIpc(): void {
     ipcMain.handle('desktop:agent-status', async (event) => {
         assertTrustedRenderer(event);
         const config = readConfig();
-        return { paired: Boolean(config.agentToken), agentId: config.agentId };
+        return {
+            paired: Boolean(activeAgentToken()),
+            agentId:
+                config.serverUrl === activeServerUrl()
+                    ? config.agentId
+                    : undefined,
+        };
     });
     ipcMain.handle('desktop:agent-pair', async (event, rawCode: unknown) => {
         assertTrustedRenderer(event);
@@ -181,7 +261,7 @@ function registerPublisherIpc(): void {
             }),
         });
         writeConfig({
-            ...readConfig(),
+            serverUrl: activeServerUrl(),
             agentToken: String(result.token),
             agentId: String(result.agentId),
         });
@@ -202,21 +282,41 @@ function registerPublisherIpc(): void {
         await disconnectThreads();
         return getThreadsConnectionStatus();
     });
+    ipcMain.handle('desktop:x-status', async (event) => {
+        assertTrustedRenderer(event);
+        return getXConnectionStatus();
+    });
+    ipcMain.handle('desktop:x-connect', async (event) => {
+        assertTrustedRenderer(event);
+        await connectX();
+        return getXConnectionStatus();
+    });
+    ipcMain.handle('desktop:x-disconnect', async (event) => {
+        assertTrustedRenderer(event);
+        await disconnectX();
+        return getXConnectionStatus();
+    });
 }
 
 async function sendHeartbeat(): Promise<void> {
-    if (!readConfig().agentToken) return;
-    const threads = await getThreadsConnectionStatus();
+    if (!activeAgentToken()) return;
+    const [threads, x] = await Promise.all([
+        getThreadsConnectionStatus(),
+        getXConnectionStatus(),
+    ]);
     await agentRequest('/api/local-publishers/heartbeat', {
         method: 'POST',
         body: JSON.stringify({
-            platforms: threads.connected ? ['threads'] : [],
+            platforms: [
+                ...(threads.connected ? ['threads'] : []),
+                ...(x.connected ? ['x'] : []),
+            ],
         }),
     });
 }
 
 async function processNextJob(): Promise<void> {
-    if (!readConfig().agentToken) return;
+    if (!activeAgentToken()) return;
     const response = await agentRequest('/api/local-publishers/jobs/claim', {
         method: 'POST',
         body: '{}',
@@ -232,10 +332,23 @@ async function processNextJob(): Promise<void> {
         | undefined;
     if (!job) return;
     try {
-        if (job.platform !== 'threads' || job.operation !== 'publish') {
+        if (job.operation !== 'publish') {
             throw new Error('Unsupported local publisher job');
         }
-        const result = await publishThreadsText(String(job.payload.text ?? ''));
+        const text = String(job.payload.text ?? '');
+        const result =
+            job.platform === 'threads'
+                ? await publishThreadsText(text)
+                : job.platform === 'x'
+                  ? await publishXText(
+                        text,
+                        job.payload.replyToId
+                            ? String(job.payload.replyToId)
+                            : undefined,
+                    )
+                  : (() => {
+                        throw new Error('Unsupported local publisher platform');
+                    })();
         await agentRequest(
             `/api/local-publishers/jobs/${job.id}/complete`,
             {
@@ -352,6 +465,47 @@ function createApplicationMenu(): void {
                             await disconnectThreads();
                         },
                     },
+                    { type: 'separator' },
+                    {
+                        label: 'Connect X…',
+                        click: async () => {
+                            try {
+                                await connectX();
+                                await dialog.showMessageBox({
+                                    type: 'info',
+                                    message: 'X connected',
+                                    detail: 'The login profile is stored only on this computer.',
+                                });
+                            } catch (error) {
+                                await dialog.showMessageBox({
+                                    type: 'error',
+                                    message: 'Could not connect X',
+                                    detail:
+                                        error instanceof Error
+                                            ? error.message
+                                            : 'X login failed',
+                                });
+                            }
+                        },
+                    },
+                    {
+                        label: 'X status',
+                        click: async () => {
+                            const status = await getXConnectionStatus();
+                            await dialog.showMessageBox({
+                                type: 'info',
+                                message: status.connected
+                                    ? 'X is connected'
+                                    : 'X is not connected',
+                            });
+                        },
+                    },
+                    {
+                        label: 'Disconnect X',
+                        click: async () => {
+                            await disconnectX();
+                        },
+                    },
                 ],
             },
             {
@@ -389,6 +543,7 @@ app.on('second-instance', () => {
 });
 
 void app.whenReady().then(() => {
+    markDesktopRequests();
     registerPublisherIpc();
     mainWindow = createWindow();
     createApplicationMenu();

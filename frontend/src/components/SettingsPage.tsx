@@ -6,9 +6,7 @@ import type {
 import {
     clearPlatformConfigField,
     createLocalPublisherPairing,
-    disconnectBrowserSession,
     fetchPlatformConfigs,
-    getBrowserSessionStatus,
     savePlatformConfig,
 } from '../api';
 import { useToast } from '../toast';
@@ -17,7 +15,6 @@ import { PageLayout } from '../layouts/PageLayout';
 import { useMe } from '../meContext';
 import { MembersPanel } from './MembersPanel';
 import { AccountPanel } from './AccountPanel';
-import { BrowserSessionModal } from './BrowserSessionModal';
 
 const LINK_PATTERN = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g;
 
@@ -123,89 +120,65 @@ function ConfigFieldRow({
     );
 }
 
-interface BrowserConnectPanelProps {
-    platform: string;
+interface DesktopBrowserPlatformPanelProps {
+    platform: 'threads' | 'x';
     platformName: string;
-    status?: { connected: boolean; status: string };
-    disconnecting: boolean;
-    onConnect: () => void;
-    onDisconnect: () => void;
 }
 
-/** Status pill + connect/reconnect/disconnect controls for a browser-session-backed platform. */
-function BrowserConnectPanel({
+function DesktopBrowserPlatformPanel({
+    platform,
     platformName,
-    status,
-    disconnecting,
-    onConnect,
-    onDisconnect,
-}: BrowserConnectPanelProps) {
-    const label = !status || status.status === 'not_connected'
-        ? 'Not connected'
-        : status.status === 'reconnect_required'
-          ? 'Reconnect needed'
-          : 'Connected';
-    const pillClass =
-        status?.status === 'connected'
-            ? 'settings-pill settings-pill-ok'
-            : status?.status === 'reconnect_required'
-              ? 'settings-pill settings-pill-warn'
-              : 'settings-pill';
-
-    return (
-        <div className="settings-browser-connect">
-            <span className={pillClass}>{label}</span>
-            <div className="settings-form-actions">
-                <button type="button" className="btn ghost" onClick={onConnect}>
-                    {status?.connected ? 'Reconnect' : 'Connect'} {platformName}
-                </button>
-                {status?.connected && (
-                    <button
-                        type="button"
-                        className="btn ghost settings-field-action-danger"
-                        disabled={disconnecting}
-                        onClick={onDisconnect}
-                    >
-                        Disconnect
-                    </button>
-                )}
-            </div>
-        </div>
-    );
-}
-
-function DesktopThreadsPanel() {
+}: DesktopBrowserPlatformPanelProps) {
     const toast = useToast();
     const [connected, setConnected] = useState(false);
     const [paired, setPaired] = useState(false);
     const [busy, setBusy] = useState(false);
 
     useEffect(() => {
-        Promise.all([
-            window.composerDesktop!.agentStatus(),
-            window.composerDesktop!.threadsStatus(),
-        ])
-            .then(([agent, threads]) => {
+        const desktop = window.composerDesktop;
+        if (!desktop) {
+            toast(
+                'Desktop integration is unavailable — restart Composer Desktop',
+                'error',
+            );
+            return;
+        }
+        const statusRequest =
+            platform === 'threads'
+                ? desktop.threadsStatus()
+                : desktop.xStatus();
+        Promise.all([desktop.agentStatus(), statusRequest])
+            .then(([agent, platformStatus]) => {
                 setPaired(agent.paired);
-                setConnected(threads.connected);
+                setConnected(platformStatus.connected);
             })
             .catch((error) => toast(error.message, 'error'));
-    }, [toast]);
+    }, [platform, toast]);
 
     async function run(action: 'connect' | 'disconnect') {
         setBusy(true);
         try {
-            const status =
-                action === 'connect'
-                    ? await window.composerDesktop!.connectThreads()
-                    : await window.composerDesktop!.disconnectThreads();
+            const desktop = window.composerDesktop;
+            if (!desktop) throw new Error('Restart Composer Desktop');
+            const status = await (platform === 'threads'
+                ? action === 'connect'
+                    ? desktop.connectThreads()
+                    : desktop.disconnectThreads()
+                : action === 'connect'
+                  ? desktop.connectX()
+                  : desktop.disconnectX());
             setConnected(status.connected);
             toast(
-                status.connected ? 'Threads connected' : 'Threads disconnected',
+                `${platformName} ${
+                    status.connected ? 'connected' : 'disconnected'
+                }`,
                 'success',
             );
         } catch (error: any) {
-            toast(error.message || 'Threads connection failed', 'error');
+            toast(
+                error.message || `${platformName} connection failed`,
+                'error',
+            );
         } finally {
             setBusy(false);
         }
@@ -214,8 +187,10 @@ function DesktopThreadsPanel() {
     async function pairDesktop() {
         setBusy(true);
         try {
+            const desktop = window.composerDesktop;
+            if (!desktop) throw new Error('Restart Composer Desktop');
             const pairing = await createLocalPublisherPairing();
-            const status = await window.composerDesktop!.pairAgent(pairing.code);
+            const status = await desktop.pairAgent(pairing.code);
             setPaired(status.paired);
             toast('Desktop client paired', 'success');
         } catch (error: any) {
@@ -253,7 +228,7 @@ function DesktopThreadsPanel() {
                     disabled={busy || !paired}
                     onClick={() => run('connect')}
                 >
-                    {connected ? 'Reconnect' : 'Connect'} Threads
+                    {connected ? 'Reconnect' : 'Connect'} {platformName}
                 </button>
                 {connected && (
                     <button
@@ -267,7 +242,7 @@ function DesktopThreadsPanel() {
                 )}
             </div>
             <small>
-                Login cookies stay in a dedicated Chrome profile on this computer.
+                Login cookies stay in a private Electron session on this computer.
             </small>
         </div>
     );
@@ -296,14 +271,6 @@ export function SettingsPage({ initialPlatformId }: SettingsPageProps = {}) {
     );
     const [activeTab, setActiveTab] = useState('');
     const [instructionsOpen, setInstructionsOpen] = useState(false);
-    const [browserSessionStatus, setBrowserSessionStatus] = useState<
-        Record<string, { connected: boolean; status: string }>
-    >({});
-    const [browserModalPlatform, setBrowserModalPlatform] = useState<
-        string | null
-    >(null);
-    const [disconnectingBrowserPlatform, setDisconnectingBrowserPlatform] =
-        useState<string | null>(null);
 
     const configByPlatform = useMemo(
         () => new Map(configs.map((config) => [config.platform, config])),
@@ -311,8 +278,8 @@ export function SettingsPage({ initialPlatformId }: SettingsPageProps = {}) {
     );
 
     const activePlatform = platforms.find((p) => p.id === activeTab);
-    const usesDesktopThreads =
-        activePlatform?.id === 'threads' && Boolean(window.composerDesktop);
+    const usesDesktopBrowser =
+        activePlatform?.setup?.connect === 'desktop-browser';
 
     useEffect(() => {
         if (activeTab || !platforms.length) return;
@@ -323,14 +290,6 @@ export function SettingsPage({ initialPlatformId }: SettingsPageProps = {}) {
                 : platforms[0].id;
         setActiveTab(preferred);
     }, [platforms, activeTab, initialPlatformId]);
-
-    useEffect(() => {
-        if (!activePlatform || activePlatform.setup?.connect !== 'browser') {
-            return;
-        }
-        refreshBrowserSessionStatus(activePlatform.id);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [activePlatform?.id]);
 
     useEffect(() => {
         Promise.all([loadPlatforms(), fetchPlatformConfigs()])
@@ -432,41 +391,6 @@ export function SettingsPage({ initialPlatformId }: SettingsPageProps = {}) {
         }
     }
 
-    async function refreshBrowserSessionStatus(platform: string) {
-        try {
-            const status = await getBrowserSessionStatus(platform);
-            setBrowserSessionStatus((current) => ({
-                ...current,
-                [platform]: status,
-            }));
-        } catch (err: any) {
-            toast(err.message, 'error');
-        }
-    }
-
-    async function disconnectBrowserPlatform(
-        platform: string,
-        platformName: string,
-    ) {
-        if (
-            !confirm(
-                `Disconnect ${platformName}? You'll need to log in again to publish.`,
-            )
-        ) {
-            return;
-        }
-        setDisconnectingBrowserPlatform(platform);
-        try {
-            await disconnectBrowserSession(platform);
-            await refreshBrowserSessionStatus(platform);
-            toast(`${platformName} disconnected`, 'success');
-        } catch (err: any) {
-            toast(err.message, 'error');
-        } finally {
-            setDisconnectingBrowserPlatform(null);
-        }
-    }
-
     return (
         <PageLayout className="settings-page">
                 <section className="settings-intro">
@@ -545,7 +469,7 @@ export function SettingsPage({ initialPlatformId }: SettingsPageProps = {}) {
                                             </span>
                                         )}
                                         {activePlatform.setup &&
-                                            !usesDesktopThreads && (
+                                            !usesDesktopBrowser && (
                                             <button
                                                 type="button"
                                                 className="settings-howto-btn"
@@ -562,8 +486,8 @@ export function SettingsPage({ initialPlatformId }: SettingsPageProps = {}) {
                                 {activePlatform.setup ? (
                                     <>
                                         <p className="muted">
-                                            {usesDesktopThreads
-                                                ? 'Publishes through a dedicated Chrome profile on this computer.'
+                                            {usesDesktopBrowser
+                                                ? 'Publishes through a private browser session inside this app.'
                                                 : activePlatform.setup.summary}
                                         </p>
 
@@ -575,7 +499,8 @@ export function SettingsPage({ initialPlatformId }: SettingsPageProps = {}) {
                                             </p>
                                         )}
 
-                                        {!usesDesktopThreads && activePlatform.setup.configFields
+                                        {!usesDesktopBrowser &&
+                                        activePlatform.setup.configFields
                                             ?.length ? (
                                             <form
                                                 className="settings-form"
@@ -678,43 +603,23 @@ export function SettingsPage({ initialPlatformId }: SettingsPageProps = {}) {
                                                 </div>
                                                 </fieldset>
                                             </form>
-                                        ) : (
+                                        ) : !usesDesktopBrowser ? (
                                             <p className="muted">
                                                 This platform has no
                                                 user-configurable credentials.
                                             </p>
-                                        )}
+                                        ) : null}
 
-                                        {activePlatform.setup.connect ===
-                                            'browser' && (
-                                            <BrowserConnectPanel
-                                                platform={activePlatform.id}
-                                                platformName={
-                                                    activePlatform.name
-                                                }
-                                                status={
-                                                    browserSessionStatus[
-                                                        activePlatform.id
-                                                    ]
-                                                }
-                                                disconnecting={
-                                                    disconnectingBrowserPlatform ===
-                                                    activePlatform.id
-                                                }
-                                                onConnect={() =>
-                                                    setBrowserModalPlatform(
-                                                        activePlatform.id,
-                                                    )
-                                                }
-                                                onDisconnect={() =>
-                                                    disconnectBrowserPlatform(
-                                                        activePlatform.id,
-                                                        activePlatform.name,
-                                                    )
-                                                }
-                                            />
-                                        )}
-                                        {usesDesktopThreads && <DesktopThreadsPanel />}
+                                        {usesDesktopBrowser &&
+                                            (activePlatform.id === 'threads' ||
+                                                activePlatform.id === 'x') && (
+                                                <DesktopBrowserPlatformPanel
+                                                    platform={activePlatform.id}
+                                                    platformName={
+                                                        activePlatform.name
+                                                    }
+                                                />
+                                            )}
                                     </>
                                 ) : (
                                     <p className="muted">
@@ -799,23 +704,6 @@ export function SettingsPage({ initialPlatformId }: SettingsPageProps = {}) {
                             </div>
                         )}
 
-                        {browserModalPlatform && (
-                            <BrowserSessionModal
-                                platform={browserModalPlatform}
-                                platformName={
-                                    platforms.find(
-                                        (p) => p.id === browserModalPlatform,
-                                    )?.name ?? browserModalPlatform
-                                }
-                                onConnected={() => {
-                                    refreshBrowserSessionStatus(
-                                        browserModalPlatform,
-                                    );
-                                    setBrowserModalPlatform(null);
-                                }}
-                                onClose={() => setBrowserModalPlatform(null)}
-                            />
-                        )}
                     </>
                 )}
         </PageLayout>

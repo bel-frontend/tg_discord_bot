@@ -23,13 +23,13 @@ export class ThreadsPlatform implements Platform {
     readonly name = 'Threads';
     readonly icon = '@';
     readonly charLimit = THREADS_LIMIT;
+    readonly desktopOnly = true;
     readonly setup = {
+        connect: 'desktop-browser' as const,
         summary:
-            'Publishes through the Composer desktop client and a local Chrome session.',
+            'Publishes through a private browser session inside Composer Desktop.',
         steps: [
-            'Install and open Composer Desktop.',
-            'Pair the desktop client with this workspace.',
-            'Click Connect Threads and log in through the Chrome window, including any 2FA step.',
+            'Click Connect Threads below and log in through the separate Composer browser window, including any 2FA step.',
         ],
         notes: [
             'The Threads login profile stays on your computer and is never uploaded to Composer.',

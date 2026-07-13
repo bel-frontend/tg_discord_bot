@@ -21,21 +21,30 @@ export function listPlatforms(): Platform[] {
     return [...platforms.values()];
 }
 
-export function listPlatformsMeta(): PlatformMeta[] {
-    return [...platforms.values()].map((platform) => {
-        const meta: PlatformMeta = {
-            id: platform.id,
-            name: platform.name,
-            icon: platform.icon,
-            charLimit: platform.charLimit,
-        };
-        if (platform.setup) meta.setup = platform.setup;
-        return meta;
-    });
+export function isDesktopOnlyPlatform(id: string): boolean {
+    return platforms.get(id.trim().toLowerCase())?.desktopOnly === true;
+}
+
+export function listPlatformsMeta(includeDesktopOnly = true): PlatformMeta[] {
+    return [...platforms.values()]
+        .filter((platform) => includeDesktopOnly || !platform.desktopOnly)
+        .map((platform) => {
+            const meta: PlatformMeta = {
+                id: platform.id,
+                name: platform.name,
+                icon: platform.icon,
+                charLimit: platform.charLimit,
+            };
+            if (platform.setup) meta.setup = platform.setup;
+            return meta;
+        });
 }
 
 /** Aggregate the channel options of every configured platform for the picker. */
-export async function listAllChannels(accountId: string): Promise<ChannelOption[]> {
+export async function listAllChannels(
+    accountId: string,
+    includeDesktopOnly = true,
+): Promise<ChannelOption[]> {
     const options: ChannelOption[] = [];
 
     const managed = await listChannelResources(accountId);
@@ -43,6 +52,7 @@ export async function listAllChannels(accountId: string): Promise<ChannelOption[
 
     for (const channel of managed) {
         const platform = platforms.get(channel.platform);
+        if (!includeDesktopOnly && platform?.desktopOnly) continue;
         const platformName = platform?.name ?? channel.platform;
         options.push({
             platform: channel.platform,
@@ -56,6 +66,7 @@ export async function listAllChannels(accountId: string): Promise<ChannelOption[
     }
 
     for (const platform of platforms.values()) {
+        if (!includeDesktopOnly && platform.desktopOnly) continue;
         try {
             const channels = await platform.listChannels({ accountId });
             for (const channel of channels) {

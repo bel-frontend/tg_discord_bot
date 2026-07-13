@@ -3,9 +3,6 @@ services:
     build: .
     container_name: tg_discord_bot
     restart: unless-stopped
-    # Chromium reliably crashes on Docker's default 64MB /dev/shm; the browser-session
-    # platforms (X, Reddit — see src/browserSessions/) need real headroom here.
-    shm_size: '1gb'
     env_file:
       - .env
     environment:

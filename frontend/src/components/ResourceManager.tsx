@@ -13,7 +13,6 @@ import { useMe } from '../meContext';
 const PLATFORM_PLACEHOLDERS = [
     { id: 'telegram', name: 'Telegram' },
     { id: 'discord', name: 'Discord' },
-    { id: 'threads', name: 'Threads' },
     { id: 'mastodon', name: 'Mastodon' },
     { id: 'bluesky', name: 'Bluesky' },
     { id: 'other', name: 'Other' },
@@ -142,7 +141,7 @@ export function ResourceManager({ onGoToSettings }: ResourceManagerProps = {}) {
                             const isConnectedAccount =
                                 channel.source === 'config' &&
                                 platforms.find((p) => p.id === channel.platform)
-                                    ?.setup?.connect === 'browser';
+                                    ?.setup?.connect === 'desktop-browser';
                             return (
                                 <div
                                     className="resource-row"

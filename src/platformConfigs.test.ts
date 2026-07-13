@@ -50,7 +50,8 @@ mock.module('./db', () => ({
     platformConfigs: () => platformConfigsCollection,
     publications: emptyCollection,
     scheduledPublications: emptyCollection,
-    browserSessions: emptyCollection,
+    localPublisherAgents: emptyCollection,
+    localPublisherJobs: emptyCollection,
 }));
 
 mock.module('./platforms/registry', () => ({

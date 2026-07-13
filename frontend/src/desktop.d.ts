@@ -11,6 +11,9 @@ declare global {
             threadsStatus(): Promise<{ connected: boolean }>;
             connectThreads(): Promise<{ connected: boolean }>;
             disconnectThreads(): Promise<{ connected: boolean }>;
+            xStatus(): Promise<{ connected: boolean }>;
+            connectX(): Promise<{ connected: boolean }>;
+            disconnectX(): Promise<{ connected: boolean }>;
         };
     }
 }

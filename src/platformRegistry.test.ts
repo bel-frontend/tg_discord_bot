@@ -15,8 +15,8 @@ import type {
 } from './platforms/types';
 
 class LinkableTestPlatform implements Platform {
-    readonly id = 'unit-platform';
-    readonly name = 'Unit Platform';
+    readonly id: string = 'unit-platform';
+    readonly name: string = 'Unit Platform';
     readonly icon = 'U';
     readonly charLimit = 123;
 
@@ -61,7 +61,14 @@ class LinkableTestPlatform implements Platform {
     }
 }
 
+class DesktopOnlyTestPlatform extends LinkableTestPlatform {
+    readonly id = 'unit-desktop-platform';
+    readonly name = 'Desktop Unit Platform';
+    readonly desktopOnly = true;
+}
+
 register(new LinkableTestPlatform());
+register(new DesktopOnlyTestPlatform());
 
 describe('platform registry metadata', () => {
     test('exposes platform metadata without platform-specific branching', () => {
@@ -71,6 +78,15 @@ describe('platform registry metadata', () => {
             icon: 'U',
             charLimit: 123,
         });
+    });
+
+    test('omits desktop-only adapters from web metadata', () => {
+        expect(listPlatformsMeta(false).map((platform) => platform.id)).not.toContain(
+            'unit-desktop-platform',
+        );
+        expect(listPlatformsMeta(true).map((platform) => platform.id)).toContain(
+            'unit-desktop-platform',
+        );
     });
 });
 

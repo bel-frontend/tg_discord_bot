@@ -47,6 +47,8 @@ export interface Platform {
     readonly name: string; // display name
     readonly icon?: string; // emoji/label for pickers; UI falls back to 🌐 when absent
     readonly charLimit?: number; // per-message length limit, shown as a UI hint
+    /** Only exposed to Composer Desktop; hidden and rejected in the web client. */
+    readonly desktopOnly?: boolean;
     readonly setup?: PlatformSetup; // displayed on the Settings page
     /** Whether the adapter has the config/tokens it needs to run. */
     isConfigured(): boolean;

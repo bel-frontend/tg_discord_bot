@@ -37,6 +37,8 @@
             });
             const initialError = new URLSearchParams(window.location.search).get('error');
             if (initialError) document.querySelector('#error').textContent = initialError;
+            const initialServer = new URLSearchParams(window.location.search).get('server');
+            if (initialServer) document.querySelector('#server').value = initialServer;
         </script>
     </body>
 </html>
