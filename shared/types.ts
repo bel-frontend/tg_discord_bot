@@ -146,6 +146,7 @@ export interface Publication {
     targets: PublicationTarget[];
     createdAt: string;
     updatedAt: string;
+    authorEmail?: string;
 }
 
 export type ScheduledPublicationStatus =
@@ -166,4 +167,5 @@ export interface ScheduledPublication {
     publicationId?: string;
     createdAt: string;
     updatedAt: string;
+    authorEmail: string;
 }

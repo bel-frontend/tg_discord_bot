@@ -36,6 +36,7 @@ mock.module('./db', () => ({
         channelAccess: 'all',
     },
     users: emptyCollection,
+    getUserEmailsByIds: mock(async () => new Map()),
     accountMembers: emptyCollection,
     emailVerifications: emptyCollection,
     passwordResets: emptyCollection,

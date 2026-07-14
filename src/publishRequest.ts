@@ -111,6 +111,7 @@ export interface PublishOutcome {
 export async function executePublish(
     accountId: string,
     parsed: ParsedPublishRequest,
+    authorId: string,
 ): Promise<PublishOutcome> {
     if (!parsed.targets.length) {
         throw new Error('No channels selected');
@@ -140,6 +141,7 @@ export async function executePublish(
               markdown: parsed.markdown,
               imageUrls: parsed.imageUrls,
               results,
+              authorId,
           })
         : null;
     return { results, publication };

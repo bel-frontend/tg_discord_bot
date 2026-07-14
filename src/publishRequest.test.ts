@@ -178,29 +178,37 @@ describe('parsePublishRequest (multipart body)', () => {
 describe('executePublish', () => {
     test('rejects when there are no targets', async () => {
         await expect(
-            executePublish('user1', {
-                markdown: 'hi',
-                draftId: '',
-                title: '',
-                targets: [],
-                imageUrls: [],
-                images: [],
-                silent: false,
-            }),
+            executePublish(
+                'user1',
+                {
+                    markdown: 'hi',
+                    draftId: '',
+                    title: '',
+                    targets: [],
+                    imageUrls: [],
+                    images: [],
+                    silent: false,
+                },
+                'author1',
+            ),
         ).rejects.toThrow('No channels selected');
     });
 
     test('rejects when there is no content', async () => {
         await expect(
-            executePublish('user1', {
-                markdown: '   ',
-                draftId: '',
-                title: '',
-                targets: [{ platform: 'telegram', channelId: 'chan1' }],
-                imageUrls: [],
-                images: [],
-                silent: false,
-            }),
+            executePublish(
+                'user1',
+                {
+                    markdown: '   ',
+                    draftId: '',
+                    title: '',
+                    targets: [{ platform: 'telegram', channelId: 'chan1' }],
+                    imageUrls: [],
+                    images: [],
+                    silent: false,
+                },
+                'author1',
+            ),
         ).rejects.toThrow('Content is empty');
     });
 
@@ -208,15 +216,19 @@ describe('executePublish', () => {
         publishToTargetsMock.mockClear();
         createPublicationMock.mockClear();
 
-        const outcome = await executePublish('user1', {
-            markdown: 'hi',
-            draftId: 'd1',
-            title: '',
-            targets: [{ platform: 'telegram', channelId: 'chan1' }],
-            imageUrls: [],
-            images: [],
-            silent: false,
-        });
+        const outcome = await executePublish(
+            'user1',
+            {
+                markdown: 'hi',
+                draftId: 'd1',
+                title: '',
+                targets: [{ platform: 'telegram', channelId: 'chan1' }],
+                imageUrls: [],
+                images: [],
+                silent: false,
+            },
+            'author1',
+        );
 
         expect(publishToTargetsMock).toHaveBeenCalledWith(
             [{ platform: 'telegram', channelId: 'chan1' }],
@@ -233,15 +245,19 @@ describe('executePublish', () => {
         publishToTargetsMock.mockClear();
         createPublicationMock.mockClear();
 
-        const outcome = await executePublish('user1', {
-            markdown: 'hi',
-            draftId: '',
-            title: '',
-            targets: [{ platform: 'telegram', channelId: 'chan1' }],
-            imageUrls: [],
-            images: [],
-            silent: false,
-        });
+        const outcome = await executePublish(
+            'user1',
+            {
+                markdown: 'hi',
+                draftId: '',
+                title: '',
+                targets: [{ platform: 'telegram', channelId: 'chan1' }],
+                imageUrls: [],
+                images: [],
+                silent: false,
+            },
+            'author1',
+        );
 
         expect(publishToTargetsMock).toHaveBeenCalledWith(
             [{ platform: 'telegram', channelId: 'chan1' }],

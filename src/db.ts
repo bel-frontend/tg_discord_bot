@@ -1,4 +1,4 @@
-import { MongoClient, type Collection, type ObjectId } from 'mongodb';
+import { MongoClient, ObjectId, type Collection } from 'mongodb';
 import type {
     AccountMemberStatus,
     MemberPermissions,
@@ -159,6 +159,7 @@ export interface PublicationTargetDoc {
 export interface PublicationDoc {
     _id?: ObjectId;
     userId: string; // account id — publication history is shared across the account
+    authorId?: string; // member who triggered this publish (added later; older docs may lack it)
     draftId: string;
     title: string;
     markdown: string;
@@ -336,6 +337,18 @@ export async function connect(): Promise<void> {
 export function users(): Collection<UserDoc> {
     if (!usersColl) throw new Error('DB not connected — call connect() first');
     return usersColl;
+}
+
+/** Batch-resolves user ids to emails, for labeling records with their author. */
+export async function getUserEmailsByIds(
+    userIds: string[],
+): Promise<Map<string, string>> {
+    const ids = [...new Set(userIds)].filter((id) => ObjectId.isValid(id));
+    if (!ids.length) return new Map();
+    const docs = await users()
+        .find({ _id: { $in: ids.map((id) => new ObjectId(id)) } })
+        .toArray();
+    return new Map(docs.map((doc) => [doc._id!.toString(), doc.email]));
 }
 
 export function drafts(): Collection<DraftDoc> {

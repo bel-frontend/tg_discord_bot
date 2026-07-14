@@ -1,5 +1,6 @@
 import { ObjectId } from 'mongodb';
 import {
+    getUserEmailsByIds,
     scheduledPublications,
     type ScheduledPublicationDoc,
 } from './db';
@@ -15,7 +16,10 @@ export interface ScheduledPublicationInput {
     scheduledAt?: unknown;
 }
 
-function serialize(doc: ScheduledPublicationDoc): ScheduledPublication {
+function serialize(
+    doc: ScheduledPublicationDoc,
+    authorEmail: string,
+): ScheduledPublication {
     return {
         id: doc._id!.toString(),
         draftId: doc.draftId,
@@ -27,7 +31,15 @@ function serialize(doc: ScheduledPublicationDoc): ScheduledPublication {
         publicationId: doc.publicationId,
         createdAt: doc.createdAt.toISOString(),
         updatedAt: doc.updatedAt.toISOString(),
+        authorEmail,
     };
+}
+
+async function serializeWithAuthor(
+    doc: ScheduledPublicationDoc,
+): Promise<ScheduledPublication> {
+    const emailsByUserId = await getUserEmailsByIds([doc.userId]);
+    return serialize(doc, emailsByUserId.get(doc.userId) ?? 'Unknown');
 }
 
 function parseScheduledAt(value: unknown): Date {
@@ -49,7 +61,10 @@ export async function listScheduledPublications(
         .find({ accountId })
         .sort({ scheduledAt: 1, createdAt: 1 })
         .toArray();
-    return docs.map(serialize);
+    const emailsByUserId = await getUserEmailsByIds(docs.map((doc) => doc.userId));
+    return docs.map((doc) =>
+        serialize(doc, emailsByUserId.get(doc.userId) ?? 'Unknown'),
+    );
 }
 
 /**
@@ -83,7 +98,7 @@ export async function createScheduledPublication(
     };
     const result = await scheduledPublications().insertOne(doc);
     doc._id = result.insertedId;
-    return serialize(doc);
+    return serializeWithAuthor(doc);
 }
 
 export async function cancelScheduledPublication(
@@ -105,7 +120,7 @@ export async function cancelScheduledPublication(
         },
         { returnDocument: 'after' },
     );
-    return doc ? serialize(doc) : null;
+    return doc ? serializeWithAuthor(doc) : null;
 }
 
 /** Draft-linked cleanup — scoped to the draft's actual author, not the whole account. */
@@ -150,15 +165,19 @@ export async function publishScheduledPublication(
         if (!draft) throw new Error('Draft not found');
 
         const images = await resolveImages(doc.userId, draft.imageIds);
-        const { results, publication } = await executePublish(doc.accountId, {
-            draftId: draft.id,
-            title: draft.title || 'Untitled',
-            markdown: draft.markdown,
-            imageUrls: draft.imageUrls,
-            targets: draft.targets,
-            images,
-            silent: draft.silent ?? false,
-        });
+        const { results, publication } = await executePublish(
+            doc.accountId,
+            {
+                draftId: draft.id,
+                title: draft.title || 'Untitled',
+                markdown: draft.markdown,
+                imageUrls: draft.imageUrls,
+                targets: draft.targets,
+                images,
+                silent: draft.silent ?? false,
+            },
+            doc.userId,
+        );
 
         await scheduledPublications().updateOne(
             { _id: doc._id },

@@ -1,5 +1,5 @@
 import { ObjectId } from 'mongodb';
-import { publications, type PublicationDoc } from './db';
+import { getUserEmailsByIds, publications, type PublicationDoc } from './db';
 import type { PublishResult } from './platforms/types';
 import {
     deleteTargets,
@@ -14,9 +14,10 @@ export interface PublicationInput {
     markdown: string;
     imageUrls: string[];
     results: PublishResult[];
+    authorId?: string;
 }
 
-function serialize(doc: PublicationDoc): Publication {
+function serialize(doc: PublicationDoc, authorEmail?: string): Publication {
     return {
         id: doc._id!.toString(),
         draftId: doc.draftId,
@@ -36,7 +37,14 @@ function serialize(doc: PublicationDoc): Publication {
         ),
         createdAt: doc.createdAt.toISOString(),
         updatedAt: doc.updatedAt.toISOString(),
+        authorEmail,
     };
+}
+
+async function serializeWithAuthor(doc: PublicationDoc): Promise<Publication> {
+    if (!doc.authorId) return serialize(doc);
+    const emailsByUserId = await getUserEmailsByIds([doc.authorId]);
+    return serialize(doc, emailsByUserId.get(doc.authorId));
 }
 
 function resultsToTargets(results: PublishResult[]) {
@@ -58,7 +66,12 @@ export async function listPublications(accountId: string, draftId?: string) {
         .find(filter)
         .sort({ updatedAt: -1 })
         .toArray();
-    return docs.map(serialize);
+    const emailsByAuthorId = await getUserEmailsByIds(
+        docs.map((doc) => doc.authorId).filter((id): id is string => Boolean(id)),
+    );
+    return docs.map((doc) =>
+        serialize(doc, doc.authorId ? emailsByAuthorId.get(doc.authorId) : undefined),
+    );
 }
 
 export async function getPublication(accountId: string, id: string) {
@@ -67,7 +80,7 @@ export async function getPublication(accountId: string, id: string) {
         _id: new ObjectId(id),
         userId: accountId,
     });
-    return doc ? serialize(doc) : null;
+    return doc ? serializeWithAuthor(doc) : null;
 }
 
 export async function createPublication(
@@ -77,6 +90,7 @@ export async function createPublication(
     const now = new Date();
     const doc: PublicationDoc = {
         userId: accountId,
+        authorId: input.authorId,
         draftId: input.draftId,
         title: input.title,
         markdown: input.markdown,
@@ -87,7 +101,7 @@ export async function createPublication(
     };
     const result = await publications().insertOne(doc);
     doc._id = result.insertedId;
-    return serialize(doc);
+    return serializeWithAuthor(doc);
 }
 
 export async function updatePublicationResults(
@@ -109,7 +123,7 @@ export async function updatePublicationResults(
         },
         { returnDocument: 'after' },
     );
-    return result ? serialize(result) : null;
+    return result ? serializeWithAuthor(result) : null;
 }
 
 export async function deletePublicationRecord(accountId: string, id: string) {

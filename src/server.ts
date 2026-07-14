@@ -533,10 +533,16 @@ export async function handleApi(req: Request, url: URL): Promise<Response> {
     }
 
     if (path === '/api/publications' && method === 'GET') {
-        const draftId = url.searchParams.get('draftId') || undefined;
-        return json({
-            publications: await listPublications(actor.accountId, draftId),
-        });
+        try {
+            assertPermission(actor, 'canPublish');
+            const draftId = url.searchParams.get('draftId') || undefined;
+            return json({
+                publications: await listPublications(actor.accountId, draftId),
+            });
+        } catch (err: any) {
+            if (err instanceof AuthError) return json({ error: err.message }, err.status);
+            throw err;
+        }
     }
 
     const publicationByIdMatch = path.match(/^\/api\/publications\/([^/]+)$/);
@@ -548,9 +554,15 @@ export async function handleApi(req: Request, url: URL): Promise<Response> {
     }
 
     if (path === '/api/scheduled-publications' && method === 'GET') {
-        return json({
-            scheduledPublications: await listScheduledPublications(actor.accountId),
-        });
+        try {
+            assertPermission(actor, 'canPublish');
+            return json({
+                scheduledPublications: await listScheduledPublications(actor.accountId),
+            });
+        } catch (err: any) {
+            if (err instanceof AuthError) return json({ error: err.message }, err.status);
+            throw err;
+        }
     }
 
     if (path === '/api/scheduled-publications' && method === 'POST') {
@@ -642,7 +654,7 @@ export async function handleApi(req: Request, url: URL): Promise<Response> {
             assertPermission(actor, 'canPublish');
             const resourceMap = await buildResourceIdMap(actor.accountId);
             assertChannelAccess(actor, parsed.targets, resourceMap);
-            return json(await executePublish(actor.accountId, parsed));
+            return json(await executePublish(actor.accountId, parsed, actor.userId));
         } catch (err: any) {
             if (err instanceof AuthError) return json({ error: err.message }, err.status);
             return json({ error: err?.message || 'Publish failed' }, 400);

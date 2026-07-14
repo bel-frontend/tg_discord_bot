@@ -44,7 +44,8 @@ function ScheduledItem({ item, canDelete, onCancel, onOpenDraft }: ScheduledItem
             <div>
                 <strong>{item.title}</strong>
                 <div className="resource-meta">
-                    {formatDate(item.scheduledAt)} · {statusLabel(item.status)}
+                    {formatDate(item.scheduledAt)} · {statusLabel(item.status)} ·{' '}
+                    {item.authorEmail}
                 </div>
                 {item.error && <p className="scheduled-error">{item.error}</p>}
             </div>
@@ -91,7 +92,8 @@ function ArchiveItem({ publication, canDelete, onOpenDraft, onDelete }: ArchiveI
                 <strong>{publication.title}</strong>
                 <div className="resource-meta">
                     {formatDate(publication.updatedAt)} · Published · {okCount}/
-                    {publication.targets.length} targets
+                    {publication.targets.length} targets ·{' '}
+                    {publication.authorEmail ?? 'Unknown'}
                 </div>
             </div>
             <div className="scheduled-actions">

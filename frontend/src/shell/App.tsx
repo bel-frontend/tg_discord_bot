@@ -148,6 +148,8 @@ export function App() {
         openEditRoute(editIdForPublishedOrDraft(draftId, publicationId));
     }
 
+    const canViewScheduled = me?.role === 'owner' || me?.permissions.canPublish === true;
+
     function renderPage() {
         const search = new URLSearchParams(locationSearch);
         if (view === 'resources') {
@@ -159,7 +161,7 @@ export function App() {
                 />
             );
         }
-        if (view === 'scheduled') {
+        if (view === 'scheduled' && canViewScheduled) {
             return (
                 <ScheduledPage
                     onOpenDraft={(draftId, publicationId) =>
@@ -238,7 +240,9 @@ export function App() {
                         navItems={[
                             navItem('composer', 'Composer'),
                             navItem('resources', 'Resources'),
-                            navItem('scheduled', 'Scheduled'),
+                            ...(canViewScheduled
+                                ? [navItem('scheduled', 'Scheduled')]
+                                : []),
                             navItem('settings', 'Settings'),
                         ]}
                         onToggleTheme={toggleTheme}
