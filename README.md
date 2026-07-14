@@ -29,6 +29,15 @@ using [Toast UI Editor](https://ui.toast.com/tui-editor).
 
 ---
 
+## Try it — hosted instance
+
+A live instance is already running at **[composer.bel-geek.com](https://composer.bel-geek.com)**.
+Register an account there and start publishing — no setup required. Self-hosting (the rest of
+this README) is only needed for a private/custom deployment, or if you want to run Composer
+Desktop locally to publish to Threads/X from your own machine.
+
+---
+
 ## How it works
 
 ```
@@ -52,7 +61,8 @@ src/server.ts ── Bun.serve router
 
 ## Configuration
 
-Create a `.env` (see `.env.example`):
+Create a `.env` (see `.env.example`, which is the source of truth for the full list — it also
+documents optional dev/Docker port overrides and the scheduler poll interval):
 
 ```env
 PORT=3000
@@ -147,8 +157,14 @@ Open `http://localhost:3000`, register an account, write a post, pick channels, 
 bun run dev          # starts the Bun API server and Next.js dev server
 ```
 
-Then open the frontend URL printed by Next.js. The frontend lives in `frontend/` (its own package);
-`bun run build` compiles it into `public/`.
+`bun run dev` (`scripts/dev.ts`) scans for a free backend port starting at `PORT` (default
+`3001`) and points the Next.js dev server's API proxy at whichever port it actually binds,
+printing both URLs. Open the frontend URL it prints. The frontend lives in `frontend/` (its own
+package); `bun run build` compiles it into `public/`.
+
+> If `bun run dev` or `bun run start` won't bind, something else may already be holding the port —
+> often a leftover `bun --watch index.ts` from a previous session. Check with
+> `lsof -nP -iTCP:3000 -sTCP:LISTEN` (swap in the port in question) and kill the PID it reports.
 
 ### Docker
 
