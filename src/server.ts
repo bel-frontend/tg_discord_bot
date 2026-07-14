@@ -716,7 +716,7 @@ export async function handleApi(req: Request, url: URL): Promise<Response> {
                 : json({ error: 'Not found' }, 404);
         }
         if (method === 'DELETE') {
-            const ok = await deleteDraftFolder(actor.userId, id);
+            const ok = await deleteDraftFolder(actor.userId, actor.accountId, id);
             return ok ? json({ ok: true }) : json({ error: 'Not found' }, 404);
         }
     }

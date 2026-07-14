@@ -208,7 +208,7 @@ describe('DraftsRail', () => {
         });
     });
 
-    it('deletes a folder after confirmation and reports it upward', async () => {
+    it('deletes a folder after confirmation and reports it upward (cascade-deletes its drafts)', async () => {
         vi.spyOn(window, 'confirm').mockReturnValue(true);
         const props = renderRail();
         await screen.findByText('Favourites');
@@ -218,12 +218,38 @@ describe('DraftsRail', () => {
         );
 
         expect(screen.queryByText('Favourites')).not.toBeInTheDocument();
-        expect(props.onFolderDeleted).toHaveBeenCalledWith('f1');
         await waitFor(() => {
             expect(apiMock).toHaveBeenCalledWith('/api/draft-folders/f1', {
                 method: 'DELETE',
             });
         });
+        await waitFor(() => {
+            expect(props.onFolderDeleted).toHaveBeenCalledWith('f1');
+        });
+    });
+
+    it('does not report the folder deleted upward when the API call fails', async () => {
+        vi.spyOn(window, 'confirm').mockReturnValue(true);
+        apiMock.mockImplementation(async (path: string, opts?: any) => {
+            if (path === '/api/draft-folders') return { folders };
+            if (path === '/api/draft-folders/f1' && opts?.method === 'DELETE') {
+                throw new Error('boom');
+            }
+            return {};
+        });
+        const props = renderRail();
+        await screen.findByText('Favourites');
+
+        fireEvent.click(
+            screen.getByRole('button', { name: 'Delete folder Favourites' }),
+        );
+
+        await waitFor(() => {
+            expect(apiMock).toHaveBeenCalledWith('/api/draft-folders/f1', {
+                method: 'DELETE',
+            });
+        });
+        expect(props.onFolderDeleted).not.toHaveBeenCalled();
     });
 
     it('collapses a folder and keeps the state in localStorage', async () => {
@@ -253,5 +279,50 @@ describe('DraftsRail', () => {
         fireEvent.click(screen.getByText('Root draft'));
 
         expect(props.onOpen).toHaveBeenCalledWith('d1');
+    });
+
+    it('creates a new draft in the selected folder, defaulting to root when none is selected', async () => {
+        const props = renderRail();
+        await screen.findByText('Favourites');
+
+        fireEvent.click(screen.getByRole('button', { name: '＋ New' }));
+        expect(props.onNew).toHaveBeenLastCalledWith(null);
+
+        fireEvent.click(
+            screen.getByRole('button', { name: 'Select folder Favourites' }),
+        );
+        fireEvent.click(screen.getByRole('button', { name: '＋ New' }));
+        expect(props.onNew).toHaveBeenLastCalledWith('f1');
+    });
+
+    it('deselects a folder by clicking it again', async () => {
+        const props = renderRail();
+        await screen.findByText('Favourites');
+
+        const favouritesButton = screen.getByRole('button', {
+            name: 'Select folder Favourites',
+        });
+        fireEvent.click(favouritesButton);
+        fireEvent.click(screen.getByRole('button', { name: '＋ New' }));
+        expect(props.onNew).toHaveBeenLastCalledWith('f1');
+
+        fireEvent.click(favouritesButton);
+        fireEvent.click(screen.getByRole('button', { name: '＋ New' }));
+        expect(props.onNew).toHaveBeenLastCalledWith(null);
+    });
+
+    it('moves a dragged folder to the end of the list when dropped on the root area', async () => {
+        renderRail();
+        await screen.findByText('Favourites');
+
+        fireEvent.dragStart(screen.getByText('Favourites'));
+        fireEvent.drop(screen.getByText('Root draft'));
+
+        await waitFor(() => {
+            expect(apiMock).toHaveBeenCalledWith('/api/draft-folders/order', {
+                method: 'PUT',
+                body: { ids: ['f2', 'f1'] },
+            });
+        });
     });
 });

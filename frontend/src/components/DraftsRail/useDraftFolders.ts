@@ -89,13 +89,15 @@ export function useDraftFolders() {
         }
     }
 
-    async function deleteFolder(folderId: string) {
+    async function deleteFolder(folderId: string): Promise<boolean> {
         setFolders((cur) => cur.filter((f) => f.id !== folderId));
         try {
             await api(`/api/draft-folders/${folderId}`, { method: 'DELETE' });
+            return true;
         } catch (err: any) {
             toast(err.message, 'error');
             loadFolders();
+            return false;
         }
     }
 

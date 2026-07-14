@@ -154,11 +154,11 @@ export function Composer({
         }
     }
 
-    function newDraft() {
+    function newDraft(folderId: string | null = null) {
         draftLoadSeq.current++;
         draftEditor.revokeImages();
         draftEditor.setImages([]);
-        autosave.withSuppressed(() => draftEditor.resetForNewDraft());
+        autosave.withSuppressed(() => draftEditor.resetForNewDraft(folderId));
         publications.reset();
         openedRouteDraftRef.current = '';
         onNewDraftRoute?.();
@@ -184,11 +184,11 @@ export function Composer({
     }
 
     function handleFolderDeleted(folderId: string) {
-        setDrafts((cur) =>
-            cur.map((d) =>
-                d.folderId === folderId ? { ...d, folderId: null } : d,
-            ),
+        const hadActiveDraft = drafts.some(
+            (d) => d.folderId === folderId && d.id === draftEditor.draftId,
         );
+        setDrafts((cur) => cur.filter((d) => d.folderId !== folderId));
+        if (hadActiveDraft) newDraft();
     }
 
     function publish() {

@@ -90,4 +90,28 @@ describe('useDraftEditor', () => {
 
         expect(result.current.parseImageUrls()).toEqual([]);
     });
+
+    it('collect() defaults folderId to null', () => {
+        const editorRef = makeEditorRef('');
+        const setDrafts = vi.fn();
+        const { result } = renderHook(() => useDraftEditor(editorRef as any, setDrafts));
+
+        expect(result.current.collect().folderId).toBeNull();
+    });
+
+    it('resetForNewDraft(folderId) carries the folder into the next collect()', () => {
+        const editorRef = makeEditorRef('');
+        const setDrafts = vi.fn();
+        const { result } = renderHook(() => useDraftEditor(editorRef as any, setDrafts));
+
+        act(() => {
+            result.current.resetForNewDraft('folder1');
+        });
+        expect(result.current.collect().folderId).toBe('folder1');
+
+        act(() => {
+            result.current.resetForNewDraft();
+        });
+        expect(result.current.collect().folderId).toBeNull();
+    });
 });

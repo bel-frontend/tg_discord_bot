@@ -45,17 +45,39 @@
     min-width: 0;
 }
 
+.collapseToggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--text-dim);
+    cursor: pointer;
+
+    &:hover {
+        color: var(--text);
+    }
+}
+
 .folderToggle {
     display: inline-flex;
     align-items: center;
     gap: 6px;
     min-width: 0;
-    padding: 0;
+    padding: 2px 6px;
     border: 0;
+    border-radius: 8px;
     background: transparent;
     color: inherit;
     font: inherit;
     cursor: pointer;
+}
+
+.groupSelected {
+    background: var(--bg-elev-2);
+    box-shadow: inset 3px 0 0 var(--accent);
 }
 
 .folderName {

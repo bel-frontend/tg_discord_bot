@@ -9,7 +9,7 @@ import styles from './DraftsRail.module.scss';
 interface Props {
     drafts: Draft[];
     activeId: string | null;
-    onNew: () => void;
+    onNew: (folderId: string | null) => void;
     onOpen: (id: string) => void;
     onDelete: (id: string) => void;
     onRename: (id: string, title: string) => void;
@@ -41,6 +41,9 @@ export function DraftsRail({
     } = useDraftFolders();
     const [dragDraftId, setDragDraftId] = useState<string | null>(null);
     const [dragFolderId, setDragFolderId] = useState<string | null>(null);
+    const [selectedFolderId, setSelectedFolderId] = useState<string | null>(
+        null,
+    );
     const [renamingFolderId, setRenamingFolderId] = useState<string | null>(
         null,
     );
@@ -80,13 +83,22 @@ export function DraftsRail({
     }
 
     function dropOnRoot() {
-        if (dragDraftId) onMove(dragDraftId, null);
+        if (dragDraftId) {
+            onMove(dragDraftId, null);
+        } else if (dragFolderId) {
+            const ids = folders
+                .map((f) => f.id)
+                .filter((id) => id !== dragFolderId);
+            ids.push(dragFolderId);
+            reorderFolders(ids);
+        }
         endDrag();
     }
 
-    function removeFolder(folderId: string) {
-        deleteFolder(folderId);
-        onFolderDeleted?.(folderId);
+    async function removeFolder(folderId: string) {
+        setSelectedFolderId((cur) => (cur === folderId ? null : cur));
+        const ok = await deleteFolder(folderId);
+        if (ok) onFolderDeleted?.(folderId);
     }
 
     function renderRow(draft: Draft) {
@@ -123,7 +135,10 @@ export function DraftsRail({
                     >
                         <FolderPlus size={16} strokeWidth={2.4} />
                     </button>
-                    <button className="btn small" onClick={onNew}>
+                    <button
+                        className="btn small"
+                        onClick={() => onNew(selectedFolderId)}
+                    >
                         ＋ New
                     </button>
                 </div>
@@ -132,12 +147,20 @@ export function DraftsRail({
                 className={styles.list}
                 onDragOver={(e) => {
                     // Dropping outside a folder moves the draft back to the
-                    // root — like dragging a file out of a directory.
-                    if (dragDraftId) e.preventDefault();
+                    // root — like dragging a file out of a directory — or,
+                    // for a dragged folder, reorders it to the end.
+                    if (dragDraftId || dragFolderId) e.preventDefault();
                 }}
                 onDrop={(e) => {
                     e.preventDefault();
                     dropOnRoot();
+                }}
+                onClick={(e) => {
+                    // Only deselect when the background itself was clicked,
+                    // not a bubbled click from a folder/draft row inside it.
+                    if (e.target === e.currentTarget) {
+                        setSelectedFolderId(null);
+                    }
                 }}
             >
                 {drafts.length === 0 && folders.length === 0 && (
@@ -168,6 +191,7 @@ export function DraftsRail({
                             folder={folder}
                             count={members.length}
                             collapsed={Boolean(collapsed[folder.id])}
+                            selected={selectedFolderId === folder.id}
                             renaming={renamingFolderId === folder.id}
                             dragActive={
                                 dragDraftId !== null || dragFolderId !== null
@@ -177,6 +201,11 @@ export function DraftsRail({
                             onRenameEnd={() => setRenamingFolderId(null)}
                             onDelete={removeFolder}
                             onToggleCollapsed={toggleCollapsed}
+                            onSelect={(id) =>
+                                setSelectedFolderId((cur) =>
+                                    cur === id ? null : id,
+                                )
+                            }
                             onDrop={dropOnFolder}
                             onDragStartFolder={setDragFolderId}
                             onDragEndFolder={endDrag}

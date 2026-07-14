@@ -63,6 +63,7 @@ mock.module('./db', () => ({
     emailChanges: emptyCollection,
     channelResources: emptyCollection,
     drafts: emptyCollection,
+    draftFolders: emptyCollection,
     uploads: emptyCollection,
     platformConfigs: emptyCollection,
     publications: emptyCollection,

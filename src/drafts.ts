@@ -9,6 +9,8 @@ export interface DraftInput {
     imageIds?: string[];
     targets?: Target[];
     silent?: unknown;
+    /** Folder to create the draft in, resolved leniently — see `resolveFolderIdOnCreate`. */
+    folderId?: unknown;
 }
 
 function serialize(doc: DraftDoc): Draft {
@@ -70,11 +72,31 @@ export async function getDraft(userId: string, id: string) {
     return doc ? serialize(doc) : null;
 }
 
+/** Unlike organizeDraft's strict validation (which aborts a PATCH on a bad
+ * folderId), a bad/deleted/foreign folderId here must not fail the create —
+ * it just falls back to root, so a first autosave never appears to lose the
+ * user's typed content. */
+async function resolveFolderIdOnCreate(
+    userId: string,
+    raw: unknown,
+): Promise<string | null> {
+    if (raw == null) return null;
+    const folderId = String(raw);
+    if (!ObjectId.isValid(folderId)) return null;
+    const folder = await draftFolders().findOne({
+        _id: new ObjectId(folderId),
+        userId,
+    });
+    return folder ? folderId : null;
+}
+
 export async function createDraft(userId: string, input: DraftInput) {
     const now = new Date();
+    const folderId = await resolveFolderIdOnCreate(userId, input.folderId);
     const doc: DraftDoc = {
         userId,
         ...sanitize(input),
+        folderId,
         createdAt: now,
         updatedAt: now,
     };

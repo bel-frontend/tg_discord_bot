@@ -1,6 +1,8 @@
 import { ObjectId } from 'mongodb';
 import { draftFolders, drafts, type DraftFolderDoc } from './db';
 import type { DraftFolder } from '../shared/types';
+import { deletePublicationsForDraft } from './publications';
+import { deleteScheduledPublicationsForDraft } from './scheduledPublications';
 
 function serialize(doc: DraftFolderDoc): DraftFolder {
     return {
@@ -54,10 +56,12 @@ export async function renameDraftFolder(
     return result ? serialize(result) : null;
 }
 
-/** Deletes the folder; its drafts move back to the root (updatedAt untouched
- * so the list order does not change). */
+/** Deletes the folder and every draft inside it, plus each of those drafts'
+ * scheduled/publication records — mirrors the cleanup a single draft delete
+ * does (DELETE /api/drafts/:id), just applied per member draft. */
 export async function deleteDraftFolder(
     userId: string,
+    accountId: string,
     id: string,
 ): Promise<boolean> {
     if (!ObjectId.isValid(id)) return false;
@@ -66,9 +70,18 @@ export async function deleteDraftFolder(
         userId,
     });
     if (result.deletedCount === 0) return false;
-    await drafts().updateMany(
-        { userId, folderId: id },
-        { $set: { folderId: null } },
+
+    const members = await drafts()
+        .find({ userId, folderId: id })
+        .project({ _id: 1 })
+        .toArray();
+    const draftIds = members.map((m) => m._id!.toString());
+    await drafts().deleteMany({ userId, folderId: id });
+    await Promise.all(
+        draftIds.flatMap((draftId) => [
+            deleteScheduledPublicationsForDraft(userId, draftId),
+            deletePublicationsForDraft(accountId, draftId),
+        ]),
     );
     return true;
 }

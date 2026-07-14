@@ -25,6 +25,7 @@ export function useDraftEditor(
     const toast = useToast();
 
     const [draftId, setDraftId] = useState<string | null>(null);
+    const pendingFolderIdRef = useRef<string | null>(null);
     const [title, setTitle] = useState('');
     const [imageUrls, setImageUrls] = useState('');
     const [images, setImages] = useState<ImageItem[]>([]);
@@ -67,6 +68,7 @@ export function useDraftEditor(
                 imageIds: imagesRef.current.map((i) => i.id),
                 targets: targetsRef.current,
                 silent: silentRef.current,
+                folderId: pendingFolderIdRef.current,
             };
         },
         [editorRef, parseImageUrls],
@@ -125,7 +127,8 @@ export function useDraftEditor(
     }
 
     /** Clear editor state for a brand new draft (caller wraps this with autosave suppression). */
-    function resetForNewDraft() {
+    function resetForNewDraft(folderId: string | null = null) {
+        pendingFolderIdRef.current = folderId;
         setDraftId(null);
         setTitle('');
         setImageUrls('');

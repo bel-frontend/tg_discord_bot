@@ -14,6 +14,7 @@ interface Props {
     folder: DraftFolder;
     count: number;
     collapsed: boolean;
+    selected: boolean;
     renaming: boolean;
     dragActive: boolean;
     onRename: (folderId: string, name: string) => void;
@@ -21,6 +22,8 @@ interface Props {
     onRenameEnd: () => void;
     onDelete: (folderId: string) => void;
     onToggleCollapsed: (folderId: string) => void;
+    /** Marks this folder as the target for new drafts (click again to clear). */
+    onSelect: (folderId: string) => void;
     /** Something (a draft or another folder) was dropped on this folder. */
     onDrop: (folderId: string) => void;
     onDragStartFolder: (folderId: string) => void;
@@ -32,6 +35,7 @@ export function DraftFolderGroup({
     folder,
     count,
     collapsed,
+    selected,
     renaming,
     dragActive,
     onRename,
@@ -39,6 +43,7 @@ export function DraftFolderGroup({
     onRenameEnd,
     onDelete,
     onToggleCollapsed,
+    onSelect,
     onDrop,
     onDragStartFolder,
     onDragEndFolder,
@@ -55,7 +60,9 @@ export function DraftFolderGroup({
 
     function remove() {
         const confirmed = window.confirm(
-            `Delete folder "${folder.name}"? Drafts move back to the list.`,
+            count > 0
+                ? `Delete folder "${folder.name}" and its ${count} draft${count === 1 ? '' : 's'}? This cannot be undone.`
+                : `Delete folder "${folder.name}"?`,
         );
         if (confirmed) onDelete(folder.id);
     }
@@ -107,17 +114,27 @@ export function DraftFolderGroup({
                         onBlur={(e) => commitRename(e.currentTarget.value)}
                     />
                 ) : (
-                    <button
-                        type="button"
-                        className={styles.folderToggle}
-                        aria-label={`${collapsed ? 'Expand' : 'Collapse'} folder ${folder.name}`}
-                        onClick={() => onToggleCollapsed(folder.id)}
-                    >
-                        <Chevron size={14} strokeWidth={2.4} />
-                        <FolderIcon size={14} strokeWidth={2.4} />
-                        <span className={styles.folderName}>{folder.name}</span>
-                        <span className={styles.count}>{count}</span>
-                    </button>
+                    <>
+                        <button
+                            type="button"
+                            className={styles.collapseToggle}
+                            aria-label={`${collapsed ? 'Expand' : 'Collapse'} folder ${folder.name}`}
+                            onClick={() => onToggleCollapsed(folder.id)}
+                        >
+                            <Chevron size={14} strokeWidth={2.4} />
+                        </button>
+                        <button
+                            type="button"
+                            className={`${styles.folderToggle} ${selected ? styles.groupSelected : ''}`}
+                            aria-label={`Select folder ${folder.name}`}
+                            aria-pressed={selected}
+                            onClick={() => onSelect(folder.id)}
+                        >
+                            <FolderIcon size={14} strokeWidth={2.4} />
+                            <span className={styles.folderName}>{folder.name}</span>
+                            <span className={styles.count}>{count}</span>
+                        </button>
+                    </>
                 )}
                 <div className={styles.headActions}>
                     <button

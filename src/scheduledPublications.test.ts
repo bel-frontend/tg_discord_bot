@@ -27,6 +27,38 @@ const emptyCollection = () => ({
     deleteMany: mock(async () => ({ deletedCount: 0 })),
 });
 
+const currentDraftId = new ObjectId();
+const currentDraft = {
+    id: currentDraftId.toString(),
+    title: 'Current title',
+    markdown: 'current markdown',
+    imageUrls: ['https://example.com/current.png'],
+    imageIds: ['img1'],
+    targets: [{ platform: 'telegram', channelId: 'chan1' }],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+};
+// Real doc shape backing the real getDraft()/serialize() round trip below —
+// avoids mock.module('./drafts', ...), which would collide process-wide with
+// any other test file that needs the real ./drafts module.
+const currentDraftDoc = {
+    _id: currentDraftId,
+    userId: 'user1',
+    title: currentDraft.title,
+    markdown: currentDraft.markdown,
+    imageUrls: currentDraft.imageUrls,
+    imageIds: currentDraft.imageIds,
+    targets: currentDraft.targets,
+    silent: false,
+    folderId: null,
+    pinned: false,
+    createdAt: new Date(currentDraft.createdAt),
+    updatedAt: new Date(currentDraft.updatedAt),
+};
+const draftsCollection = {
+    findOne: mock(async (_filter: any) => currentDraftDoc),
+};
+
 mock.module('./db', () => ({
     FULL_ACCESS_PERMISSIONS: {
         canPublish: true,
@@ -41,7 +73,8 @@ mock.module('./db', () => ({
     passwordResets: emptyCollection,
     emailChanges: emptyCollection,
     channelResources: emptyCollection,
-    drafts: emptyCollection,
+    drafts: () => draftsCollection,
+    draftFolders: emptyCollection,
     uploads: emptyCollection,
     publications: emptyCollection,
     scheduledPublications: () => scheduledCollection,
@@ -50,18 +83,6 @@ mock.module('./db', () => ({
     localPublisherJobs: emptyCollection,
 }));
 
-const currentDraft = {
-    id: new ObjectId().toString(),
-    title: 'Current title',
-    markdown: 'current markdown',
-    imageUrls: ['https://example.com/current.png'],
-    imageIds: ['img1'],
-    targets: [{ platform: 'telegram', channelId: 'chan1' }],
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-};
-
-const getDraftMock = mock(async () => currentDraft);
 const resolveImagesMock = mock(async () => [
     {
         data: Buffer.from('image'),
@@ -81,13 +102,6 @@ const createPublicationMock = mock(async () => ({
     id: 'pub1',
 }));
 
-mock.module('./drafts', () => ({
-    createDraft: mock(async () => null),
-    deleteDraft: mock(async () => false),
-    getDraft: getDraftMock,
-    listDrafts: mock(async () => []),
-    updateDraft: mock(async () => null),
-}));
 mock.module('./uploads', () => ({
     getUpload: mock(async () => null),
     resolveImages: resolveImagesMock,
