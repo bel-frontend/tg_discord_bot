@@ -31,6 +31,9 @@ Open the printed URL, register an account, write a post, pick channels, and publ
 
 ## Documentation
 
+- **[docs/features.md](docs/features.md)** — precise inventory of what's currently supported: the
+  editor, drafts, scheduling, per-platform limits and capabilities, accounts/workspaces, and
+  Composer Desktop.
 - **[docs/self-hosting.md](docs/self-hosting.md)** — environment variables, `bun run dev` /
   `bun run start`, Docker, workspaces & members.
 - **[docs/platforms.md](docs/platforms.md)** — how to connect Telegram, Discord, Threads, and X,
