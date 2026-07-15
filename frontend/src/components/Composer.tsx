@@ -183,11 +183,16 @@ export function Composer({
         if (draftEditor.draftId === id) draftEditor.setTitle(trimmed);
     }
 
-    function handleFolderDeleted(folderId: string) {
+    function handleFolderDeleted(folderIds: Set<string>) {
         const hadActiveDraft = drafts.some(
-            (d) => d.folderId === folderId && d.id === draftEditor.draftId,
+            (d) =>
+                d.folderId &&
+                folderIds.has(d.folderId) &&
+                d.id === draftEditor.draftId,
         );
-        setDrafts((cur) => cur.filter((d) => d.folderId !== folderId));
+        setDrafts((cur) =>
+            cur.filter((d) => !d.folderId || !folderIds.has(d.folderId)),
+        );
         if (hadActiveDraft) newDraft();
     }
 

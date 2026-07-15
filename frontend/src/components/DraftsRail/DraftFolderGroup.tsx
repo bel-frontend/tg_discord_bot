@@ -13,6 +13,9 @@ import styles from './DraftsRail.module.scss';
 interface Props {
     folder: DraftFolder;
     count: number;
+    /** Drafts that would be deleted including nested subfolders — may exceed
+     * `count` when this folder has subfolders of its own. */
+    deleteImpactCount: number;
     collapsed: boolean;
     selected: boolean;
     renaming: boolean;
@@ -34,6 +37,7 @@ interface Props {
 export function DraftFolderGroup({
     folder,
     count,
+    deleteImpactCount,
     collapsed,
     selected,
     renaming,
@@ -60,8 +64,8 @@ export function DraftFolderGroup({
 
     function remove() {
         const confirmed = window.confirm(
-            count > 0
-                ? `Delete folder "${folder.name}" and its ${count} draft${count === 1 ? '' : 's'}? This cannot be undone.`
+            deleteImpactCount > 0
+                ? `Delete folder "${folder.name}" and its ${deleteImpactCount} draft${deleteImpactCount === 1 ? '' : 's'}? This cannot be undone.`
                 : `Delete folder "${folder.name}"?`,
         );
         if (confirmed) onDelete(folder.id);
@@ -73,6 +77,10 @@ export function DraftFolderGroup({
             onDragOver={(e) => {
                 if (!dragActive) return;
                 e.preventDefault();
+                // Nested folders sit inside each other in the DOM — stop the
+                // event so only the innermost hovered folder highlights,
+                // not every ancestor folder up the tree too.
+                e.stopPropagation();
                 if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
                 setDragOver(true);
             }}

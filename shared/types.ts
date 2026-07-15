@@ -116,6 +116,7 @@ export interface DraftFolder {
     name: string;
     order: number;
     createdAt: string;
+    parentId: string | null;
 }
 
 export interface PublishResult {

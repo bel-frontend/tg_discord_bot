@@ -23,6 +23,23 @@ function readCollapsed(): Record<string, true> {
     }
 }
 
+/** A folder and every folder nested inside it, however deep — mirrors the
+ * cascade the server performs on delete. */
+function collectWithDescendants(all: DraftFolder[], rootId: string): Set<string> {
+    const childrenOf = new Map<string, string[]>();
+    for (const f of all) {
+        if (!f.parentId) continue;
+        const list = childrenOf.get(f.parentId) ?? [];
+        list.push(f.id);
+        childrenOf.set(f.parentId, list);
+    }
+    const ids = new Set([rootId]);
+    for (const id of ids) {
+        for (const childId of childrenOf.get(id) ?? []) ids.add(childId);
+    }
+    return ids;
+}
+
 /** Server-backed folders (shared across devices, like the drafts themselves);
  * only the collapsed state is a local convenience kept in localStorage. */
 export function useDraftFolders() {
@@ -89,30 +106,34 @@ export function useDraftFolders() {
         }
     }
 
-    async function deleteFolder(folderId: string): Promise<boolean> {
-        setFolders((cur) => cur.filter((f) => f.id !== folderId));
-        try {
-            await api(`/api/draft-folders/${folderId}`, { method: 'DELETE' });
-            return true;
-        } catch (err: any) {
-            toast(err.message, 'error');
-            loadFolders();
-            return false;
-        }
-    }
-
-    async function reorderFolders(ids: string[]) {
+    async function moveFolder(folderId: string, parentId: string | null) {
         setFolders((cur) =>
-            [...cur].sort((a, b) => ids.indexOf(a.id) - ids.indexOf(b.id)),
+            cur.map((f) => (f.id === folderId ? { ...f, parentId } : f)),
         );
         try {
-            await api('/api/draft-folders/order', {
+            await api(`/api/draft-folders/${folderId}`, {
                 method: 'PUT',
-                body: { ids },
+                body: { parentId },
             });
         } catch (err: any) {
             toast(err.message, 'error');
             loadFolders();
+        }
+    }
+
+    /** Deletes the folder and, like the server, every folder nested inside
+     * it. Returns the full set of removed ids (folder + descendants) so
+     * callers can drop drafts belonging to any of them, or null on failure. */
+    async function deleteFolder(folderId: string): Promise<Set<string> | null> {
+        const affected = collectWithDescendants(folders, folderId);
+        setFolders((cur) => cur.filter((f) => !affected.has(f.id)));
+        try {
+            await api(`/api/draft-folders/${folderId}`, { method: 'DELETE' });
+            return affected;
+        } catch (err: any) {
+            toast(err.message, 'error');
+            loadFolders();
+            return null;
         }
     }
 
@@ -129,8 +150,8 @@ export function useDraftFolders() {
         folders,
         createFolder,
         renameFolder,
+        moveFolder,
         deleteFolder,
-        reorderFolders,
         collapsed,
         toggleCollapsed,
     };

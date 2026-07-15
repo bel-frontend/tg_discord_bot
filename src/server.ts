@@ -40,6 +40,7 @@ import {
     createDraftFolder,
     deleteDraftFolder,
     listDraftFolders,
+    moveDraftFolder,
     renameDraftFolder,
     reorderDraftFolders,
 } from './draftFolders';
@@ -722,7 +723,27 @@ export async function handleApi(req: Request, url: URL): Promise<Response> {
         const id = draftFolderMatch[1];
         if (method === 'PUT') {
             const body = await req.json().catch(() => ({}));
-            const folder = await renameDraftFolder(actor.userId, id, body.name);
+            // `name` and `parentId` are independent — apply whichever keys
+            // are present (both, if a caller ever sends a combined patch)
+            // instead of treating them as mutually exclusive.
+            if (!('parentId' in body)) {
+                const folder = await renameDraftFolder(
+                    actor.userId,
+                    id,
+                    body.name,
+                );
+                return folder
+                    ? json({ folder })
+                    : json({ error: 'Not found' }, 404);
+            }
+            if ('name' in body) {
+                await renameDraftFolder(actor.userId, id, body.name);
+            }
+            const folder = await moveDraftFolder(
+                actor.userId,
+                id,
+                body.parentId,
+            );
             return folder
                 ? json({ folder })
                 : json({ error: 'Not found' }, 404);

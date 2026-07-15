@@ -36,8 +36,8 @@ const drafts: Draft[] = [
 ];
 
 const folders: DraftFolder[] = [
-    { id: 'f1', name: 'Favourites', order: 0, createdAt: '2026-07-01T10:00:00.000Z' },
-    { id: 'f2', name: 'Archive', order: 1, createdAt: '2026-07-01T10:00:00.000Z' },
+    { id: 'f1', name: 'Favourites', order: 0, createdAt: '2026-07-01T10:00:00.000Z', parentId: null },
+    { id: 'f2', name: 'Archive', order: 1, createdAt: '2026-07-01T10:00:00.000Z', parentId: null },
 ];
 
 describe('DraftsRail', () => {
@@ -193,7 +193,7 @@ describe('DraftsRail', () => {
         expect(props.onMove).toHaveBeenCalledWith('d2', null);
     });
 
-    it('reorders folders by dropping one folder on another', async () => {
+    it('nests a folder inside another by dropping one folder on it', async () => {
         renderRail();
         await screen.findByText('Favourites');
 
@@ -201,11 +201,32 @@ describe('DraftsRail', () => {
         fireEvent.drop(screen.getByText('Favourites'));
 
         await waitFor(() => {
-            expect(apiMock).toHaveBeenCalledWith('/api/draft-folders/order', {
+            expect(apiMock).toHaveBeenCalledWith('/api/draft-folders/f2', {
                 method: 'PUT',
-                body: { ids: ['f2', 'f1'] },
+                body: { parentId: 'f1' },
             });
         });
+    });
+
+    it('renders a folder nested inside its parent', async () => {
+        apiMock.mockImplementation(async (path: string) => {
+            if (path === '/api/draft-folders') {
+                return {
+                    folders: [
+                        folders[0],
+                        { ...folders[1], parentId: 'f1' },
+                    ],
+                };
+            }
+            return {};
+        });
+        renderRail();
+
+        const parent = await screen.findByText('Favourites');
+        const child = await screen.findByText('Archive');
+        const parentGroup = parent.closest('section');
+        expect(parentGroup).not.toBeNull();
+        expect(parentGroup?.contains(child)).toBe(true);
     });
 
     it('deletes a folder after confirmation and reports it upward (cascade-deletes its drafts)', async () => {
@@ -224,7 +245,36 @@ describe('DraftsRail', () => {
             });
         });
         await waitFor(() => {
-            expect(props.onFolderDeleted).toHaveBeenCalledWith('f1');
+            expect(props.onFolderDeleted).toHaveBeenCalledWith(
+                new Set(['f1']),
+            );
+        });
+    });
+
+    it('cascades deletion through a nested subfolder, reporting both ids upward', async () => {
+        vi.spyOn(window, 'confirm').mockReturnValue(true);
+        apiMock.mockImplementation(async (path: string) => {
+            if (path === '/api/draft-folders') {
+                return {
+                    folders: [
+                        folders[0],
+                        { ...folders[1], parentId: 'f1' },
+                    ],
+                };
+            }
+            return {};
+        });
+        const props = renderRail();
+        await screen.findByText('Favourites');
+
+        fireEvent.click(
+            screen.getByRole('button', { name: 'Delete folder Favourites' }),
+        );
+
+        await waitFor(() => {
+            expect(props.onFolderDeleted).toHaveBeenCalledWith(
+                new Set(['f1', 'f2']),
+            );
         });
     });
 
@@ -311,17 +361,28 @@ describe('DraftsRail', () => {
         expect(props.onNew).toHaveBeenLastCalledWith(null);
     });
 
-    it('moves a dragged folder to the end of the list when dropped on the root area', async () => {
+    it('moves a dragged folder back to the root when dropped on the root area', async () => {
+        apiMock.mockImplementation(async (path: string) => {
+            if (path === '/api/draft-folders') {
+                return {
+                    folders: [
+                        folders[0],
+                        { ...folders[1], parentId: 'f1' },
+                    ],
+                };
+            }
+            return {};
+        });
         renderRail();
         await screen.findByText('Favourites');
 
-        fireEvent.dragStart(screen.getByText('Favourites'));
+        fireEvent.dragStart(screen.getByText('Archive'));
         fireEvent.drop(screen.getByText('Root draft'));
 
         await waitFor(() => {
-            expect(apiMock).toHaveBeenCalledWith('/api/draft-folders/order', {
+            expect(apiMock).toHaveBeenCalledWith('/api/draft-folders/f2', {
                 method: 'PUT',
-                body: { ids: ['f2', 'f1'] },
+                body: { parentId: null },
             });
         });
     });

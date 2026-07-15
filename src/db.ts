@@ -85,8 +85,9 @@ export interface DraftFolderDoc {
     _id?: ObjectId;
     userId: string; // owner — folders are private per member, like drafts
     name: string;
-    order: number; // ascending sort position in the rail
+    order: number; // ascending sort position among siblings sharing parentId
     createdAt: Date;
+    parentId?: string | null; // parent DraftFolderDoc _id as string; null/absent = root
 }
 
 export interface UploadDoc {

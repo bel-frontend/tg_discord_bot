@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { FolderPlus, Pin } from 'lucide-react';
-import type { Draft } from '../../../../shared/types';
+import type { Draft, DraftFolder } from '../../../../shared/types';
 import { useDraftFolders } from './useDraftFolders';
 import { DraftRow } from './DraftRow';
 import { DraftFolderGroup } from './DraftFolderGroup';
@@ -15,8 +15,9 @@ interface Props {
     onRename: (id: string, title: string) => void;
     onMove: (id: string, folderId: string | null) => void;
     onTogglePin: (id: string) => void;
-    /** Lets the drafts owner drop stale folderId refs without a refetch. */
-    onFolderDeleted?: (folderId: string) => void;
+    /** Lets the drafts owner drop stale folderId refs without a refetch —
+     * includes the deleted folder plus every subfolder cascaded with it. */
+    onFolderDeleted?: (folderIds: Set<string>) => void;
 }
 
 export function DraftsRail({
@@ -34,8 +35,8 @@ export function DraftsRail({
         folders,
         createFolder,
         renameFolder,
+        moveFolder,
         deleteFolder,
-        reorderFolders,
         collapsed,
         toggleCollapsed,
     } = useDraftFolders();
@@ -69,15 +70,26 @@ export function DraftsRail({
         setDragFolderId(null);
     }
 
+    /** True when `candidateId` is nested (at any depth) inside `ancestorId` —
+     * used to block dropping a folder onto its own descendant. */
+    function isDescendant(candidateId: string, ancestorId: string): boolean {
+        let current = folders.find((f) => f.id === candidateId);
+        while (current?.parentId) {
+            if (current.parentId === ancestorId) return true;
+            current = folders.find((f) => f.id === current!.parentId);
+        }
+        return false;
+    }
+
     function dropOnFolder(folderId: string) {
         if (dragDraftId) {
             onMove(dragDraftId, folderId);
-        } else if (dragFolderId && dragFolderId !== folderId) {
-            const ids = folders
-                .map((f) => f.id)
-                .filter((id) => id !== dragFolderId);
-            ids.splice(ids.indexOf(folderId), 0, dragFolderId);
-            reorderFolders(ids);
+        } else if (
+            dragFolderId &&
+            dragFolderId !== folderId &&
+            !isDescendant(folderId, dragFolderId)
+        ) {
+            moveFolder(dragFolderId, folderId);
         }
         endDrag();
     }
@@ -86,19 +98,17 @@ export function DraftsRail({
         if (dragDraftId) {
             onMove(dragDraftId, null);
         } else if (dragFolderId) {
-            const ids = folders
-                .map((f) => f.id)
-                .filter((id) => id !== dragFolderId);
-            ids.push(dragFolderId);
-            reorderFolders(ids);
+            moveFolder(dragFolderId, null);
         }
         endDrag();
     }
 
     async function removeFolder(folderId: string) {
-        setSelectedFolderId((cur) => (cur === folderId ? null : cur));
-        const ok = await deleteFolder(folderId);
-        if (ok) onFolderDeleted?.(folderId);
+        const affected = await deleteFolder(folderId);
+        if (affected) {
+            setSelectedFolderId((cur) => (cur && affected.has(cur) ? null : cur));
+            onFolderDeleted?.(affected);
+        }
     }
 
     function renderRow(draft: Draft) {
@@ -118,6 +128,57 @@ export function DraftsRail({
                 onDragStart={setDragDraftId}
                 onDragEnd={endDrag}
             />
+        );
+    }
+
+    function childrenOf(parentId: string | null) {
+        return folders.filter((f) => (f.parentId ?? null) === parentId);
+    }
+
+    /** Drafts inside this folder and every subfolder nested inside it —
+     * matches the server's delete cascade, for an accurate confirm prompt. */
+    function draftCountIncludingDescendants(folderId: string): number {
+        let total = drafts.filter((d) => d.folderId === folderId).length;
+        for (const child of childrenOf(folderId)) {
+            total += draftCountIncludingDescendants(child.id);
+        }
+        return total;
+    }
+
+    function renderFolder(folder: DraftFolder) {
+        const members = drafts.filter((d) => d.folderId === folder.id);
+        const visibleMembers = members.filter((d) => !d.pinned);
+        const childFolders = childrenOf(folder.id);
+
+        return (
+            <DraftFolderGroup
+                key={folder.id}
+                folder={folder}
+                count={members.length}
+                deleteImpactCount={draftCountIncludingDescendants(folder.id)}
+                collapsed={Boolean(collapsed[folder.id])}
+                selected={selectedFolderId === folder.id}
+                renaming={renamingFolderId === folder.id}
+                dragActive={dragDraftId !== null || dragFolderId !== null}
+                onRename={renameFolder}
+                onRenameStart={setRenamingFolderId}
+                onRenameEnd={() => setRenamingFolderId(null)}
+                onDelete={removeFolder}
+                onToggleCollapsed={toggleCollapsed}
+                onSelect={(id) =>
+                    setSelectedFolderId((cur) => (cur === id ? null : id))
+                }
+                onDrop={dropOnFolder}
+                onDragStartFolder={setDragFolderId}
+                onDragEndFolder={endDrag}
+            >
+                {childFolders.map(renderFolder)}
+                {visibleMembers.length || childFolders.length ? (
+                    visibleMembers.map(renderRow)
+                ) : (
+                    <p className={styles.dropHint}>Drag drafts here</p>
+                )}
+            </DraftFolderGroup>
         );
     }
 
@@ -146,9 +207,9 @@ export function DraftsRail({
             <div
                 className={styles.list}
                 onDragOver={(e) => {
-                    // Dropping outside a folder moves the draft back to the
-                    // root — like dragging a file out of a directory — or,
-                    // for a dragged folder, reorders it to the end.
+                    // Dropping outside a folder moves the dragged draft or
+                    // folder back to the root — like dragging a file out of
+                    // a directory.
                     if (dragDraftId || dragFolderId) e.preventDefault();
                 }}
                 onDrop={(e) => {
@@ -179,47 +240,7 @@ export function DraftsRail({
                         </div>
                     </section>
                 )}
-                {folders.map((folder) => {
-                    const members = drafts.filter(
-                        (d) => d.folderId === folder.id,
-                    );
-                    const visibleMembers = members.filter((d) => !d.pinned);
-
-                    return (
-                        <DraftFolderGroup
-                            key={folder.id}
-                            folder={folder}
-                            count={members.length}
-                            collapsed={Boolean(collapsed[folder.id])}
-                            selected={selectedFolderId === folder.id}
-                            renaming={renamingFolderId === folder.id}
-                            dragActive={
-                                dragDraftId !== null || dragFolderId !== null
-                            }
-                            onRename={renameFolder}
-                            onRenameStart={setRenamingFolderId}
-                            onRenameEnd={() => setRenamingFolderId(null)}
-                            onDelete={removeFolder}
-                            onToggleCollapsed={toggleCollapsed}
-                            onSelect={(id) =>
-                                setSelectedFolderId((cur) =>
-                                    cur === id ? null : id,
-                                )
-                            }
-                            onDrop={dropOnFolder}
-                            onDragStartFolder={setDragFolderId}
-                            onDragEndFolder={endDrag}
-                        >
-                            {visibleMembers.length ? (
-                                visibleMembers.map(renderRow)
-                            ) : (
-                                <p className={styles.dropHint}>
-                                    Drag drafts here
-                                </p>
-                            )}
-                        </DraftFolderGroup>
-                    );
-                })}
+                {childrenOf(null).map(renderFolder)}
                 {rootDrafts.map(renderRow)}
             </div>
         </aside>
