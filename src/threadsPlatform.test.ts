@@ -15,4 +15,13 @@ describe('ThreadsPlatform local publisher adapter', () => {
         const platform = new ThreadsPlatform();
         expect(platform.toPreviewHtml('**Hello**')).toContain('Hello');
     });
+
+    test('keeps Threads visible in the desktop picker between heartbeats', async () => {
+        const platform = new ThreadsPlatform();
+
+        expect(
+            await platform.listChannels({ accountId: 'workspace-id' }),
+        ).toEqual([{ id: 'me', name: 'Local Threads profile' }]);
+        expect(await platform.listChannels()).toEqual([]);
+    });
 });

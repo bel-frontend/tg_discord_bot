@@ -75,8 +75,15 @@
                     const switchButton = document.createElement('button');
                     switchButton.className = 'switch';
                     switchButton.textContent = 'Switch';
-                    switchButton.addEventListener('click', () => {
-                        window.location.href = `composer-setup://switch?id=${encodeURIComponent(env.id)}`;
+                    switchButton.addEventListener('click', async () => {
+                        try {
+                            switchButton.disabled = true;
+                            await window.composerDesktop.switchEnvironment(env.id);
+                        } catch (error) {
+                            switchButton.disabled = false;
+                            document.querySelector('#error').textContent =
+                                error?.message || 'Could not switch environment';
+                        }
                     });
                     item.append(switchButton);
                 }
@@ -84,19 +91,34 @@
                 const removeButton = document.createElement('button');
                 removeButton.className = 'remove';
                 removeButton.textContent = 'Remove';
-                removeButton.addEventListener('click', () => {
-                    window.location.href = `composer-setup://remove?id=${encodeURIComponent(env.id)}`;
+                removeButton.addEventListener('click', async () => {
+                    try {
+                        removeButton.disabled = true;
+                        await window.composerDesktop.removeEnvironment(env.id);
+                    } catch (error) {
+                        removeButton.disabled = false;
+                        document.querySelector('#error').textContent =
+                            error?.message || 'Could not remove environment';
+                    }
                 });
                 item.append(removeButton);
 
                 list.append(item);
             }
 
-            document.querySelector('#add').addEventListener('submit', (event) => {
+            document.querySelector('#add').addEventListener('submit', async (event) => {
                 event.preventDefault();
                 const name = document.querySelector('#name').value;
                 const server = document.querySelector('#server').value;
-                window.location.href = `composer-setup://add?name=${encodeURIComponent(name)}&server=${encodeURIComponent(server)}`;
+                const button = event.currentTarget.querySelector('button');
+                try {
+                    button.disabled = true;
+                    await window.composerDesktop.addEnvironment(name, server);
+                } catch (error) {
+                    button.disabled = false;
+                    document.querySelector('#error').textContent =
+                        error?.message || 'Could not add environment';
+                }
             });
         </script>
     </body>

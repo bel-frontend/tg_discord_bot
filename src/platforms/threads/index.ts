@@ -43,11 +43,11 @@ export class ThreadsPlatform implements Platform {
 
     async listChannels(context?: PlatformContext): Promise<Channel[]> {
         if (!context?.accountId) return [];
-        const online = await hasOnlineLocalPublisher(
-            context.accountId,
-            'threads',
-        );
-        return online ? [{ id: 'me', name: 'Local Threads profile' }] : [];
+        // Threads is already restricted to Desktop clients by the platform
+        // registry. Keep it visible while the local publisher is starting or
+        // between heartbeats; publish() performs the authoritative online
+        // check immediately before enqueueing work.
+        return [{ id: 'me', name: 'Local Threads profile' }];
     }
 
     toPreviewHtml(markdown: string): string {

@@ -5,6 +5,7 @@ import {
     ipcMain,
     Menu,
     nativeImage,
+    net,
     session,
     shell,
     Tray,
@@ -144,7 +145,15 @@ function environmentManagerQuery(
 ): Record<string, string> {
     const config = readConfig();
     return {
-        environments: JSON.stringify(config.environments),
+        // The setup page only needs display metadata. Pairing credentials must
+        // never be exposed in a file URL, logs, screenshots, or renderer code.
+        environments: JSON.stringify(
+            config.environments.map(({ id, name, serverUrl }) => ({
+                id,
+                name,
+                serverUrl,
+            })),
+        ),
         activeId: config.activeEnvironmentId ?? '',
         ...extra,
     };
@@ -173,10 +182,18 @@ async function loadServerPage(
     serverUrl: string,
 ): Promise<void> {
     try {
+        const response = await net.fetch(serverUrl, {
+            method: 'HEAD',
+            signal: AbortSignal.timeout(10_000),
+        });
+        if (!response.ok) {
+            throw new Error(`Server returned HTTP ${response.status}`);
+        }
         await window.loadURL(serverUrl);
-    } catch {
+    } catch (error) {
+        const detail = error instanceof Error ? ` (${error.message})` : '';
         await showEnvironmentManagerPage(window, {
-            error: `Cannot reach Composer at ${serverUrl}. Start the server or choose another address.`,
+            error: `Cannot reach Composer at ${serverUrl}${detail}. Start the server or choose another address.`,
         });
     }
 }
@@ -243,50 +260,6 @@ function createWindow(): BrowserWindow {
             { role: 'selectAll', enabled: params.editFlags.canSelectAll },
         ]).popup({ window });
     });
-    window.webContents.on('will-navigate', (event, target) => {
-        const url = new URL(target);
-        if (url.protocol !== 'composer-setup:') return;
-        event.preventDefault();
-        if (!window.webContents.getURL().startsWith('file:')) return;
-        try {
-            const config = readConfig();
-            if (url.hostname === 'add') {
-                const name = (url.searchParams.get('name') ?? '').trim();
-                const serverUrl = normalizeServerUrl(
-                    url.searchParams.get('server') ?? '',
-                );
-                const id = randomUUID();
-                config.environments.push({
-                    id,
-                    name: name || serverUrl,
-                    serverUrl,
-                });
-                config.activeEnvironmentId = id;
-            } else if (url.hostname === 'switch') {
-                const id = url.searchParams.get('id') ?? '';
-                if (!config.environments.some((e) => e.id === id)) {
-                    throw new Error('Unknown environment');
-                }
-                config.activeEnvironmentId = id;
-            } else if (url.hostname === 'remove') {
-                const id = url.searchParams.get('id') ?? '';
-                config.environments = config.environments.filter(
-                    (e) => e.id !== id,
-                );
-                if (config.activeEnvironmentId === id) {
-                    config.activeEnvironmentId = undefined;
-                }
-            } else {
-                return;
-            }
-            writeConfig(config);
-            void loadConfiguredPage(window);
-        } catch (error) {
-            const message =
-                error instanceof Error ? error.message : 'Invalid environment';
-            void showEnvironmentManagerPage(window, { error: message });
-        }
-    });
     void loadConfiguredPage(window);
     return window;
 }
@@ -310,7 +283,86 @@ function assertTrustedRenderer(event: Electron.IpcMainInvokeEvent): void {
     }
 }
 
+function environmentManagerWindow(
+    event: Electron.IpcMainInvokeEvent,
+): BrowserWindow {
+    if (
+        !mainWindow ||
+        event.sender !== mainWindow.webContents ||
+        !event.sender.getURL().startsWith('file:')
+    ) {
+        throw new Error('Untrusted environment manager');
+    }
+    return mainWindow;
+}
+
+function navigateAfterEnvironmentChange(window: BrowserWindow): void {
+    // Let the IPC response reach the setup renderer before navigating away
+    // from it. Awaiting loadURL/loadFile inside the handler destroys the
+    // caller's context and makes Electron reject invoke() with ERR_FAILED.
+    setTimeout(() => {
+        void loadConfiguredPage(window).catch((error) => {
+            console.error('Failed to load Composer environment:', error);
+        });
+    }, 0);
+}
+
 function registerPublisherIpc(): void {
+    ipcMain.handle(
+        'desktop:environment-add',
+        async (event, rawName: unknown, rawServerUrl: unknown) => {
+            const window = environmentManagerWindow(event);
+            const config = readConfig();
+            const serverUrl = normalizeServerUrl(String(rawServerUrl ?? ''));
+            const name = String(rawName ?? '').trim();
+            const id = randomUUID();
+            config.environments.push({
+                id,
+                name: name || serverUrl,
+                serverUrl,
+            });
+            config.activeEnvironmentId = id;
+            writeConfig(config);
+            navigateAfterEnvironmentChange(window);
+            return { ok: true };
+        },
+    );
+    ipcMain.handle(
+        'desktop:environment-switch',
+        async (event, rawId: unknown) => {
+            const window = environmentManagerWindow(event);
+            const id = String(rawId ?? '');
+            const config = readConfig();
+            if (
+                !config.environments.some(
+                    (environment) => environment.id === id,
+                )
+            ) {
+                throw new Error('Unknown environment');
+            }
+            config.activeEnvironmentId = id;
+            writeConfig(config);
+            navigateAfterEnvironmentChange(window);
+            return { ok: true };
+        },
+    );
+    ipcMain.handle(
+        'desktop:environment-remove',
+        async (event, rawId: unknown) => {
+            const window = environmentManagerWindow(event);
+            const id = String(rawId ?? '');
+            const config = readConfig();
+            config.environments = config.environments.filter(
+                (environment) => environment.id !== id,
+            );
+            if (config.activeEnvironmentId === id) {
+                config.activeEnvironmentId = undefined;
+            }
+            writeConfig(config);
+            navigateAfterEnvironmentChange(window);
+            return { ok: true };
+        },
+    );
     ipcMain.handle('desktop:agent-status', async (event) => {
         assertTrustedRenderer(event);
         const env = activeEnvironment();
