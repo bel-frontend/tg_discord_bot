@@ -4,34 +4,36 @@ import type {
     PlatformContext,
     PublishContent,
     PublishResult,
-} from './types';
-import { splitTextIntoChunks } from '../chunk';
-import { hasOnlineLocalPublisher } from '../localPublisherAgents';
+} from '../types';
+import { splitTextIntoChunks } from '../../chunk';
+import { hasOnlineLocalPublisher } from '../../localPublisherAgents';
 import {
     enqueueLocalPublisherJob,
     waitForLocalPublisherJob,
-} from '../localPublisherJobs';
-import { markdownToXPreviewHtml, markdownToXText } from './x/markdown';
+} from '../../localPublisherJobs';
+import {
+    markdownToThreadsPreviewHtml,
+    markdownToThreadsText,
+} from './markdown';
 
-const X_LIMIT = 280;
+const THREADS_LIMIT = 500;
 
-export class XPlatform implements Platform {
-    readonly id = 'x';
-    readonly name = 'X';
-    readonly icon = '𝕏';
-    readonly charLimit = X_LIMIT;
+export class ThreadsPlatform implements Platform {
+    readonly id = 'threads';
+    readonly name = 'Threads';
+    readonly icon = '@';
+    readonly charLimit = THREADS_LIMIT;
     readonly desktopOnly = true;
     readonly setup = {
         connect: 'desktop-browser' as const,
         summary:
             'Publishes through a private browser session inside Composer Desktop.',
         steps: [
-            'Click Connect X below and log in through the separate Composer browser window, including any 2FA step.',
+            'Click Connect Threads below and log in through the separate Composer browser window, including any 2FA step.',
         ],
         notes: [
-            'The X login profile stays on your computer and is never uploaded to Composer.',
-            'Composer Desktop must be online when an X publication is sent.',
-            `Posts longer than ${X_LIMIT} characters are published as a reply thread.`,
+            'The Threads login profile stays on your computer and is never uploaded to Composer.',
+            'Composer Desktop must be online when a Threads publication is sent.',
         ],
     };
 
@@ -41,16 +43,15 @@ export class XPlatform implements Platform {
 
     async listChannels(context?: PlatformContext): Promise<Channel[]> {
         if (!context?.accountId) return [];
-        const online = await hasOnlineLocalPublisher(context.accountId, 'x');
-        return online ? [{ id: 'me', name: 'Local X profile' }] : [];
+        const online = await hasOnlineLocalPublisher(
+            context.accountId,
+            'threads',
+        );
+        return online ? [{ id: 'me', name: 'Local Threads profile' }] : [];
     }
 
     toPreviewHtml(markdown: string): string {
-        return markdownToXPreviewHtml(markdown);
-    }
-
-    buildMessageLink(_channelId: string, messageId: string): string | null {
-        return `https://x.com/i/status/${messageId}`;
+        return markdownToThreadsPreviewHtml(markdown);
     }
 
     async publish(
@@ -59,45 +60,50 @@ export class XPlatform implements Platform {
         context?: PlatformContext,
     ): Promise<PublishResult[]> {
         if (!context?.accountId) {
-            throw new Error('X publishing requires a workspace');
+            throw new Error('Threads publishing requires a workspace');
         }
         if (content.images?.length || content.imageUrls?.length) {
-            throw new Error('Local X image publishing is not implemented yet');
+            throw new Error('Local Threads image publishing is not implemented yet');
         }
-        const text = markdownToXText(content.markdown);
+        const text = markdownToThreadsText(content.markdown);
         if (!text) throw new Error('Write something first');
-        if (!(await hasOnlineLocalPublisher(context.accountId, 'x'))) {
-            throw new Error('Open Composer Desktop and connect X first');
+        if (!(await hasOnlineLocalPublisher(context.accountId, 'threads'))) {
+            throw new Error('Open Composer Desktop and connect Threads first');
         }
 
-        const chunks = splitTextIntoChunks(text, X_LIMIT, true);
         const results: PublishResult[] = [];
+        const chunks = splitTextIntoChunks(text, THREADS_LIMIT, true);
+        if (chunks.length > 1) {
+            throw new Error(
+                'Local Threads reply chains are not implemented yet; keep the post within 500 characters',
+            );
+        }
         for (const channelId of channelIds) {
             try {
                 const messageIds: string[] = [];
-                let replyToId: string | undefined;
+                let link: string | undefined;
                 for (const chunk of chunks) {
                     const jobId = await enqueueLocalPublisherJob({
                         accountId: context.accountId,
-                        platform: 'x',
+                        platform: 'threads',
                         operation: 'publish',
-                        payload: { text: chunk, replyToId },
+                        payload: { text: chunk },
                     });
                     const jobResult = await waitForLocalPublisherJob(
                         context.accountId,
                         jobId,
                     );
-                    replyToId = String(jobResult.messageId);
-                    messageIds.push(replyToId);
+                    messageIds.push(String(jobResult.messageId));
+                    link ??= jobResult.link
+                        ? String(jobResult.link)
+                        : undefined;
                 }
                 results.push({
                     platform: this.id,
                     channelId,
                     ok: true,
                     messageIds,
-                    link:
-                        this.buildMessageLink(channelId, messageIds[0]) ??
-                        undefined,
+                    link,
                 });
             } catch (error: unknown) {
                 results.push({
@@ -111,4 +117,8 @@ export class XPlatform implements Platform {
         }
         return results;
     }
+}
+
+export function createPlatform(): Platform {
+    return new ThreadsPlatform();
 }

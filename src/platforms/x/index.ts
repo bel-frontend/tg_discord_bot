@@ -4,36 +4,34 @@ import type {
     PlatformContext,
     PublishContent,
     PublishResult,
-} from './types';
-import { splitTextIntoChunks } from '../chunk';
-import { hasOnlineLocalPublisher } from '../localPublisherAgents';
+} from '../types';
+import { splitTextIntoChunks } from '../../chunk';
+import { hasOnlineLocalPublisher } from '../../localPublisherAgents';
 import {
     enqueueLocalPublisherJob,
     waitForLocalPublisherJob,
-} from '../localPublisherJobs';
-import {
-    markdownToThreadsPreviewHtml,
-    markdownToThreadsText,
-} from './threads/markdown';
+} from '../../localPublisherJobs';
+import { markdownToXPreviewHtml, markdownToXText } from './markdown';
 
-const THREADS_LIMIT = 500;
+const X_LIMIT = 280;
 
-export class ThreadsPlatform implements Platform {
-    readonly id = 'threads';
-    readonly name = 'Threads';
-    readonly icon = '@';
-    readonly charLimit = THREADS_LIMIT;
+export class XPlatform implements Platform {
+    readonly id = 'x';
+    readonly name = 'X';
+    readonly icon = '𝕏';
+    readonly charLimit = X_LIMIT;
     readonly desktopOnly = true;
     readonly setup = {
         connect: 'desktop-browser' as const,
         summary:
             'Publishes through a private browser session inside Composer Desktop.',
         steps: [
-            'Click Connect Threads below and log in through the separate Composer browser window, including any 2FA step.',
+            'Click Connect X below and log in through the separate Composer browser window, including any 2FA step.',
         ],
         notes: [
-            'The Threads login profile stays on your computer and is never uploaded to Composer.',
-            'Composer Desktop must be online when a Threads publication is sent.',
+            'The X login profile stays on your computer and is never uploaded to Composer.',
+            'Composer Desktop must be online when an X publication is sent.',
+            `Posts longer than ${X_LIMIT} characters are published as a reply thread.`,
         ],
     };
 
@@ -43,15 +41,16 @@ export class ThreadsPlatform implements Platform {
 
     async listChannels(context?: PlatformContext): Promise<Channel[]> {
         if (!context?.accountId) return [];
-        const online = await hasOnlineLocalPublisher(
-            context.accountId,
-            'threads',
-        );
-        return online ? [{ id: 'me', name: 'Local Threads profile' }] : [];
+        const online = await hasOnlineLocalPublisher(context.accountId, 'x');
+        return online ? [{ id: 'me', name: 'Local X profile' }] : [];
     }
 
     toPreviewHtml(markdown: string): string {
-        return markdownToThreadsPreviewHtml(markdown);
+        return markdownToXPreviewHtml(markdown);
+    }
+
+    buildMessageLink(_channelId: string, messageId: string): string | null {
+        return `https://x.com/i/status/${messageId}`;
     }
 
     async publish(
@@ -60,50 +59,45 @@ export class ThreadsPlatform implements Platform {
         context?: PlatformContext,
     ): Promise<PublishResult[]> {
         if (!context?.accountId) {
-            throw new Error('Threads publishing requires a workspace');
+            throw new Error('X publishing requires a workspace');
         }
         if (content.images?.length || content.imageUrls?.length) {
-            throw new Error('Local Threads image publishing is not implemented yet');
+            throw new Error('Local X image publishing is not implemented yet');
         }
-        const text = markdownToThreadsText(content.markdown);
+        const text = markdownToXText(content.markdown);
         if (!text) throw new Error('Write something first');
-        if (!(await hasOnlineLocalPublisher(context.accountId, 'threads'))) {
-            throw new Error('Open Composer Desktop and connect Threads first');
+        if (!(await hasOnlineLocalPublisher(context.accountId, 'x'))) {
+            throw new Error('Open Composer Desktop and connect X first');
         }
 
+        const chunks = splitTextIntoChunks(text, X_LIMIT, true);
         const results: PublishResult[] = [];
-        const chunks = splitTextIntoChunks(text, THREADS_LIMIT, true);
-        if (chunks.length > 1) {
-            throw new Error(
-                'Local Threads reply chains are not implemented yet; keep the post within 500 characters',
-            );
-        }
         for (const channelId of channelIds) {
             try {
                 const messageIds: string[] = [];
-                let link: string | undefined;
+                let replyToId: string | undefined;
                 for (const chunk of chunks) {
                     const jobId = await enqueueLocalPublisherJob({
                         accountId: context.accountId,
-                        platform: 'threads',
+                        platform: 'x',
                         operation: 'publish',
-                        payload: { text: chunk },
+                        payload: { text: chunk, replyToId },
                     });
                     const jobResult = await waitForLocalPublisherJob(
                         context.accountId,
                         jobId,
                     );
-                    messageIds.push(String(jobResult.messageId));
-                    link ??= jobResult.link
-                        ? String(jobResult.link)
-                        : undefined;
+                    replyToId = String(jobResult.messageId);
+                    messageIds.push(replyToId);
                 }
                 results.push({
                     platform: this.id,
                     channelId,
                     ok: true,
                     messageIds,
-                    link,
+                    link:
+                        this.buildMessageLink(channelId, messageIds[0]) ??
+                        undefined,
                 });
             } catch (error: unknown) {
                 results.push({
@@ -117,4 +111,8 @@ export class ThreadsPlatform implements Platform {
         }
         return results;
     }
+}
+
+export function createPlatform(): Platform {
+    return new XPlatform();
 }

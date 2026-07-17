@@ -7,13 +7,13 @@ import type {
     PublishContent,
     PublishedMessageRef,
     PublishResult,
-} from './types';
-import { getPlatformConfigValues } from '../platformConfigs';
+} from '../types';
+import { getPlatformConfigValues } from '../../platformConfigs';
 import {
     markdownToDiscord,
     markdownToDiscordPreviewHtml,
-} from './discord/markdown';
-import { splitTextIntoChunks, DISCORD_LIMIT } from '../chunk';
+} from './markdown';
+import { splitTextIntoChunks, DISCORD_LIMIT } from '../../chunk';
 
 export class DiscordPlatform implements Platform {
     readonly id = 'discord';
@@ -347,4 +347,8 @@ export class DiscordPlatform implements Platform {
         if (token !== this.token) client.destroy();
         return results;
     }
+}
+
+export function createPlatform(): Platform {
+    return new DiscordPlatform();
 }

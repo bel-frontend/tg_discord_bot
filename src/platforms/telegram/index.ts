@@ -7,11 +7,11 @@ import type {
     PublishedMessageRef,
     PublishResult,
     ValidationIssue,
-} from './types';
-import { getPlatformConfigValues } from '../platformConfigs';
-import { markdownToTelegramHtml } from './telegram/markdown';
-import { splitTextIntoChunks, TELEGRAM_LIMIT } from '../chunk';
-import { isValidTelegramHtml, validateTelegramHtml } from '../telegramValidation';
+} from '../types';
+import { getPlatformConfigValues } from '../../platformConfigs';
+import { markdownToTelegramHtml } from './markdown';
+import { splitTextIntoChunks, TELEGRAM_LIMIT } from '../../chunk';
+import { isValidTelegramHtml, validateTelegramHtml } from '../../telegramValidation';
 
 /** True when a Telegram API error means "this channel just isn't reachable" (skip, don't crash). */
 function isChannelError(error: any): boolean {
@@ -403,4 +403,8 @@ export class TelegramPlatform implements Platform {
 
         return results;
     }
+}
+
+export function createPlatform(): Platform {
+    return new TelegramPlatform();
 }

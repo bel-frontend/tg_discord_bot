@@ -1,12 +1,12 @@
 # Platforms
 
-Each platform is an adapter under `src/platforms/` implementing the `Platform` interface
-(`src/platforms/types.ts`). This page covers how to connect each shipped platform, and how to add
-a new one.
+Each platform is a self-contained folder under `src/platforms/` implementing the `Platform`
+interface (`src/platforms/types.ts`), discovered and registered automatically at startup. This
+page covers how to connect each shipped platform, and how to add a new one.
 
 ## Telegram
 
-Publishes through a Telegram bot added to each target channel or chat (`src/platforms/telegram.ts`).
+Publishes through a Telegram bot added to each target channel or chat (`src/platforms/telegram/`).
 
 1. Open [BotFather](https://t.me/BotFather) in Telegram, send `/newbot`, and follow the prompts to
    create a bot.
@@ -25,7 +25,7 @@ the Resources page. Docs: <https://core.telegram.org/bots>.
 ## Discord
 
 Publishes through a Discord bot installed in your server with message permissions
-(`src/platforms/discord.ts`).
+(`src/platforms/discord/`).
 
 1. Create an application in the [Discord Developer Portal](https://discord.com/developers/applications)
    and add a bot to it.
@@ -39,10 +39,29 @@ Publishes through a Discord bot installed in your server with message permission
 The bot can only publish to text channels it can see and where it has Send Messages permission.
 Docs: <https://discord.com/developers/docs/intro>.
 
+## Bluesky
+
+Publishes to your Bluesky account over the AT Protocol using an app password
+(`src/platforms/bluesky/`).
+
+1. Open [App Passwords](https://bsky.app/settings/app-passwords) in your Bluesky settings and
+   create a new app password.
+2. Paste your handle (e.g. `you.bsky.social`) and the app password into
+   **Settings → Bluesky**, then save. Use the **Service URL** field only if you run your own PDS;
+   it defaults to `https://bsky.social`.
+3. Your account shows up in the channel picker as a Bluesky channel — no Resources entry needed.
+
+- Posts are limited to 300 characters; longer posts are published as a reply thread, with any
+  images attached to the first post (at most 4 images, up to 1 MB each).
+- Bluesky does not support editing, so published posts cannot be updated afterwards — deleting a
+  publication removes the whole thread.
+- Use an app password, never your account password; repeated failed logins can temporarily
+  rate-limit the account.
+
 ## Threads and X
 
 Threads and X have no official public posting API usable here, so both are `desktopOnly`
-platforms (`src/platforms/threads.ts`, `src/platforms/x.ts`): they publish through a private
+platforms (`src/platforms/threads/`, `src/platforms/x/`): they publish through a private
 browser session that lives inside **Composer Desktop**, on your own computer, not on the server.
 See [docs/desktop.md](desktop.md) for how to install Composer Desktop, pair it with your
 workspace, and connect each platform.
@@ -54,23 +73,9 @@ workspace, and connect each platform.
 
 ## Adding a new platform
 
-1. Implement the `Platform` interface (`src/platforms/types.ts`): `id`, `name`, `isConfigured()`,
-   `listChannels()`, `publish()`, and `toPreviewHtml()` at minimum. Add `update()`/`delete()` if
-   the platform supports editing/removing a published message, and `validateContent()` /
-   `buildMessageLink()` if useful.
-2. Add the adapter under `src/platforms/<name>.ts`, with Markdown conversion in
-   `src/platforms/<name>/markdown.ts` if the platform needs a distinct output format.
-3. Register the instance in `index.ts` — no server or frontend changes are needed beyond that; the
-   platform shows up in the channel picker and Settings automatically from its `setup` metadata.
-4. If the platform needs per-workspace credentials (like Telegram/Discord), declare `setup.configFields`
-   and `setup.steps` on the class — this is what renders the Settings form and instructions. If it
-   needs a local browser session instead (like Threads/X), set `desktopOnly = true` and
-   `setup.connect = 'desktop-browser'`.
-5. Add tests for chunking, Markdown conversion, publish/update/delete request handling, and
-   registry behavior for anything shared-logic-affecting.
-
-Keep every platform integration self-contained: a platform module owns its own
-authentication/client setup, channel discovery, publishing, updating, deleting, chunking
-constraints, and format conversion. Platform modules should not depend on another platform's
-internals — only on the shared `Platform` contract, `shared/types`, and the registry API
-(`src/platforms/registry.ts`).
+Drop a folder into `src/platforms/<id>/` whose `index.ts` exports
+`createPlatform(): Platform` — it is discovered and registered automatically at startup, and shows
+up in the channel picker and Settings with no server or frontend changes. The full folder
+contract (required members, credentials, isolation and testing rules) is in
+[docs/platform-plugins.md](platform-plugins.md); `src/platforms/bluesky/` is the reference
+implementation.

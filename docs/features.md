@@ -46,9 +46,11 @@ specific (limits, intervals, permission names).
 - Channels/servers/profiles you publish to ("Resources") are stored **per workspace account**, not
   per individual member (`src/channelResources.ts`).
 - **Live channel discovery** only exists for:
-  - Discord — needs a bot token *and* a configured server (guild) id (`src/platforms/discord.ts`).
+  - Discord — needs a bot token *and* a configured server (guild) id (`src/platforms/discord/`).
+  - Bluesky — lists the configured account as a single pseudo-channel once a handle and app
+    password are saved in Settings (`src/platforms/bluesky/`).
   - Threads/X — lists a single "Local … profile" pseudo-channel when a paired Composer Desktop is
-    online (`src/platforms/threads.ts`, `src/platforms/x.ts`).
+    online (`src/platforms/threads/`, `src/platforms/x/`).
   - Telegram has **no discovery at all**: bots can't enumerate the channels they're in, so every
     Telegram target must be added manually as a Resource.
 - **Pinning** and **folder grouping** in the channel picker itself are client-side conveniences
@@ -69,15 +71,17 @@ specific (limits, intervals, permission names).
   |----------|--------------|---------------------|
   | Telegram | 4096 chars   | Split into multiple messages |
   | Discord  | 2000 chars   | Split into multiple messages |
+  | Bluesky  | 300 chars    | Auto-split into a reply thread |
   | Threads  | 500 chars    | **Rejected** — "reply chains are not implemented yet" |
   | X        | 280 chars    | Auto-split into a reply thread |
 
-  (`src/chunk.ts`, `src/platforms/threads.ts`, `src/platforms/x.ts`)
+  (`src/chunk.ts`, `src/platforms/bluesky/`, `src/platforms/threads/`, `src/platforms/x/`)
 
 - **Editing/deleting an already-published post**: Telegram and Discord support both `update()` and
-  `delete()` (edit messages in place, add/remove trailing chunks as needed). **Threads and X
-  support neither** — attempting either returns "\<platform\> does not support updates/deletes
-  yet" (`src/platforms/registry.ts`).
+  `delete()` (edit messages in place, add/remove trailing chunks as needed). Bluesky supports
+  `delete()` only — AT Protocol posts are immutable, so edits are rejected. **Threads and X
+  support neither** — attempting an unsupported operation returns "\<platform\> does not support
+  updates/deletes yet" (`src/platforms/registry.ts`).
 - **Images on Threads/X**: not implemented. Both throw an explicit "local \<platform\> image
   publishing is not implemented yet" error if you try.
 - **Message links** back to the published post: Telegram only for `@username` channels (not

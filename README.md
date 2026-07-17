@@ -50,10 +50,12 @@ frontend/ ── Next.js frontend (auth, drafts, channel picker, publish)
 src/server.ts ── Bun.serve router
    ├─ auth.ts / drafts.ts ── users & drafts (MongoDB via db.ts)
    └─ platforms/registry.ts ── fans a post out to selected {platform, channel} targets
-         ├─ platforms/telegram.ts  (Markdown → Telegram HTML)
-         ├─ platforms/discord.ts   (Markdown → native, live channel discovery)
-         ├─ platforms/x.ts         (browser automation via Composer Desktop — no official API)
-         └─ platforms/threads.ts   (browser automation via Composer Desktop — no official API)
+         │     (platform folders below are auto-discovered by platforms/loader.ts)
+         ├─ platforms/telegram/  (Markdown → Telegram HTML)
+         ├─ platforms/discord/   (Markdown → native, live channel discovery)
+         ├─ platforms/bluesky/   (AT Protocol app-password publishing, 300-char threads)
+         ├─ platforms/x/         (browser automation via Composer Desktop — no official API)
+         └─ platforms/threads/   (browser automation via Composer Desktop — no official API)
 desktop/ ── Electron app: local browser sessions for Threads/X, polls the server for publish jobs
 ```
 
