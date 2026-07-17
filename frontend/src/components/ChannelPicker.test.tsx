@@ -100,8 +100,20 @@ describe('ChannelPicker', () => {
         });
     });
 
-    it('collapses platform groups and persists the choice', async () => {
-        renderPicker();
+    it('collapses platform groups, shows selection status, and persists it', async () => {
+        render(
+            <ChannelPicker
+                channels={channels}
+                platforms={platforms}
+                selected={[
+                    {
+                        platform: 'telegram',
+                        channelId: '@krasny_bagatyr',
+                    },
+                ]}
+                onChange={vi.fn()}
+            />,
+        );
 
         fireEvent.click(
             screen.getByRole('button', {
@@ -113,6 +125,7 @@ describe('ChannelPicker', () => {
         expect(
             screen.getByRole('button', { name: 'Expand platform Telegram' }),
         ).toBeInTheDocument();
+        expect(screen.getByText('1/1')).toBeInTheDocument();
 
         await waitFor(() => {
             expect(

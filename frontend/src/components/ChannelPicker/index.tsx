@@ -211,6 +211,9 @@ export function ChannelPicker({
                 if (!visibleItems.length) return null;
                 const collapsed = collapsedPlatforms.has(platform);
                 const Chevron = collapsed ? ChevronRight : ChevronDown;
+                const selectedCount = group.items.filter((channel) =>
+                    selectedKeys.has(channelOptionKey(channel)),
+                ).length;
 
                 return (
                     <section className={styles.group} key={platform}>
@@ -228,6 +231,11 @@ export function ChannelPicker({
                                     {platformIcon(platform, platforms)}{' '}
                                     {group.name}
                                 </span>
+                                {collapsed && (
+                                    <span className={styles.count}>
+                                        {selectedCount}/{group.items.length}
+                                    </span>
+                                )}
                             </button>
                             <button
                                 className="chan-all btn small"
