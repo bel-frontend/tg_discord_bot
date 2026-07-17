@@ -71,7 +71,7 @@ Optional:
 | `setup` | Settings-page metadata (see Credentials below). |
 | `update(refs, content, context)` | Edit published messages. Omit it when the platform can't edit (e.g. Bluesky) — the registry then returns a clean "does not support updates yet" error. |
 | `delete(refs, context)` | Delete published messages; same omission rule. |
-| `validateContent(markdown)` | Pre-publish warnings (formatting problems, will-be-threaded notices). |
+| `validateContent(markdown)` | Pre-publish checks. Any issue returned **blocks publishing** in the UI — only report genuine errors (malformed markup, unsupported content), never informational notices about behavior like auto-threading. |
 | `buildMessageLink(channelId, messageId)` | **Stateless** link building only — it may not use per-workspace state. When a link needs session data (a handle, a guild id), set `link` on the `PublishResult` inside `publish()` instead; the registry never overrides a link the adapter already set. |
 
 The `messageIds` you return from `publish` are stored verbatim and round-trip back into

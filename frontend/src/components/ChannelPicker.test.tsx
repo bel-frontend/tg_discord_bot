@@ -100,6 +100,31 @@ describe('ChannelPicker', () => {
         });
     });
 
+    it('collapses platform groups and persists the choice', async () => {
+        renderPicker();
+
+        fireEvent.click(
+            screen.getByRole('button', {
+                name: 'Collapse platform Telegram',
+            }),
+        );
+
+        expect(screen.queryByText('@krasny_bagatyr')).not.toBeInTheDocument();
+        expect(
+            screen.getByRole('button', { name: 'Expand platform Telegram' }),
+        ).toBeInTheDocument();
+
+        await waitFor(() => {
+            expect(
+                JSON.parse(
+                    window.localStorage.getItem(
+                        'composer:collapsedChannelPlatforms',
+                    ) ?? '[]',
+                ),
+            ).toEqual(['telegram']);
+        });
+    });
+
     it('creates a folder and lets the user name it inline', async () => {
         renderPicker();
 

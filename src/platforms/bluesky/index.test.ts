@@ -1,5 +1,6 @@
 import { describe, expect, mock, test } from 'bun:test';
 import { BlueskyPlatform, type BlueskyAgentLike } from './index';
+import type { Platform } from '../types';
 
 const CREDS = { identifier: 'me.bsky.social', password: 'app-pass' };
 const DID = 'did:plc:abc123';
@@ -274,12 +275,10 @@ describe('links and validation', () => {
         expect(platform.buildMessageLink('me', 'not-an-at-uri')).toBeNull();
     });
 
-    test('validateContent warns when the post will become a thread', () => {
-        const platform = makePlatform(makeAgent());
-        expect(platform.validateContent('short post')).toEqual([]);
-
-        const issues = platform.validateContent('word '.repeat(120));
-        expect(issues).toHaveLength(1);
-        expect(issues[0].message).toContain('thread');
+    test('long posts produce no validation issues — they thread instead', () => {
+        // validateContent is deliberately absent: any issue it returned would
+        // block publishing in the UI, and long posts are handled by threading.
+        const platform: Platform = makePlatform(makeAgent());
+        expect(platform.validateContent).toBeUndefined();
     });
 });

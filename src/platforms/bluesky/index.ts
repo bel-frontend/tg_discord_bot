@@ -6,7 +6,6 @@ import type {
     PublishContent,
     PublishedMessageRef,
     PublishResult,
-    ValidationIssue,
 } from '../types';
 import { getPlatformConfigValues } from '../../platformConfigs';
 import { splitTextIntoChunks } from '../../chunk';
@@ -216,18 +215,8 @@ export class BlueskyPlatform implements Platform {
         return markdownToBlueskyPreviewHtml(markdown);
     }
 
-    validateContent(markdown: string): ValidationIssue[] {
-        const text = markdownToBlueskyText(markdown);
-        if (text.length <= BLUESKY_LIMIT) return [];
-        const posts = splitTextIntoChunks(text, BLUESKY_LIMIT, true).length;
-        return [
-            {
-                platform: this.id,
-                chunk: 1,
-                message: `Post is ${text.length} characters; Bluesky will publish it as a thread of ${posts} posts of up to ${BLUESKY_LIMIT} characters.`,
-            },
-        ];
-    }
+    // No validateContent(): validation issues block publishing in the UI, and a
+    // long post is not a problem — it is published as a reply thread, like X.
 
     buildMessageLink(_channelId: string, messageId: string): string | null {
         const match = AT_POST_URI.exec(messageId);

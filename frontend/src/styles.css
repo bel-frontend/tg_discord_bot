@@ -232,6 +232,7 @@ select:focus {
     display: flex;
     flex-direction: column;
     height: 100vh;
+    height: 100dvh;
 }
 .topbar {
     display: flex;
@@ -784,7 +785,11 @@ tg-spoiler {
     display: flex;
     flex-direction: column;
     gap: 16px;
+    height: 100%;
+    max-height: 100%;
+    min-height: 0;
     min-width: 0;
+    overscroll-behavior-y: contain;
 }
 .side-title {
     margin: 0;
@@ -796,12 +801,17 @@ tg-spoiler {
 .channels {
     display: flex;
     flex-direction: column;
+    flex-shrink: 0;
     gap: 14px;
-    max-height: min(48vh, 460px);
+    height: min(55vh, 460px);
+    height: min(55dvh, 460px);
     min-height: 0;
     overflow-y: auto;
-    overscroll-behavior: contain;
+    overscroll-behavior-y: auto;
     padding-right: 4px;
+}
+.channels > * {
+    flex-shrink: 0;
 }
 .chan-group-head {
     display: flex;
@@ -1591,6 +1601,11 @@ tg-spoiler {
         border: none;
         border-bottom: 1px solid var(--border);
     }
+    .sidebar {
+        height: auto;
+        max-height: none;
+        overflow-y: visible;
+    }
     .editor-pane {
         min-height: 60vh;
     }
@@ -1607,6 +1622,12 @@ tg-spoiler {
 }
 
 @media (max-width: 480px) {
+    .actions {
+        flex-direction: column;
+    }
+    .actions .btn {
+        width: 100%;
+    }
     .modal-backdrop {
         padding: 10px;
     }

@@ -17,4 +17,13 @@ describe('XPlatform local publisher adapter', () => {
             'https://x.com/i/status/123',
         );
     });
+
+    test('keeps X visible in the desktop picker between heartbeats', async () => {
+        const platform = new XPlatform();
+
+        expect(
+            await platform.listChannels({ accountId: 'workspace-id' }),
+        ).toEqual([{ id: 'me', name: 'Local X profile' }]);
+        expect(await platform.listChannels()).toEqual([]);
+    });
 });

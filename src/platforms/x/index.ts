@@ -41,8 +41,11 @@ export class XPlatform implements Platform {
 
     async listChannels(context?: PlatformContext): Promise<Channel[]> {
         if (!context?.accountId) return [];
-        const online = await hasOnlineLocalPublisher(context.accountId, 'x');
-        return online ? [{ id: 'me', name: 'Local X profile' }] : [];
+        // X is already restricted to Desktop clients by the platform registry.
+        // Do not tie picker visibility to the short heartbeat window: the
+        // publisher may still be starting when channels are loaded, and the
+        // publish path performs the authoritative online check below.
+        return [{ id: 'me', name: 'Local X profile' }];
     }
 
     toPreviewHtml(markdown: string): string {

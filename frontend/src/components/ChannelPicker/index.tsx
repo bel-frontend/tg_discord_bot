@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { FolderPlus, Pin } from 'lucide-react';
+import { ChevronDown, ChevronRight, FolderPlus, Pin } from 'lucide-react';
 import type {
     ChannelOption,
     PlatformMeta,
@@ -8,6 +8,7 @@ import type {
 import { channelOptionKey, channelKey } from './channelKey';
 import { usePinnedChannels } from './usePinnedChannels';
 import { useChannelFolders } from './useChannelFolders';
+import { useCollapsedPlatforms } from './useCollapsedPlatforms';
 import { ChannelRow } from './ChannelRow';
 import { FolderGroup } from './FolderGroup';
 import styles from './ChannelPicker.module.scss';
@@ -42,6 +43,8 @@ export function ChannelPicker({
     const [renamingFolderId, setRenamingFolderId] = useState<string | null>(
         null,
     );
+    const { collapsedPlatforms, togglePlatformCollapsed } =
+        useCollapsedPlatforms();
     const groups = useMemo(() => {
         const next = new Map<
             string,
@@ -206,13 +209,26 @@ export function ChannelPicker({
                     return !pinnedKeySet.has(k) && !folderedKeySet.has(k);
                 });
                 if (!visibleItems.length) return null;
+                const collapsed = collapsedPlatforms.has(platform);
+                const Chevron = collapsed ? ChevronRight : ChevronDown;
 
                 return (
                     <section className={styles.group} key={platform}>
                         <div className={styles.groupHead}>
-                            <span className={styles.groupTitle}>
-                                {platformIcon(platform, platforms)} {group.name}
-                            </span>
+                            <button
+                                type="button"
+                                className={styles.folderToggle}
+                                aria-label={`${collapsed ? 'Expand' : 'Collapse'} platform ${group.name}`}
+                                onClick={() =>
+                                    togglePlatformCollapsed(platform)
+                                }
+                            >
+                                <Chevron size={14} strokeWidth={2.4} />
+                                <span className={styles.groupTitle}>
+                                    {platformIcon(platform, platforms)}{' '}
+                                    {group.name}
+                                </span>
+                            </button>
                             <button
                                 className="chan-all btn small"
                                 onClick={() => toggleAll(group.items)}
@@ -220,9 +236,11 @@ export function ChannelPicker({
                                 All
                             </button>
                         </div>
-                        <div className={styles.children}>
-                            {visibleItems.map(renderRow)}
-                        </div>
+                        {!collapsed && (
+                            <div className={styles.children}>
+                                {visibleItems.map(renderRow)}
+                            </div>
+                        )}
                     </section>
                 );
             })}
