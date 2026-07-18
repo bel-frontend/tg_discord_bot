@@ -23,6 +23,7 @@ import { assertChannelAccess, assertPermission } from './permissions';
 import { users } from './db';
 import { ObjectId } from 'mongodb';
 import {
+    isBrowserConnectPlatform,
     isDesktopOnlyPlatform,
     listAllChannels,
     listPlatforms,
@@ -494,6 +495,15 @@ export async function handleApi(req: Request, url: URL): Promise<Response> {
         try {
             assertPermission(actor, 'canManageChannels');
             assertPlatformAvailableToClient(req, [String(body.platform ?? '')]);
+            if (isBrowserConnectPlatform(String(body.platform ?? ''))) {
+                return json(
+                    {
+                        error:
+                            'This platform uses a single connected account managed on the Settings page',
+                    },
+                    400,
+                );
+            }
             const channel = await createChannelResource(actor.accountId, body);
             return json({ channel }, 201);
         } catch (err: any) {

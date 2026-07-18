@@ -25,6 +25,13 @@ export function isDesktopOnlyPlatform(id: string): boolean {
     return platforms.get(id.trim().toLowerCase())?.desktopOnly === true;
 }
 
+export function isBrowserConnectPlatform(id: string): boolean {
+    return (
+        platforms.get(id.trim().toLowerCase())?.setup?.connect ===
+        'desktop-browser'
+    );
+}
+
 export function listPlatformsMeta(includeDesktopOnly = true): PlatformMeta[] {
     return [...platforms.values()]
         .filter((platform) => includeDesktopOnly || !platform.desktopOnly)

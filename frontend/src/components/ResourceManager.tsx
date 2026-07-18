@@ -36,7 +36,10 @@ export function ResourceManager({ onGoToSettings }: ResourceManagerProps = {}) {
 
     const platformOptions = useMemo(() => {
         const known = new Map(PLATFORM_PLACEHOLDERS.map((p) => [p.id, p]));
-        for (const p of platforms) known.set(p.id, { id: p.id, name: p.name });
+        for (const p of platforms) {
+            if (p.setup?.connect === 'desktop-browser') continue;
+            known.set(p.id, { id: p.id, name: p.name });
+        }
         return [...known.values()];
     }, [platforms]);
 
