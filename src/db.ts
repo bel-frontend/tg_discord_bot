@@ -185,21 +185,48 @@ export interface ScheduledPublicationDoc {
     updatedAt: Date;
 }
 
-let client: MongoClient | null = null;
-let usersColl: Collection<UserDoc> | null = null;
-let draftsColl: Collection<DraftDoc> | null = null;
-let draftFoldersColl: Collection<DraftFolderDoc> | null = null;
-let uploadsColl: Collection<UploadDoc> | null = null;
-let channelResourcesColl: Collection<ChannelResourceDoc> | null = null;
-let platformConfigsColl: Collection<PlatformConfigDoc> | null = null;
-let localPublisherAgentsColl: Collection<LocalPublisherAgentDoc> | null = null;
-let localPublisherJobsColl: Collection<LocalPublisherJobDoc> | null = null;
-let publicationsColl: Collection<PublicationDoc> | null = null;
-let scheduledPublicationsColl: Collection<ScheduledPublicationDoc> | null = null;
-let accountMembersColl: Collection<AccountMemberDoc> | null = null;
-let emailVerificationsColl: Collection<EmailVerificationDoc> | null = null;
-let passwordResetsColl: Collection<PasswordResetDoc> | null = null;
-let emailChangesColl: Collection<EmailChangeDoc> | null = null;
+interface DbState {
+    client: MongoClient | null;
+    usersColl: Collection<UserDoc> | null;
+    draftsColl: Collection<DraftDoc> | null;
+    draftFoldersColl: Collection<DraftFolderDoc> | null;
+    uploadsColl: Collection<UploadDoc> | null;
+    channelResourcesColl: Collection<ChannelResourceDoc> | null;
+    platformConfigsColl: Collection<PlatformConfigDoc> | null;
+    localPublisherAgentsColl: Collection<LocalPublisherAgentDoc> | null;
+    localPublisherJobsColl: Collection<LocalPublisherJobDoc> | null;
+    publicationsColl: Collection<PublicationDoc> | null;
+    scheduledPublicationsColl: Collection<ScheduledPublicationDoc> | null;
+    accountMembersColl: Collection<AccountMemberDoc> | null;
+    emailVerificationsColl: Collection<EmailVerificationDoc> | null;
+    passwordResetsColl: Collection<PasswordResetDoc> | null;
+    emailChangesColl: Collection<EmailChangeDoc> | null;
+}
+
+const runtime = globalThis as typeof globalThis & {
+    __composerDbState?: DbState;
+};
+
+// Runtime-discovered platform adapters can be evaluated through a separate
+// module graph by Bun. Keep the connection on the process global so those
+// adapters and the HTTP server always use the same initialized collections.
+const state = (runtime.__composerDbState ??= {
+    client: null,
+    usersColl: null,
+    draftsColl: null,
+    draftFoldersColl: null,
+    uploadsColl: null,
+    channelResourcesColl: null,
+    platformConfigsColl: null,
+    localPublisherAgentsColl: null,
+    localPublisherJobsColl: null,
+    publicationsColl: null,
+    scheduledPublicationsColl: null,
+    accountMembersColl: null,
+    emailVerificationsColl: null,
+    passwordResetsColl: null,
+    emailChangesColl: null,
+});
 
 export function resolveMongoConfig(
     env: Record<string, string | undefined> = process.env,
@@ -237,34 +264,37 @@ export function resolveMongoConfig(
 }
 
 export async function connect(): Promise<void> {
-    if (client) return;
+    if (state.client) return;
 
     const { uri, dbName } = resolveMongoConfig();
 
     // promoteBuffers so stored binary (uploaded images) reads back as Buffer, not Binary.
-    client = new MongoClient(uri, { promoteBuffers: true });
+    const client = new MongoClient(uri, { promoteBuffers: true });
     await client.connect();
 
     const db = client.db(dbName);
-    usersColl = db.collection<UserDoc>('users');
-    draftsColl = db.collection<DraftDoc>('drafts');
-    draftFoldersColl = db.collection<DraftFolderDoc>('draftFolders');
-    uploadsColl = db.collection<UploadDoc>('uploads');
-    channelResourcesColl =
+    const usersColl = db.collection<UserDoc>('users');
+    const draftsColl = db.collection<DraftDoc>('drafts');
+    const draftFoldersColl = db.collection<DraftFolderDoc>('draftFolders');
+    const uploadsColl = db.collection<UploadDoc>('uploads');
+    const channelResourcesColl =
         db.collection<ChannelResourceDoc>('channelResources');
-    platformConfigsColl = db.collection<PlatformConfigDoc>('platformConfigs');
-    localPublisherAgentsColl =
+    const platformConfigsColl =
+        db.collection<PlatformConfigDoc>('platformConfigs');
+    const localPublisherAgentsColl =
         db.collection<LocalPublisherAgentDoc>('localPublisherAgents');
-    localPublisherJobsColl =
+    const localPublisherJobsColl =
         db.collection<LocalPublisherJobDoc>('localPublisherJobs');
-    publicationsColl = db.collection<PublicationDoc>('publications');
-    scheduledPublicationsColl =
+    const publicationsColl = db.collection<PublicationDoc>('publications');
+    const scheduledPublicationsColl =
         db.collection<ScheduledPublicationDoc>('scheduledPublications');
-    accountMembersColl = db.collection<AccountMemberDoc>('accountMembers');
-    emailVerificationsColl =
+    const accountMembersColl =
+        db.collection<AccountMemberDoc>('accountMembers');
+    const emailVerificationsColl =
         db.collection<EmailVerificationDoc>('emailVerifications');
-    passwordResetsColl = db.collection<PasswordResetDoc>('passwordResets');
-    emailChangesColl = db.collection<EmailChangeDoc>('emailChanges');
+    const passwordResetsColl =
+        db.collection<PasswordResetDoc>('passwordResets');
+    const emailChangesColl = db.collection<EmailChangeDoc>('emailChanges');
 
     await usersColl.createIndex({ email: 1 }, { unique: true });
     await draftsColl.createIndex({ userId: 1, updatedAt: -1 });
@@ -332,12 +362,32 @@ export async function connect(): Promise<void> {
         [{ $set: { accountId: '$userId' } }],
     );
 
+    Object.assign(state, {
+        client,
+        usersColl,
+        draftsColl,
+        draftFoldersColl,
+        uploadsColl,
+        channelResourcesColl,
+        platformConfigsColl,
+        localPublisherAgentsColl,
+        localPublisherJobsColl,
+        publicationsColl,
+        scheduledPublicationsColl,
+        accountMembersColl,
+        emailVerificationsColl,
+        passwordResetsColl,
+        emailChangesColl,
+    });
+
     console.log(`Connected to MongoDB (db: ${dbName}).`);
 }
 
 export function users(): Collection<UserDoc> {
-    if (!usersColl) throw new Error('DB not connected — call connect() first');
-    return usersColl;
+    if (!state.usersColl) {
+        throw new Error('DB not connected — call connect() first');
+    }
+    return state.usersColl;
 }
 
 /** Batch-resolves user ids to emails, for labeling records with their author. */
@@ -353,88 +403,92 @@ export async function getUserEmailsByIds(
 }
 
 export function drafts(): Collection<DraftDoc> {
-    if (!draftsColl) throw new Error('DB not connected — call connect() first');
-    return draftsColl;
+    if (!state.draftsColl) {
+        throw new Error('DB not connected — call connect() first');
+    }
+    return state.draftsColl;
 }
 
 export function draftFolders(): Collection<DraftFolderDoc> {
-    if (!draftFoldersColl) {
+    if (!state.draftFoldersColl) {
         throw new Error('DB not connected — call connect() first');
     }
-    return draftFoldersColl;
+    return state.draftFoldersColl;
 }
 
 export function uploads(): Collection<UploadDoc> {
-    if (!uploadsColl) throw new Error('DB not connected — call connect() first');
-    return uploadsColl;
+    if (!state.uploadsColl) {
+        throw new Error('DB not connected — call connect() first');
+    }
+    return state.uploadsColl;
 }
 
 export function channelResources(): Collection<ChannelResourceDoc> {
-    if (!channelResourcesColl) {
+    if (!state.channelResourcesColl) {
         throw new Error('DB not connected — call connect() first');
     }
-    return channelResourcesColl;
+    return state.channelResourcesColl;
 }
 
 export function platformConfigs(): Collection<PlatformConfigDoc> {
-    if (!platformConfigsColl) {
+    if (!state.platformConfigsColl) {
         throw new Error('DB not connected — call connect() first');
     }
-    return platformConfigsColl;
+    return state.platformConfigsColl;
 }
 
 export function localPublisherAgents(): Collection<LocalPublisherAgentDoc> {
-    if (!localPublisherAgentsColl) {
+    if (!state.localPublisherAgentsColl) {
         throw new Error('DB not connected — call connect() first');
     }
-    return localPublisherAgentsColl;
+    return state.localPublisherAgentsColl;
 }
 
 export function localPublisherJobs(): Collection<LocalPublisherJobDoc> {
-    if (!localPublisherJobsColl) {
+    if (!state.localPublisherJobsColl) {
         throw new Error('DB not connected — call connect() first');
     }
-    return localPublisherJobsColl;
+    return state.localPublisherJobsColl;
 }
 
 export function publications(): Collection<PublicationDoc> {
-    if (!publicationsColl) {
+    if (!state.publicationsColl) {
         throw new Error('DB not connected — call connect() first');
     }
-    return publicationsColl;
+    return state.publicationsColl;
 }
 
 export function scheduledPublications(): Collection<ScheduledPublicationDoc> {
-    if (!scheduledPublicationsColl) {
+    if (!state.scheduledPublicationsColl) {
         throw new Error('DB not connected — call connect() first');
     }
-    return scheduledPublicationsColl;
+    return state.scheduledPublicationsColl;
 }
 
 export function accountMembers(): Collection<AccountMemberDoc> {
-    if (!accountMembersColl) {
+    if (!state.accountMembersColl) {
         throw new Error('DB not connected — call connect() first');
     }
-    return accountMembersColl;
+    return state.accountMembersColl;
 }
 
 export function emailVerifications(): Collection<EmailVerificationDoc> {
-    if (!emailVerificationsColl) {
+    if (!state.emailVerificationsColl) {
         throw new Error('DB not connected — call connect() first');
     }
-    return emailVerificationsColl;
+    return state.emailVerificationsColl;
 }
 
 export function passwordResets(): Collection<PasswordResetDoc> {
-    if (!passwordResetsColl) {
+    if (!state.passwordResetsColl) {
         throw new Error('DB not connected — call connect() first');
     }
-    return passwordResetsColl;
+    return state.passwordResetsColl;
 }
 
 export function emailChanges(): Collection<EmailChangeDoc> {
-    if (!emailChangesColl) {
+    if (!state.emailChangesColl) {
         throw new Error('DB not connected — call connect() first');
     }
-    return emailChangesColl;
+    return state.emailChangesColl;
 }

@@ -1,5 +1,31 @@
 import { describe, expect, test } from 'bun:test';
+import { join } from 'node:path';
 import { resolveMongoConfig } from './db';
+
+const DB_PATH = join(import.meta.dir, 'db.ts');
+
+describe('database runtime state', () => {
+    test('is shared by separately evaluated module graphs', () => {
+        const firstSpecifier = JSON.stringify(`${DB_PATH}?graph=first`);
+        const secondSpecifier = JSON.stringify(`${DB_PATH}?graph=second`);
+        const source = `
+            const first = await import(${firstSpecifier});
+            const sentinel = {};
+            globalThis.__composerDbState.usersColl = sentinel;
+            const second = await import(${secondSpecifier});
+            if (first.users === second.users) throw new Error('modules were not separate');
+            if (second.users() !== sentinel) throw new Error('DB state was not shared');
+        `;
+        const child = Bun.spawnSync(['bun', '--eval', source], {
+            cwd: join(import.meta.dir, '..'),
+            stdout: 'pipe',
+            stderr: 'pipe',
+        });
+
+        expect(child.stderr.toString()).toBe('');
+        expect(child.exitCode).toBe(0);
+    });
+});
 
 describe('resolveMongoConfig', () => {
     test('builds the default remote composer MongoDB URI from env parts', () => {
