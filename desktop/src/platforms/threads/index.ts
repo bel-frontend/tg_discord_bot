@@ -1,8 +1,13 @@
+import type { BrowserWindow } from 'electron';
 import {
     BrowserPublisherSession,
     humanDelay,
     waitForJavaScript,
 } from '../../browserPublisherSession';
+import {
+    findCreatedThreadsPost,
+    type CreatedThreadsPost,
+} from './createdPost';
 import { normalizeThreadsPostUrl } from './post';
 
 const THREADS_HOME = 'https://www.threads.com/';
@@ -14,6 +19,70 @@ const threadsSession = new BrowserPublisherSession({
     cookieNames: ['sessionid'],
     cookieDomains: ['threads.com', 'threads.net', 'instagram.com'],
 });
+
+async function watchCreatedPost(
+    window: BrowserWindow,
+    text: string,
+): Promise<{
+    promise: Promise<CreatedThreadsPost | undefined>;
+    stop: () => void;
+}> {
+    const debug = window.webContents.debugger;
+    if (!debug.isAttached()) debug.attach('1.3');
+    await debug.sendCommand('Network.enable');
+
+    let finish: (post?: CreatedThreadsPost) => void = () => {};
+    const promise = new Promise<CreatedThreadsPost | undefined>((resolve) => {
+        let settled = false;
+        const complete = (post?: CreatedThreadsPost) => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timeout);
+            debug.off('message', onMessage);
+            resolve(post);
+        };
+        finish = complete;
+        const onMessage = async (
+            _event: Electron.Event,
+            method: string,
+            params: { requestId?: string; response?: { url?: string } },
+        ) => {
+            const url = params.response?.url;
+            if (
+                method !== 'Network.responseReceived' ||
+                !params.requestId ||
+                !url ||
+                !/^https:\/\/([^/]+\.)?threads\.(com|net)\//.test(url) ||
+                (!url.includes('/api/') && !url.includes('graphql'))
+            ) {
+                return;
+            }
+            try {
+                const response = (await debug.sendCommand(
+                    'Network.getResponseBody',
+                    { requestId: params.requestId },
+                )) as { body?: string; base64Encoded?: boolean };
+                const raw = response.base64Encoded
+                    ? Buffer.from(response.body ?? '', 'base64').toString()
+                    : response.body ?? '';
+                const post = findCreatedThreadsPost(JSON.parse(raw), text);
+                if (post) complete(post);
+            } catch {
+                // The text-matched DOM lookup below remains as a fallback.
+            }
+        };
+        const timeout = setTimeout(() => complete(), 30_000);
+        debug.on('message', onMessage);
+    });
+
+    return {
+        promise,
+        stop: () => {
+            finish();
+            if (debug.isAttached()) debug.detach();
+        },
+    };
+}
 
 export async function getThreadsConnectionStatus(): Promise<{
     connected: boolean;
@@ -37,6 +106,7 @@ export async function publishThreadsText(
     link: string;
 }> {
     const window = await threadsSession.createAutomationWindow();
+    let watcher: Awaited<ReturnType<typeof watchCreatedPost>> | undefined;
     try {
         await window.loadURL(
             replyToLink
@@ -98,6 +168,7 @@ export async function publishThreadsText(
             ),
         );
         await humanDelay();
+        watcher = await watchCreatedPost(window, text);
         await waitForJavaScript<boolean>(
             window,
             `(() => {
@@ -118,20 +189,46 @@ export async function publishThreadsText(
             })()`,
         );
 
-        const link = await waitForJavaScript<string>(
+        const networkPost = watcher.promise.then((post) => {
+            if (!post) throw new Error('Threads network confirmation timed out');
+            return post;
+        });
+        const domPost = waitForJavaScript<CreatedThreadsPost>(
             window,
             `(() => {
+                const normalize = (value) =>
+                    (value || '').replace(/\\s+/g, ' ').trim();
+                const expected = normalize(${JSON.stringify(text)});
                 const known = new Set(${JSON.stringify([...knownLinks])});
-                return Array.from(document.querySelectorAll('a[href*="/post/"]'))
-                    .map((item) => item.href)
-                    .find((href) => !known.has(href)) || null;
+                const links = Array.from(document.querySelectorAll(
+                    'a[href*="/post/"]'
+                )).filter((link) => !known.has(link.href));
+
+                for (const link of links) {
+                    let container = link;
+                    for (let depth = 0; container && depth < 10; depth += 1) {
+                        if (normalize(container.textContent).includes(expected)) {
+                            const messageId = link.href.match(
+                                /\\/post\\/([^/?]+)/
+                            )?.[1];
+                            if (messageId) {
+                                return { messageId, link: link.href };
+                            }
+                        }
+                        container = container.parentElement;
+                    }
+                }
+                return null;
             })()`,
             45_000,
         );
-        const messageId = link.match(/\/post\/([^/?]+)/)?.[1];
-        if (!messageId) throw new Error('Could not identify the Threads post');
-        return { messageId, link };
+        try {
+            return await Promise.any([networkPost, domPost]);
+        } catch {
+            throw new Error('Could not identify the published Threads post');
+        }
     } finally {
+        watcher?.stop();
         if (!window.isDestroyed()) window.destroy();
     }
 }
