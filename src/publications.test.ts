@@ -308,12 +308,25 @@ describe('deletePublishedTargets', () => {
     });
 
     test('deletes the DB record when every platform delete succeeds', async () => {
-        const doc = makeDoc();
+        const doc = makeDoc({
+            targets: [
+                {
+                    platform: 'threads',
+                    channelId: 'me',
+                    messageIds: ['ROOT'],
+                    link: 'https://www.threads.com/@composer/post/ROOT',
+                    ok: false,
+                    error: 'Reply failed',
+                    updatedAt: new Date(),
+                },
+            ],
+        });
         findOneMock.mockImplementationOnce(async () => doc);
         deleteTargetsMock.mockImplementationOnce(async () => [
             { platform: 'telegram', channelId: 'chan1', ok: true, messageIds: ['1'] },
         ]);
         deleteOneMock.mockClear();
+        deleteTargetsMock.mockClear();
         deleteOneMock.mockImplementationOnce(async () => ({ deletedCount: 1 }));
 
         const outcome = await deletePublishedTargets('user1', VALID_ID);
@@ -324,6 +337,17 @@ describe('deletePublishedTargets', () => {
             ],
             deleted: true,
         });
+        expect(deleteTargetsMock).toHaveBeenCalledWith(
+            [
+                {
+                    platform: 'threads',
+                    channelId: 'me',
+                    messageIds: ['ROOT'],
+                    link: 'https://www.threads.com/@composer/post/ROOT',
+                },
+            ],
+            'user1',
+        );
         expect(deleteOneMock).toHaveBeenCalledTimes(1);
     });
 

@@ -8,7 +8,14 @@ import {
     findCreatedThreadsPost,
     type CreatedThreadsPost,
 } from './createdPost';
+import {
+    buildClickThreadsDeleteMenuItemScript,
+    buildClickThreadsMoreScript,
+    buildConfirmThreadsDeleteScript,
+} from './deleteScript';
 import { normalizeThreadsPostUrl } from './post';
+import { buildClickThreadsReplyScript } from './replyScript';
+import { buildClickThreadsSubmitScript } from './submitScript';
 
 const THREADS_HOME = 'https://www.threads.com/';
 const threadsSession = new BrowserPublisherSession({
@@ -84,6 +91,25 @@ async function watchCreatedPost(
     };
 }
 
+async function waitForThreadsStep<T>(
+    window: BrowserWindow,
+    code: string,
+    errorMessage: string,
+    timeoutMs?: number,
+): Promise<T> {
+    try {
+        return await waitForJavaScript<T>(window, code, timeoutMs);
+    } catch (error) {
+        if (
+            error instanceof Error &&
+            error.message === 'Timed out waiting for the publishing page'
+        ) {
+            throw new Error(errorMessage);
+        }
+        throw error;
+    }
+}
+
 export async function getThreadsConnectionStatus(): Promise<{
     connected: boolean;
 }> {
@@ -98,6 +124,38 @@ export async function disconnectThreads(): Promise<void> {
     await threadsSession.disconnect();
 }
 
+export async function deleteThreadsPost(link: string): Promise<{
+    deleted: true;
+}> {
+    const targetLink = normalizeThreadsPostUrl(link);
+    const window = await threadsSession.createAutomationWindow();
+    try {
+        await window.loadURL(targetLink);
+        await humanDelay();
+        await waitForThreadsStep<boolean>(
+            window,
+            buildClickThreadsMoreScript(targetLink),
+            'Could not find the More button on the Threads post',
+        );
+        await humanDelay();
+        await waitForThreadsStep<boolean>(
+            window,
+            buildClickThreadsDeleteMenuItemScript(),
+            'Could not find Delete in the Threads post menu',
+        );
+        await humanDelay();
+        await waitForThreadsStep<boolean>(
+            window,
+            buildConfirmThreadsDeleteScript(),
+            'Could not find the Threads delete confirmation button',
+        );
+        await humanDelay(700, 1_200);
+        return { deleted: true };
+    } finally {
+        if (!window.isDestroyed()) window.destroy();
+    }
+}
+
 export async function publishThreadsText(
     text: string,
     replyToLink?: string,
@@ -108,55 +166,45 @@ export async function publishThreadsText(
     const window = await threadsSession.createAutomationWindow();
     let watcher: Awaited<ReturnType<typeof watchCreatedPost>> | undefined;
     try {
+        const targetLink = replyToLink
+            ? normalizeThreadsPostUrl(replyToLink)
+            : undefined;
         await window.loadURL(
-            replyToLink
-                ? normalizeThreadsPostUrl(replyToLink)
+            targetLink
+                ? targetLink
                 : `${THREADS_HOME}intent/post?text=${encodeURIComponent(text)}`,
         );
         await humanDelay();
-        if (replyToLink) {
-            await waitForJavaScript<boolean>(
+        if (targetLink) {
+            await waitForThreadsStep<boolean>(
                 window,
-                `(() => {
-                    const replyLabels = [
-                        'reply', 'odpowiedz', 'адказаць', 'ответить'
-                    ];
-                    const direct = document.querySelector(
-                        '[aria-label="Reply"], [aria-label="Odpowiedz"], ' +
-                        '[aria-label="Адказаць"], [aria-label="Ответить"]'
-                    );
-                    const candidates = Array.from(document.querySelectorAll(
-                        '[role="button"], button'
-                    ));
-                    const button = direct?.closest('[role="button"], button') ||
-                        candidates.find((candidate) =>
-                            replyLabels.includes(
-                                (candidate.getAttribute('aria-label') ||
-                                    candidate.textContent || '')
-                                    .trim()
-                                    .toLowerCase()
-                            )
-                        );
-                    if (!button) return false;
-                    button.click();
-                    return true;
-                })()`,
+                buildClickThreadsReplyScript(targetLink),
+                'Could not open the reply composer on the Threads post',
             );
             await humanDelay();
         }
-        await waitForJavaScript<boolean>(
+        await waitForThreadsStep<boolean>(
             window,
             `(() => {
-                const editor = document.querySelector(
-                    '[role="dialog"] div[contenteditable="true"][role="textbox"], ' +
-                    'div[contenteditable="true"][data-lexical-editor="true"]'
-                );
+                const visible = (candidate) =>
+                    candidate.getClientRects().length > 0 &&
+                    candidate.getAttribute('aria-hidden') !== 'true';
+                const candidates = Array.from(document.querySelectorAll(
+                    '[role="dialog"] [contenteditable="true"], ' +
+                    '[contenteditable="true"][role="textbox"], ' +
+                    '[contenteditable="true"][data-lexical-editor="true"], ' +
+                    'textarea'
+                ));
+                const editor = candidates.find(visible);
                 if (!editor) return false;
                 editor.focus();
                 return true;
             })()`,
+            targetLink
+                ? 'Could not find the Threads reply editor'
+                : 'Could not find the Threads post editor',
         );
-        if (replyToLink) {
+        if (targetLink) {
             await humanDelay();
             await window.webContents.insertText(text);
         }
@@ -169,24 +217,12 @@ export async function publishThreadsText(
         );
         await humanDelay();
         watcher = await watchCreatedPost(window, text);
-        await waitForJavaScript<boolean>(
+        await waitForThreadsStep<boolean>(
             window,
-            `(() => {
-                const labels = [
-                    'post', 'publish', 'opublikuj',
-                    'апублікаваць', 'опубликовать',
-                    'reply', 'odpowiedz', 'адказаць', 'ответить'
-                ];
-                const buttons = Array.from(document.querySelectorAll(
-                    '[role="dialog"] [role="button"], [role="dialog"] button'
-                ));
-                const button = buttons.find((candidate) =>
-                    labels.includes((candidate.textContent || '').trim().toLowerCase())
-                );
-                if (!button) return false;
-                button.click();
-                return true;
-            })()`,
+            buildClickThreadsSubmitScript(),
+            targetLink
+                ? 'Could not find the button that publishes a Threads reply'
+                : 'Could not find the button that publishes a Threads post',
         );
 
         const networkPost = watcher.promise.then((post) => {

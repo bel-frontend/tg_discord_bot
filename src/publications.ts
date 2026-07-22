@@ -151,6 +151,7 @@ function buildRefs(publication: Publication): ExistingPublishTarget[] {
             platform: target.platform,
             channelId: target.channelId,
             messageIds: target.messageIds,
+            link: target.link,
         }));
 }
 

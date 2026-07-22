@@ -3,6 +3,7 @@ import type {
     Platform,
     PlatformContext,
     PublishContent,
+    PublishedMessageRef,
     PublishResult,
 } from '../types';
 import { splitTextIntoChunks } from '../../chunk';
@@ -17,6 +18,25 @@ import {
 } from './markdown';
 
 const THREADS_LIMIT = 500;
+
+function threadsPostLink(messageId: string, rootLink?: string): string {
+    if (/^https:\/\//.test(messageId)) return messageId;
+    if (!rootLink) {
+        throw new Error('No Threads post link was stored for deletion');
+    }
+    const url = new URL(rootLink);
+    if (!['threads.com', 'www.threads.com', 'threads.net', 'www.threads.net'].includes(url.hostname)) {
+        throw new Error('Invalid stored Threads post link');
+    }
+    const match = url.pathname.match(/^(\/@[^/]+\/post\/)[^/]+/);
+    if (!match || !/^[A-Za-z0-9_-]+$/.test(messageId)) {
+        throw new Error('Invalid stored Threads post id');
+    }
+    url.pathname = `${match[1]}${messageId}`;
+    url.search = '';
+    url.hash = '';
+    return url.href;
+}
 
 export interface ThreadsPlatformDependencies {
     hasOnlineLocalPublisher: typeof hasOnlineLocalPublisher;
@@ -96,9 +116,9 @@ export class ThreadsPlatform implements Platform {
         const results: PublishResult[] = [];
         const chunks = splitTextIntoChunks(text, THREADS_LIMIT, true);
         for (const channelId of channelIds) {
+            const messageIds: string[] = [];
+            let link: string | undefined;
             try {
-                const messageIds: string[] = [];
-                let link: string | undefined;
                 let replyToLink: string | undefined;
                 for (const chunk of chunks) {
                     const jobId =
@@ -141,8 +161,67 @@ export class ThreadsPlatform implements Platform {
                     platform: this.id,
                     channelId,
                     ok: false,
+                    messageIds,
+                    link,
                     error:
                         error instanceof Error ? error.message : 'Publish failed',
+                });
+            }
+        }
+        return results;
+    }
+
+    async delete(
+        refs: PublishedMessageRef[],
+        context?: PlatformContext,
+    ): Promise<PublishResult[]> {
+        if (!context?.accountId) {
+            throw new Error('Threads deletion requires a workspace');
+        }
+        if (
+            !(await this.dependencies.hasOnlineLocalPublisher(
+                context.accountId,
+                'threads',
+            ))
+        ) {
+            throw new Error('Open Composer Desktop and connect Threads first');
+        }
+
+        const results: PublishResult[] = [];
+        for (const ref of refs) {
+            try {
+                // Delete replies before their parent so the chain remains
+                // addressable until every stored post has been removed.
+                for (const messageId of [...ref.messageIds].reverse()) {
+                    const jobId =
+                        await this.dependencies.enqueueLocalPublisherJob({
+                            accountId: context.accountId,
+                            platform: 'threads',
+                            operation: 'delete',
+                            payload: {
+                                link: threadsPostLink(messageId, ref.link),
+                            },
+                        });
+                    await this.dependencies.waitForLocalPublisherJob(
+                        context.accountId,
+                        jobId,
+                    );
+                }
+                results.push({
+                    platform: this.id,
+                    channelId: ref.channelId,
+                    ok: true,
+                    messageIds: ref.messageIds,
+                });
+            } catch (error: unknown) {
+                results.push({
+                    platform: this.id,
+                    channelId: ref.channelId,
+                    ok: false,
+                    messageIds: ref.messageIds,
+                    link: ref.link,
+                    error:
+                        error instanceof Error ? error.message : 'Delete failed',
                 });
             }
         }

@@ -15,6 +15,7 @@ import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import {
     connectThreads,
+    deleteThreadsPost,
     disconnectThreads,
     getThreadsConnectionStatus,
     publishThreadsText,
@@ -468,28 +469,34 @@ async function processNextJob(): Promise<void> {
         | undefined;
     if (!job) return;
     try {
-        if (job.operation !== 'publish') {
+        let result: Record<string, unknown>;
+        if (job.operation === 'publish') {
+            const text = String(job.payload.text ?? '');
+            result =
+                job.platform === 'threads'
+                    ? await publishThreadsText(
+                          text,
+                          job.payload.replyToLink
+                              ? String(job.payload.replyToLink)
+                              : undefined,
+                      )
+                    : job.platform === 'x'
+                      ? await publishXText(
+                            text,
+                            job.payload.replyToId
+                                ? String(job.payload.replyToId)
+                                : undefined,
+                        )
+                      : (() => {
+                            throw new Error(
+                                'Unsupported local publisher platform',
+                            );
+                        })();
+        } else if (job.operation === 'delete' && job.platform === 'threads') {
+            result = await deleteThreadsPost(String(job.payload.link ?? ''));
+        } else {
             throw new Error('Unsupported local publisher job');
         }
-        const text = String(job.payload.text ?? '');
-        const result =
-            job.platform === 'threads'
-                ? await publishThreadsText(
-                      text,
-                      job.payload.replyToLink
-                          ? String(job.payload.replyToLink)
-                          : undefined,
-                  )
-                : job.platform === 'x'
-                  ? await publishXText(
-                        text,
-                        job.payload.replyToId
-                            ? String(job.payload.replyToId)
-                            : undefined,
-                    )
-                  : (() => {
-                        throw new Error('Unsupported local publisher platform');
-                    })();
         await agentRequest(
             `/api/local-publishers/jobs/${job.id}/complete`,
             {

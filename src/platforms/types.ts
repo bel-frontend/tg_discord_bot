@@ -25,6 +25,7 @@ export interface PublishContent {
 export interface PublishedMessageRef {
     channelId: string;
     messageIds: string[];
+    link?: string;
 }
 
 export interface PlatformContext {

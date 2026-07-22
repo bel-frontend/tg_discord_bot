@@ -174,6 +174,7 @@ export async function publishToTargets(
 
 export interface ExistingPublishTarget extends PublishTarget {
     messageIds: string[];
+    link?: string;
 }
 
 export async function updateTargets(
@@ -187,6 +188,7 @@ export async function updateTargets(
         list.push({
             channelId: target.channelId,
             messageIds: target.messageIds,
+            ...(target.link ? { link: target.link } : {}),
         });
         byPlatform.set(target.platform, list);
     }
@@ -250,6 +252,7 @@ export async function deleteTargets(
         list.push({
             channelId: target.channelId,
             messageIds: target.messageIds,
+            ...(target.link ? { link: target.link } : {}),
         });
         byPlatform.set(target.platform, list);
     }
