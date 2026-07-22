@@ -16,12 +16,20 @@ src/platforms/<id>/
 ├── index.ts          # required — the entry module (see below)
 ├── markdown.ts       # convention — markdown → platform format conversion
 └── *.test.ts         # colocated tests, run by `bun run test`
+
+desktop/src/platforms/<id>/
+├── index.ts          # optional — local browser publisher for desktop-only platforms
+├── *.ts              # platform-specific desktop helpers
+└── *.test.ts         # colocated desktop tests
 ```
 
 - The folder name should equal the platform `id`.
 - `markdown.ts` holds the markdown conversion when the platform's output format differs from raw
   markdown (Telegram HTML, Discord markdown, plain text with facets, …). Keep it separate from the
   adapter so it stays unit-testable without network mocks.
+- Desktop-only browser automation and its helpers live in the matching
+  `desktop/src/platforms/<id>/` folder. Keep `desktop/src/` itself limited to shared Electron
+  infrastructure and application orchestration.
 
 ## Entry contract
 

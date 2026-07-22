@@ -2,7 +2,8 @@ import {
     BrowserPublisherSession,
     humanDelay,
     waitForJavaScript,
-} from './browserPublisherSession';
+} from '../../browserPublisherSession';
+import { normalizeThreadsPostUrl } from './post';
 
 const THREADS_HOME = 'https://www.threads.com/';
 const threadsSession = new BrowserPublisherSession({
@@ -28,23 +29,67 @@ export async function disconnectThreads(): Promise<void> {
     await threadsSession.disconnect();
 }
 
-export async function publishThreadsText(text: string): Promise<{
+export async function publishThreadsText(
+    text: string,
+    replyToLink?: string,
+): Promise<{
     messageId: string;
     link: string;
 }> {
     const window = await threadsSession.createAutomationWindow();
     try {
         await window.loadURL(
-            `${THREADS_HOME}intent/post?text=${encodeURIComponent(text)}`,
+            replyToLink
+                ? normalizeThreadsPostUrl(replyToLink)
+                : `${THREADS_HOME}intent/post?text=${encodeURIComponent(text)}`,
         );
         await humanDelay();
+        if (replyToLink) {
+            await waitForJavaScript<boolean>(
+                window,
+                `(() => {
+                    const replyLabels = [
+                        'reply', 'odpowiedz', 'адказаць', 'ответить'
+                    ];
+                    const direct = document.querySelector(
+                        '[aria-label="Reply"], [aria-label="Odpowiedz"], ' +
+                        '[aria-label="Адказаць"], [aria-label="Ответить"]'
+                    );
+                    const candidates = Array.from(document.querySelectorAll(
+                        '[role="button"], button'
+                    ));
+                    const button = direct?.closest('[role="button"], button') ||
+                        candidates.find((candidate) =>
+                            replyLabels.includes(
+                                (candidate.getAttribute('aria-label') ||
+                                    candidate.textContent || '')
+                                    .trim()
+                                    .toLowerCase()
+                            )
+                        );
+                    if (!button) return false;
+                    button.click();
+                    return true;
+                })()`,
+            );
+            await humanDelay();
+        }
         await waitForJavaScript<boolean>(
             window,
-            `Boolean(document.querySelector(
-                '[role="dialog"] div[contenteditable="true"][role="textbox"], ' +
-                'div[contenteditable="true"][data-lexical-editor="true"]'
-            ))`,
+            `(() => {
+                const editor = document.querySelector(
+                    '[role="dialog"] div[contenteditable="true"][role="textbox"], ' +
+                    'div[contenteditable="true"][data-lexical-editor="true"]'
+                );
+                if (!editor) return false;
+                editor.focus();
+                return true;
+            })()`,
         );
+        if (replyToLink) {
+            await humanDelay();
+            await window.webContents.insertText(text);
+        }
         const knownLinks = new Set(
             await window.webContents.executeJavaScript(
                 `Array.from(document.querySelectorAll('a[href*="/post/"]'))
@@ -58,7 +103,8 @@ export async function publishThreadsText(text: string): Promise<{
             `(() => {
                 const labels = [
                     'post', 'publish', 'opublikuj',
-                    'апублікаваць', 'опубликовать'
+                    'апублікаваць', 'опубликовать',
+                    'reply', 'odpowiedz', 'адказаць', 'ответить'
                 ];
                 const buttons = Array.from(document.querySelectorAll(
                     '[role="dialog"] [role="button"], [role="dialog"] button'

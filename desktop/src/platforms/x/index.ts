@@ -3,7 +3,7 @@ import {
     BrowserPublisherSession,
     humanDelay,
     waitForJavaScript,
-} from './browserPublisherSession';
+} from '../../browserPublisherSession';
 
 const X_HOME = 'https://x.com/home';
 const xSession = new BrowserPublisherSession({

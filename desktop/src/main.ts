@@ -18,13 +18,13 @@ import {
     disconnectThreads,
     getThreadsConnectionStatus,
     publishThreadsText,
-} from './threadsSession';
+} from './platforms/threads';
 import {
     connectX,
     disconnectX,
     getXConnectionStatus,
     publishXText,
-} from './xSession';
+} from './platforms/x';
 import { applyPublisherConnectionChange } from './publisherConnection';
 
 interface EnvironmentConfig {
@@ -474,7 +474,12 @@ async function processNextJob(): Promise<void> {
         const text = String(job.payload.text ?? '');
         const result =
             job.platform === 'threads'
-                ? await publishThreadsText(text)
+                ? await publishThreadsText(
+                      text,
+                      job.payload.replyToLink
+                          ? String(job.payload.replyToLink)
+                          : undefined,
+                  )
                 : job.platform === 'x'
                   ? await publishXText(
                         text,

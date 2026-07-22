@@ -18,6 +18,18 @@ import {
 
 const THREADS_LIMIT = 500;
 
+export interface ThreadsPlatformDependencies {
+    hasOnlineLocalPublisher: typeof hasOnlineLocalPublisher;
+    enqueueLocalPublisherJob: typeof enqueueLocalPublisherJob;
+    waitForLocalPublisherJob: typeof waitForLocalPublisherJob;
+}
+
+const defaultDependencies: ThreadsPlatformDependencies = {
+    hasOnlineLocalPublisher,
+    enqueueLocalPublisherJob,
+    waitForLocalPublisherJob,
+};
+
 export class ThreadsPlatform implements Platform {
     readonly id = 'threads';
     readonly name = 'Threads';
@@ -36,6 +48,11 @@ export class ThreadsPlatform implements Platform {
             'Composer Desktop must be online when a Threads publication is sent.',
         ],
     };
+
+    constructor(
+        private readonly dependencies: ThreadsPlatformDependencies =
+            defaultDependencies,
+    ) {}
 
     isConfigured(): boolean {
         return false;
@@ -67,36 +84,50 @@ export class ThreadsPlatform implements Platform {
         }
         const text = markdownToThreadsText(content.markdown);
         if (!text) throw new Error('Write something first');
-        if (!(await hasOnlineLocalPublisher(context.accountId, 'threads'))) {
+        if (
+            !(await this.dependencies.hasOnlineLocalPublisher(
+                context.accountId,
+                'threads',
+            ))
+        ) {
             throw new Error('Open Composer Desktop and connect Threads first');
         }
 
         const results: PublishResult[] = [];
         const chunks = splitTextIntoChunks(text, THREADS_LIMIT, true);
-        if (chunks.length > 1) {
-            throw new Error(
-                'Local Threads reply chains are not implemented yet; keep the post within 500 characters',
-            );
-        }
         for (const channelId of channelIds) {
             try {
                 const messageIds: string[] = [];
                 let link: string | undefined;
+                let replyToLink: string | undefined;
                 for (const chunk of chunks) {
-                    const jobId = await enqueueLocalPublisherJob({
-                        accountId: context.accountId,
-                        platform: 'threads',
-                        operation: 'publish',
-                        payload: { text: chunk },
-                    });
-                    const jobResult = await waitForLocalPublisherJob(
-                        context.accountId,
-                        jobId,
-                    );
-                    messageIds.push(String(jobResult.messageId));
-                    link ??= jobResult.link
-                        ? String(jobResult.link)
-                        : undefined;
+                    const jobId =
+                        await this.dependencies.enqueueLocalPublisherJob({
+                            accountId: context.accountId,
+                            platform: 'threads',
+                            operation: 'publish',
+                            payload: {
+                                text: chunk,
+                                ...(replyToLink ? { replyToLink } : {}),
+                            },
+                        });
+                    const jobResult =
+                        await this.dependencies.waitForLocalPublisherJob(
+                            context.accountId,
+                            jobId,
+                        );
+                    const messageId = String(
+                        jobResult.messageId ?? '',
+                    ).trim();
+                    const publishedLink = String(jobResult.link ?? '').trim();
+                    if (!messageId || !publishedLink) {
+                        throw new Error(
+                            'Local Threads publisher did not return the published post link',
+                        );
+                    }
+                    messageIds.push(messageId);
+                    link ??= publishedLink;
+                    replyToLink = publishedLink;
                 }
                 results.push({
                     platform: this.id,

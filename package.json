@@ -8,7 +8,7 @@
     "build": "cd frontend && bun install && bun run build",
     "desktop:dev": "bun run scripts/desktop-dev.ts",
     "desktop:dist": "cd desktop && bun run dist",
-    "test": "bun test src/*.test.ts src/platforms/*/*.test.ts && cd frontend && bun run test"
+    "test": "bun test src/*.test.ts src/platforms/*/*.test.ts && bun test desktop/test desktop/src/platforms/*/*.test.ts && cd frontend && bun run test"
   },
   "devDependencies": {
     "@types/bun": "latest",
