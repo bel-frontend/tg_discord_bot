@@ -1,5 +1,8 @@
 import { describe, expect, test } from 'bun:test';
-import { buildClickThreadsSubmitScript } from './submitScript';
+import {
+    buildClickThreadsSubmitScript,
+    buildSnapshotThreadsComposerButtonsScript,
+} from './submitScript';
 
 describe('buildClickThreadsSubmitScript', () => {
     test('produces valid renderer JavaScript', () => {
@@ -81,5 +84,134 @@ describe('buildClickThreadsSubmitScript', () => {
         expect(run(document)).toBe(true);
         expect(dialogClicked).toBe(true);
         expect(strayClicked).toBe(false);
+    });
+
+    test('matches a Russian submit button labeled with the noun form "Ответ" instead of the verb "ответить"', () => {
+        let clicked = false;
+        const svg = {
+            getAttribute: (name: string) =>
+                name === 'aria-label' ? 'Ответ' : null,
+        };
+        const submitButton = {
+            getClientRects: () => [{}],
+            getAttribute: () => null,
+            querySelector: (selector: string) =>
+                selector === '[aria-label]' ? svg : null,
+            textContent: '',
+            disabled: false,
+            click: () => {
+                clicked = true;
+            },
+        };
+        const editor = {
+            querySelectorAll: (selector: string) =>
+                selector.includes('[role="button"]') ? [submitButton] : [],
+            parentElement: null,
+        };
+        const document = {
+            activeElement: editor,
+            querySelectorAll: () => [],
+        };
+        const run = new Function(
+            'document',
+            `return ${buildClickThreadsSubmitScript()};`,
+        );
+
+        expect(run(document)).toBe(true);
+        expect(clicked).toBe(true);
+    });
+
+    test('falls back to whichever nearby button became enabled after typing, even with no recognizable label', () => {
+        let clicked = false;
+        const unlabeledButton = {
+            getClientRects: () => [{}],
+            getAttribute: () => null,
+            disabled: false,
+            click: () => {
+                clicked = true;
+            },
+        };
+        const fakeWindow = {
+            __threadsComposerButtons: [
+                { el: unlabeledButton, wasDisabled: true },
+            ],
+        };
+        const document = {
+            activeElement: null,
+            querySelectorAll: () => [],
+        };
+        const run = new Function(
+            'document',
+            'window',
+            `return ${buildClickThreadsSubmitScript()};`,
+        );
+
+        expect(run(document, fakeWindow)).toBe(true);
+        expect(clicked).toBe(true);
+    });
+
+    test('does not use the enabled-state fallback for a button that was already enabled before typing', () => {
+        const alreadyEnabledButton = {
+            getClientRects: () => [{}],
+            getAttribute: () => null,
+            disabled: false,
+            click: () => {
+                throw new Error('should not be clicked');
+            },
+        };
+        const fakeWindow = {
+            __threadsComposerButtons: [
+                { el: alreadyEnabledButton, wasDisabled: false },
+            ],
+        };
+        const document = {
+            activeElement: null,
+            querySelectorAll: () => [],
+        };
+        const run = new Function(
+            'document',
+            'window',
+            `return ${buildClickThreadsSubmitScript()};`,
+        );
+
+        expect(run(document, fakeWindow)).toBe(false);
+    });
+});
+
+describe('buildSnapshotThreadsComposerButtonsScript', () => {
+    test('produces valid renderer JavaScript', () => {
+        const script = buildSnapshotThreadsComposerButtonsScript();
+
+        expect(() => new Function(script)).not.toThrow();
+    });
+
+    test('records the disabled state of every button near the focused editor', () => {
+        const disabledButton = {
+            getAttribute: (name: string) =>
+                name === 'aria-disabled' ? 'true' : null,
+            disabled: false,
+        };
+        const enabledButton = {
+            getAttribute: () => null,
+            disabled: false,
+        };
+        const toolbar = {
+            querySelectorAll: () => [disabledButton, enabledButton],
+            parentElement: null,
+        };
+        const editor = { querySelectorAll: () => [], parentElement: toolbar };
+        const fakeWindow: { __threadsComposerButtons?: unknown } = {};
+        const document = { activeElement: editor };
+        const run = new Function(
+            'document',
+            'window',
+            `return ${buildSnapshotThreadsComposerButtonsScript()};`,
+        );
+
+        expect(run(document, fakeWindow)).toBe(true);
+        expect(fakeWindow.__threadsComposerButtons).toEqual([
+            { el: disabledButton, wasDisabled: true },
+            { el: enabledButton, wasDisabled: false },
+        ]);
     });
 });

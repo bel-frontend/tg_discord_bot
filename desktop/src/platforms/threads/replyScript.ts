@@ -13,11 +13,7 @@ export function buildClickThreadsPostActionScript(
                 .toLowerCase();
         const isAction = (candidate) => {
             const label = labelOf(candidate);
-            return actionLabels.some((expected) =>
-                label === expected ||
-                label.startsWith(expected + ' ') ||
-                label.startsWith(expected + '(')
-            );
+            return actionLabels.some((expected) => label.startsWith(expected));
         };
         const visible = (candidate) => candidate.getClientRects().length > 0;
         const editor = Array.from(document.querySelectorAll(
@@ -84,8 +80,8 @@ export function buildClickThreadsPostActionScript(
 export function buildClickThreadsReplyScript(targetLink: string): string {
     return buildClickThreadsPostActionScript(targetLink, [
         'reply',
-        'odpowiedz',
-        'адказаць',
-        'ответить',
+        'odpowied',
+        'адказ',
+        'ответ',
     ]);
 }

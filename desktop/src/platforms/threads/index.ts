@@ -1,4 +1,6 @@
-import type { BrowserWindow } from 'electron';
+import { app, type BrowserWindow } from 'electron';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import {
     BrowserPublisherSession,
     humanDelay,
@@ -15,7 +17,10 @@ import {
 } from './deleteScript';
 import { normalizeThreadsPostUrl } from './post';
 import { buildClickThreadsReplyScript } from './replyScript';
-import { buildClickThreadsSubmitScript } from './submitScript';
+import {
+    buildClickThreadsSubmitScript,
+    buildSnapshotThreadsComposerButtonsScript,
+} from './submitScript';
 
 const THREADS_HOME = 'https://www.threads.com/';
 const threadsSession = new BrowserPublisherSession({
@@ -89,6 +94,29 @@ async function watchCreatedPost(
             if (debug.isAttached()) debug.detach();
         },
     };
+}
+
+async function dumpThreadsDebugSnapshot(
+    window: BrowserWindow,
+    label: string,
+): Promise<void> {
+    try {
+        const directory = join(app.getPath('userData'), 'threads-debug');
+        mkdirSync(directory, { recursive: true });
+        const stamp = Date.now();
+        const html = await window.webContents.executeJavaScript(
+            'document.documentElement.outerHTML',
+            true,
+        );
+        writeFileSync(join(directory, `${label}-${stamp}.html`), String(html));
+        const image = await window.webContents.capturePage();
+        writeFileSync(join(directory, `${label}-${stamp}.png`), image.toPNG());
+        console.error(
+            `Threads debug snapshot saved to ${directory} (${label}-${stamp}.html/.png)`,
+        );
+    } catch (snapshotError) {
+        console.error('Failed to capture Threads debug snapshot:', snapshotError);
+    }
 }
 
 async function waitForThreadsStep<T>(
@@ -206,6 +234,10 @@ export async function publishThreadsText(
         );
         if (targetLink) {
             await humanDelay();
+            await window.webContents.executeJavaScript(
+                buildSnapshotThreadsComposerButtonsScript(),
+                true,
+            );
             await window.webContents.insertText(text);
         }
         const knownLinks = new Set(
@@ -263,6 +295,11 @@ export async function publishThreadsText(
         } catch {
             throw new Error('Could not identify the published Threads post');
         }
+    } catch (error) {
+        if (replyToLink && !window.isDestroyed()) {
+            await dumpThreadsDebugSnapshot(window, 'reply-failure');
+        }
+        throw error;
     } finally {
         watcher?.stop();
         if (!window.isDestroyed()) window.destroy();
