@@ -15,6 +15,7 @@ import {
     buildClickThreadsMoreScript,
     buildConfirmThreadsDeleteScript,
 } from './deleteScript';
+import { buildFindThreadsEditorScript } from './editorScript';
 import { normalizeThreadsPostUrl } from './post';
 import { buildClickThreadsReplyScript } from './replyScript';
 import {
@@ -119,6 +120,20 @@ async function dumpThreadsDebugSnapshot(
     }
 }
 
+// webContents.insertText() delivers keystrokes through the OS-level key
+// window, so it silently no-ops if this BrowserWindow lost native focus
+// while we were awaiting a humanDelay(). CDP's Input.insertText instead
+// injects straight into the renderer's focused element, independent of
+// whether the window currently holds OS key focus.
+async function insertThreadsText(
+    window: BrowserWindow,
+    text: string,
+): Promise<void> {
+    const debug = window.webContents.debugger;
+    if (!debug.isAttached()) debug.attach('1.3');
+    await debug.sendCommand('Input.insertText', { text });
+}
+
 async function waitForThreadsStep<T>(
     window: BrowserWindow,
     code: string,
@@ -179,6 +194,11 @@ export async function deleteThreadsPost(link: string): Promise<{
         );
         await humanDelay(700, 1_200);
         return { deleted: true };
+    } catch (error) {
+        if (!window.isDestroyed()) {
+            await dumpThreadsDebugSnapshot(window, 'delete-failure');
+        }
+        throw error;
     } finally {
         if (!window.isDestroyed()) window.destroy();
     }
@@ -213,21 +233,7 @@ export async function publishThreadsText(
         }
         await waitForThreadsStep<boolean>(
             window,
-            `(() => {
-                const visible = (candidate) =>
-                    candidate.getClientRects().length > 0 &&
-                    candidate.getAttribute('aria-hidden') !== 'true';
-                const candidates = Array.from(document.querySelectorAll(
-                    '[role="dialog"] [contenteditable="true"], ' +
-                    '[contenteditable="true"][role="textbox"], ' +
-                    '[contenteditable="true"][data-lexical-editor="true"], ' +
-                    'textarea'
-                ));
-                const editor = candidates.find(visible);
-                if (!editor) return false;
-                editor.focus();
-                return true;
-            })()`,
+            buildFindThreadsEditorScript(),
             targetLink
                 ? 'Could not find the Threads reply editor'
                 : 'Could not find the Threads post editor',
@@ -238,7 +244,7 @@ export async function publishThreadsText(
                 buildSnapshotThreadsComposerButtonsScript(),
                 true,
             );
-            await window.webContents.insertText(text);
+            await insertThreadsText(window, text);
         }
         const knownLinks = new Set(
             await window.webContents.executeJavaScript(

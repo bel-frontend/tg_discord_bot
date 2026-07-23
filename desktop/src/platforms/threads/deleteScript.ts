@@ -1,4 +1,4 @@
-import { buildClickThreadsPostActionScript } from './replyScript';
+import { buildClickThreadsActionButtonScript } from './replyScript';
 
 const DELETE_LABELS = ['delete', 'usuń', 'выдаліць', 'удалить'];
 
@@ -30,7 +30,7 @@ function clickLabeledControlScript(selector: string): string {
 }
 
 export function buildClickThreadsMoreScript(targetLink: string): string {
-    return buildClickThreadsPostActionScript(targetLink, [
+    return buildClickThreadsActionButtonScript(targetLink, [
         'more',
         'więcej',
         'яшчэ',
